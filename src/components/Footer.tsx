@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { footerQuickLinks, site } from "@/lib/site";
+import { footerQuickLinks, site, sponsors } from "@/lib/site";
 import Logo from "./Logo";
 import {
   CalendarIcon,
@@ -12,10 +12,11 @@ import {
 
 const socials = [
   { name: "Facebook", href: "#", icon: FacebookIcon },
-  { name: "Instagram", href: "#", icon: InstagramIcon },
+  { name: "Instagram", href: site.instagram, icon: InstagramIcon },
   { name: "YouTube", href: "#", icon: YoutubeIcon },
 ];
 
+/* Site footer: logo blurb, quick links, event info and social links */
 export default function Footer() {
   return (
     <footer className="bg-bronze-deep text-cream">
@@ -23,11 +24,8 @@ export default function Footer() {
         <div>
           <Logo invert />
           <p className="mt-4 text-sm leading-6 text-cream/75">
-            Preserving the legacy.
-            <br />
-            Inspiring the future.
-            <br />
-            Uniting the world.
+            The 1st Open Neza Bazi Punjab Championship — riders competing for
+            the {site.cupName}.
           </p>
         </div>
 
@@ -81,11 +79,17 @@ export default function Footer() {
               </li>
             ))}
           </ul>
+          <p className="mt-3 text-xs tracking-[0.15em] text-cream/60">
+            {site.socialHandle}
+          </p>
         </div>
       </div>
 
-      <div className="border-t border-cream/15 py-4 text-center text-xs text-cream/60">
-        © 2026 Neza Bazi Punjab. All Rights Reserved.
+      <div className="border-t border-cream/15 px-6 py-4 text-center text-xs text-cream/60">
+        <p className="uppercase tracking-[0.15em]">
+          Powered by {sponsors.join(" · ")}
+        </p>
+        <p className="mt-2">© 2026 Neza Bazi Punjab. All Rights Reserved.</p>
       </div>
     </footer>
   );

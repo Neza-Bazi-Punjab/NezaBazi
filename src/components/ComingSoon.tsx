@@ -13,7 +13,7 @@ export default function ComingSoon({
 }) {
   return (
     <section className="dust-glow flex flex-1 flex-col items-center justify-center px-6 py-24 text-center">
-      <LogoMark className="h-16 w-16 text-bronze/70" />
+      <LogoMark className="h-16 w-auto opacity-80" />
       <h1 className="mt-6 font-display text-4xl font-bold uppercase tracking-wide text-bronze-dark sm:text-5xl">
         {title}
       </h1>

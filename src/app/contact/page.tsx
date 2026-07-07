@@ -1,7 +1,14 @@
 import type { Metadata } from "next";
 import PageHeader from "@/components/PageHeader";
+import Reveal from "@/components/Reveal";
 import SectionHeading from "@/components/SectionHeading";
-import { MapPinIcon, UsersIcon } from "@/components/icons";
+import {
+  InstagramIcon,
+  MapPinIcon,
+  PhoneIcon,
+  TrophyIcon,
+  UsersIcon,
+} from "@/components/icons";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -18,11 +25,11 @@ export default function ContactPage() {
     <>
       <PageHeader
         title="Contact Us"
-        intro="Questions about riding, registration, sponsorship or attending as a spectator — the organising team is happy to help."
+        intro="Questions about riding, registration or sponsorship? Reach the organising team directly using the details below."
       />
 
       <section className="bg-cream">
-        <div className="mx-auto grid max-w-6xl gap-12 px-6 py-16 lg:grid-cols-[1fr_1.2fr]">
+        <Reveal className="mx-auto grid max-w-6xl gap-12 px-6 py-16 lg:grid-cols-[1fr_1.2fr]">
           <div>
             <SectionHeading>Get in Touch</SectionHeading>
             <ul className="mt-8 space-y-6 text-brown/85">
@@ -41,12 +48,67 @@ export default function ContactPage() {
                 </div>
               </li>
               <li className="flex items-start gap-4">
+                <PhoneIcon className="mt-1 h-6 w-6 shrink-0 text-bronze" />
+                <div>
+                  <p className="font-display text-sm font-bold uppercase tracking-[0.15em] text-ink">
+                    Phone
+                  </p>
+                  <a
+                    href={`tel:${site.phone.replace(/\s/g, "")}`}
+                    className="text-sm hover:text-bronze"
+                  >
+                    {site.phone}
+                  </a>
+                </div>
+              </li>
+              <li className="flex items-start gap-4">
+                <InstagramIcon className="mt-1 h-6 w-6 shrink-0 text-bronze" />
+                <div>
+                  <p className="font-display text-sm font-bold uppercase tracking-[0.15em] text-ink">
+                    Instagram
+                  </p>
+                  <a
+                    href={site.instagram}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm hover:text-bronze"
+                  >
+                    {site.socialHandle}
+                  </a>
+                </div>
+              </li>
+              <li className="flex items-start gap-4">
                 <MapPinIcon className="mt-1 h-6 w-6 shrink-0 text-bronze" />
                 <div>
                   <p className="font-display text-sm font-bold uppercase tracking-[0.15em] text-ink">
                     Venue
                   </p>
                   <p className="text-sm">{site.venue}, India</p>
+                </div>
+              </li>
+              <li className="flex items-start gap-4">
+                <TrophyIcon className="mt-1 h-6 w-6 shrink-0 text-bronze" />
+                <div>
+                  <p className="font-display text-sm font-bold uppercase tracking-[0.15em] text-ink">
+                    Become a Sponsor
+                  </p>
+                  <p className="text-sm">
+                    Join {`the championship's`} partners — call{" "}
+                    <a
+                      href={`tel:${site.phone.replace(/\s/g, "")}`}
+                      className="text-bronze hover:underline"
+                    >
+                      {site.phone}
+                    </a>{" "}
+                    or email{" "}
+                    <a
+                      href={`mailto:${site.email}?subject=Sponsorship enquiry`}
+                      className="text-bronze hover:underline"
+                    >
+                      {site.email}
+                    </a>
+                    .
+                  </p>
                 </div>
               </li>
             </ul>
@@ -103,7 +165,7 @@ export default function ContactPage() {
               </p>
             </form>
           </div>
-        </div>
+        </Reveal>
       </section>
     </>
   );

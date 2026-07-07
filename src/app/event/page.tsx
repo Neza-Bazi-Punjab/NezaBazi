@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import ButtonLink from "@/components/Button";
 import PageHeader from "@/components/PageHeader";
+import Reveal from "@/components/Reveal";
 import SectionHeading from "@/components/SectionHeading";
 import {
   ArenaLightIcon,
@@ -12,11 +13,11 @@ import {
   TrophyIcon,
   UsersIcon,
 } from "@/components/icons";
-import { site } from "@/lib/site";
+import { site, sponsors } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Event",
-  description: `Championship details — ${site.eventDate} at ${site.venue}. Schedule, categories and facilities.`,
+  description: `Compete for the ${site.cupName} — ${site.eventDate} at ${site.venue}. ${site.prize} first-place cash prize. Schedule, categories and facilities.`,
 };
 
 const keyFacts = [
@@ -50,7 +51,7 @@ const schedule = [
 const categories = [
   {
     title: "Open Individual",
-    detail: "The flagship event — individual lance runs, open to all riders.",
+    detail: "The main event — individual lance runs, open to all riders.",
   },
   {
     title: "Team Relay",
@@ -74,7 +75,7 @@ export default function EventPage() {
     <>
       <PageHeader
         title="Championship 2026"
-        intro="Everything you need to know about the Neza Bazi Punjab Championship — date, venue, schedule, categories and facilities."
+        intro={`Riders from around the world compete for the ${site.cupName} on ${site.eventDate} — here's the schedule, categories and facilities.`}
       />
 
       <section className="bg-cream">
@@ -96,6 +97,24 @@ export default function EventPage() {
             </li>
           ))}
         </ul>
+      </section>
+
+      {/* Gurdaspur Cup */}
+      <section className="bg-bronze-deep text-cream">
+        <div className="mx-auto flex max-w-6xl flex-col items-center gap-6 px-6 py-14 text-center lg:flex-row lg:gap-10 lg:text-left">
+          <TrophyIcon className="h-16 w-16 shrink-0 text-cream/90" />
+          <div>
+            <p className="font-display text-sm font-semibold uppercase tracking-[0.35em] text-cream/70">
+              The {site.cupName}
+            </p>
+            <p className="text-shadow-warm mt-2 font-display text-4xl font-bold uppercase tracking-tight sm:text-5xl">
+              {site.prize} Cash Prize · 1st Place
+            </p>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-cream/75">
+              {`The champion of the inaugural ${site.cupName} takes home the trophy and the ${site.prize} winner's purse. Further placings and prizes will be announced with the final run order.`}
+            </p>
+          </div>
+        </div>
       </section>
 
       <section className="bg-sand">
@@ -126,7 +145,7 @@ export default function EventPage() {
       <section className="bg-cream">
         <div className="mx-auto max-w-6xl px-6 py-16">
           <SectionHeading>Categories</SectionHeading>
-          <ul className="mt-10 grid gap-6 md:grid-cols-3">
+          <Reveal as="ul" className="mt-10 grid gap-6 md:grid-cols-3">
             {categories.map((cat) => (
               <li
                 key={cat.title}
@@ -140,14 +159,14 @@ export default function EventPage() {
                 </p>
               </li>
             ))}
-          </ul>
+          </Reveal>
         </div>
       </section>
 
       <section className="bg-sand">
         <div className="mx-auto max-w-6xl px-6 py-16">
           <SectionHeading>Facilities</SectionHeading>
-          <ul className="mt-10 grid gap-6 sm:grid-cols-2">
+          <Reveal as="ul" className="mt-10 grid gap-6 sm:grid-cols-2">
             {facilities.map(({ icon: Icon, text }) => (
               <li key={text} className="flex items-center gap-4">
                 <Icon className="h-9 w-9 shrink-0 text-bronze" />
@@ -156,10 +175,40 @@ export default function EventPage() {
                 </p>
               </li>
             ))}
-          </ul>
+          </Reveal>
           <ButtonLink href="/register" className="mt-12">
             Register Now
           </ButtonLink>
+        </div>
+      </section>
+
+      {/* Sponsors */}
+      <section className="bg-cream">
+        <div className="mx-auto max-w-6xl px-6 py-16">
+          <SectionHeading>Powered By</SectionHeading>
+          <Reveal as="ul" className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {sponsors.map((sponsor) => (
+              <li
+                key={sponsor}
+                className="flex items-center justify-center rounded-2xl border border-bronze/20 bg-sand px-6 py-10 text-center"
+              >
+                <p className="font-display text-base font-bold uppercase tracking-[0.12em] text-bronze-dark">
+                  {sponsor}
+                </p>
+              </li>
+            ))}
+          </Reveal>
+          <p className="mt-8 text-sm text-brown/70">
+            Interested in sponsoring the championship? Contact{" "}
+            <a href={`tel:${site.phone.replace(/\s/g, "")}`} className="text-bronze underline">
+              {site.phone}
+            </a>{" "}
+            or{" "}
+            <a href={`mailto:${site.email}`} className="text-bronze underline">
+              {site.email}
+            </a>
+            .
+          </p>
         </div>
       </section>
     </>

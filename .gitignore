@@ -24,6 +24,11 @@
 .DS_Store
 *.pem
 
+# AI assistant config (kept local, not part of the shared repo)
+.claude/
+CLAUDE.md
+AGENTS.md
+
 # debug
 npm-debug.log*
 yarn-debug.log*

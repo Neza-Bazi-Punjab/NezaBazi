@@ -3,6 +3,12 @@
 :root {
   --background: #f7efe4;
   --foreground: #2e1d0e;
+
+  /* Motion tokens — one source of truth for animation timing site-wide */
+  --ease-soft: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --dur-fast: 180ms;
+  --dur-base: 320ms;
+  --dur-slow: 620ms;
 }
 
 @theme inline {
@@ -37,4 +43,123 @@ body {
 
 .text-shadow-warm {
   text-shadow: 0 2px 24px rgba(110, 48, 10, 0.35);
+}
+
+/* Section photos dissolve softly into the background, echoing the poster's
+   masked imagery. Two intersecting linear gradients feather each edge while
+   the centre stays fully opaque — works at any aspect ratio. */
+.photo-dissolve {
+  -webkit-mask-image:
+    linear-gradient(to right, transparent, #000 15%, #000 85%, transparent),
+    linear-gradient(to bottom, transparent, #000 15%, #000 85%, transparent);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to right, transparent, #000 15%, #000 85%, transparent),
+    linear-gradient(to bottom, transparent, #000 15%, #000 85%, transparent);
+  mask-composite: intersect;
+}
+
+/* Mobile hero photo dissolve: keeps the rider (top-centre) fully opaque and
+   feathers every edge into the parchment — no card edge. The bottom fades
+   over a longer run so the dust melts into the page like the poster. */
+.hero-photo-fade {
+  -webkit-mask-image:
+    linear-gradient(to right, transparent, #000 15%, #000 85%, transparent),
+    linear-gradient(to bottom, transparent, #000 10%, #000 72%, transparent);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to right, transparent, #000 15%, #000 85%, transparent),
+    linear-gradient(to bottom, transparent, #000 10%, #000 72%, transparent);
+  mask-composite: intersect;
+}
+
+/* Desktop hero photo dissolve, like the poster: opaque over the rider,
+   melting into the page toward the left, top and bottom edges */
+@media (min-width: 64rem) {
+  .hero-photo-fade {
+    -webkit-mask-image: radial-gradient(
+      110% 105% at 74% 38%,
+      #000 36%,
+      rgba(0, 0, 0, 0.72) 54%,
+      transparent 72%
+    );
+    mask-image: radial-gradient(
+      110% 105% at 74% 38%,
+      #000 36%,
+      rgba(0, 0, 0, 0.72) 54%,
+      transparent 72%
+    );
+  }
+}
+
+/* Scroll reveal: content fades and rises gently the first time it enters view.
+   The Reveal client component toggles `is-visible` via IntersectionObserver. */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity var(--dur-slow) var(--ease-soft),
+    transform var(--dur-slow) var(--ease-soft);
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* One-time staggered hero entrance (runs on paint, no JS, no layout shift) */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.hero-stagger > * {
+  animation: rise-in var(--dur-slow) var(--ease-soft) both;
+}
+.hero-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.hero-stagger > *:nth-child(2) { animation-delay: 70ms; }
+.hero-stagger > *:nth-child(3) { animation-delay: 140ms; }
+.hero-stagger > *:nth-child(4) { animation-delay: 210ms; }
+.hero-stagger > *:nth-child(5) { animation-delay: 280ms; }
+.hero-stagger > *:nth-child(6) { animation-delay: 350ms; }
+
+/* Animated nav underline: grows left-to-right on hover, stays put when active */
+.nav-underline {
+  position: relative;
+}
+.nav-underline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.5rem;
+  height: 2px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--dur-base) var(--ease-soft);
+}
+.nav-underline:hover::after,
+.nav-underline[data-active="true"]::after {
+  transform: scaleX(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .hero-stagger > * {
+    animation: none;
+  }
+  .nav-underline::after {
+    transition: none;
+  }
 }

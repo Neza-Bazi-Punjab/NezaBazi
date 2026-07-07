@@ -1,3 +1,5 @@
+/* Shared inline SVG icon set. Each icon inherits size via className (h-/w-)
+   and colour via currentColor, using the stroke defaults from base(). */
 type IconProps = React.SVGProps<SVGSVGElement>;
 
 function base(props: IconProps): IconProps {
@@ -92,6 +94,33 @@ export function HorseIcon(props: IconProps) {
     <svg {...base(props)}>
       <path d="M4 20c.3-3.5 1.5-6 4-7.5 2-1.2 4.5-1.5 6.5-1L17 9l1-3 2.5 2c.5.4.6 1 .3 1.6L19 13c-.4.8-1.3 1.2-2.1 1l-1.4-.3c.3 2.4 1 4.3 2.5 6.3" />
       <path d="M8 20c0-1.8.4-3.2 1.5-4.4M18 6l-1.5-2" />
+    </svg>
+  );
+}
+
+export function PhoneIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M5 4h4l1.5 4.5-2.2 1.6a12.5 12.5 0 0 0 5.6 5.6l1.6-2.2L20 15v4a1.5 1.5 0 0 1-1.6 1.5C10.6 20 4 13.4 3.5 5.6A1.5 1.5 0 0 1 5 4Z" />
+    </svg>
+  );
+}
+
+export function DocumentIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M7 3h7l4 4v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
+      <path d="M14 3v4h4" />
+      <path d="M8.5 12.5h7m-7 3.5h7m-7-7h3" />
+    </svg>
+  );
+}
+
+export function DownloadIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5" />
+      <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
     </svg>
   );
 }

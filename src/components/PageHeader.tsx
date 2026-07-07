@@ -1,4 +1,5 @@
 import BrushDivider from "./BrushDivider";
+import Reveal from "./Reveal";
 
 /* Consistent interior-page header band */
 export default function PageHeader({
@@ -10,7 +11,7 @@ export default function PageHeader({
 }) {
   return (
     <section className="dust-glow">
-      <div className="mx-auto max-w-6xl px-6 pb-10 pt-14 sm:pt-16">
+      <Reveal className="mx-auto max-w-6xl px-6 pb-10 pt-14 sm:pt-16">
         <h1 className="font-display text-4xl font-bold uppercase tracking-wide text-brown sm:text-5xl">
           {title}
         </h1>
@@ -25,7 +26,7 @@ export default function PageHeader({
           />
         </svg>
         {intro && <p className="mt-6 max-w-2xl leading-7 text-brown/85">{intro}</p>}
-      </div>
+      </Reveal>
       <BrushDivider className="text-bronze/60" />
     </section>
   );

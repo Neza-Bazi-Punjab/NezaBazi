@@ -1,31 +1,25 @@
+import Image from "next/image";
 import Link from "next/link";
 
-/* Stylized mark: horse head crossed by a tent-pegging lance with pennant */
-export function LogoMark({ className = "h-10 w-10" }: { className?: string }) {
+/* Site logo: the rider-and-lance mark, a mark+wordmark lockup, and the default
+   home-linked logo used in the navbar and footer. */
+
+/* Rider-and-lance mark, cropped from public/brand/logo.svg (see public/brand/README.md) */
+export function LogoMark({ className = "h-10 w-auto" }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 48 48"
-      xmlns="http://www.w3.org/2000/svg"
+    <Image
+      src="/brand/logo-mark.svg"
+      alt=""
+      width={886}
+      height={722}
+      unoptimized
       className={className}
-      aria-hidden
-    >
-      <path
-        d="M8 44 40 8"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-      />
-      <path d="M40 8l-7.5.8 4.6 4.6L40 8Z" fill="currentColor" />
-      <path
-        d="M15 41c0-9 2-15 7.5-19.5-1.8-2.8-1.8-5.6-.2-8.3l4.5 4.2 3.5-2 1 4.5c5 2.7 8.2 7.3 9 13.6l-3.6 1.4c-1.6-4.6-4.5-7.6-8.4-8.4 1.4 4.9-.3 9.6-4.3 12.6-1.9 1.4-2.8 2.4-3 5.9H15Z"
-        fill="currentColor"
-      />
-    </svg>
+    />
   );
 }
 
 export function LogoLockup({
-  markClassName = "h-10 w-10",
+  markClassName = "h-10 w-auto",
   invert = false,
 }: {
   markClassName?: string;
@@ -33,9 +27,7 @@ export function LogoLockup({
 }) {
   return (
     <span className="flex items-center gap-2.5">
-      <LogoMark
-        className={`${markClassName} ${invert ? "text-cream" : "text-bronze"}`}
-      />
+      <LogoMark className={markClassName} />
       <span
         className={`font-display leading-none ${invert ? "text-cream" : "text-brown"}`}
       >

@@ -1,133 +1,89 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import type { Metadata } from "next";
-import ButtonLink from "@/components/Button";
 import PageHeader from "@/components/PageHeader";
-import SectionHeading from "@/components/SectionHeading";
+import { DocumentIcon, DownloadIcon } from "@/components/icons";
 
 export const metadata: Metadata = {
   title: "Rules",
   description:
-    "Competition format, equipment, scoring and conduct for the Neza Bazi Punjab Championship 2026.",
+    "Official rules of competition for the Neza Bazi Punjab Championship 2026 — download the full PDF.",
 };
 
-const scoring = [
-  {
-    points: "6",
-    title: "Carry",
-    detail:
-      "The peg is struck, lifted and carried cleanly on the lance past the finish line.",
-  },
-  {
-    points: "4",
-    title: "Draw",
-    detail:
-      "The peg is struck and drawn out of the ground but not carried to the line.",
-  },
-  {
-    points: "2",
-    title: "Strike",
-    detail: "The peg is clearly struck by the lance but remains in the ground.",
-  },
-  {
-    points: "0",
-    title: "Miss",
-    detail: "The peg is untouched, or the run is broken off before the gallop.",
-  },
-];
+const PDF_PATH = "/documents/rules.pdf";
 
-const conduct = [
-  "Riders must complete the run at a full gallop through the timed section; a broken gait voids the run.",
-  "Each rider is responsible for the fitness and welfare of their horse — veterinary checks apply before competition.",
-  "Approved riding helmets or traditional protective headwear are required in the arena.",
-  "Any interference with another rider's run leads to disqualification from the round.",
-  "The judges' scoring decisions on each run are final.",
-];
+function rulesPdfExists() {
+  return existsSync(join(process.cwd(), "public", "documents", "rules.pdf"));
+}
 
 export default function RulesPage() {
+  const hasPdf = rulesPdfExists();
+
   return (
     <>
       <PageHeader
         title="Rules of Competition"
-        intro="The championship follows internationally recognised tent-pegging rules, honouring the traditions of Neza Bazi. Full regulations will be shared with registered riders."
+        intro="The championship follows internationally recognised tent-pegging rules. Download the official rules document below."
       />
 
       <section className="bg-cream">
-        <div className="mx-auto max-w-6xl px-6 py-16">
-          <SectionHeading>Format</SectionHeading>
-          <div className="mt-6 max-w-3xl space-y-4 leading-7 text-brown/85">
-            <p>
-              Each rider makes a series of runs down a straight track at full
-              gallop, aiming to strike and carry a ground peg with the lance.
-              Qualifying rounds decide the field for the knockout stages, and
-              cumulative scores decide the champions in each category.
-            </p>
-            <p>
-              Ties in the final rounds are broken by timed run-offs on
-              progressively smaller pegs.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section className="bg-sand">
-        <div className="mx-auto max-w-6xl px-6 py-16">
-          <SectionHeading>Scoring</SectionHeading>
-          <ul className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {scoring.map((rule) => (
-              <li
-                key={rule.title}
-                className="rounded-2xl border border-bronze/20 bg-cream p-6 text-center"
+        <div className="mx-auto max-w-5xl px-6 py-16">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-bronze/20 pb-6">
+            <div className="flex items-center gap-4">
+              <DocumentIcon className="h-9 w-9 text-bronze" />
+              <div>
+                <p className="font-display text-lg font-bold uppercase tracking-wide text-ink">
+                  Official Rules
+                </p>
+                <p className="text-sm text-brown/60">
+                  Neza Bazi Punjab Championship 2026
+                </p>
+              </div>
+            </div>
+            {hasPdf && (
+              <a
+                href={PDF_PATH}
+                download
+                className="inline-flex items-center gap-2.5 rounded-lg bg-bronze px-6 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze-dark"
               >
-                <p className="font-display text-5xl font-bold text-bronze">
-                  {rule.points}
-                </p>
-                <p className="mt-1 text-xs uppercase tracking-[0.3em] text-brown/60">
-                  points
-                </p>
-                <h3 className="mt-3 font-display text-lg font-bold uppercase tracking-wide text-ink">
-                  {rule.title}
-                </h3>
-                <p className="mt-2 text-sm leading-6 text-brown/80">
-                  {rule.detail}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      <section className="bg-cream">
-        <div className="mx-auto max-w-6xl px-6 py-16">
-          <SectionHeading>Equipment</SectionHeading>
-          <div className="mt-6 max-w-3xl space-y-4 leading-7 text-brown/85">
-            <p>
-              Runs are made with a regulation lance of approximately 2.5
-              metres, wooden or cane shafted with a steel tip. Pegs are of
-              standard competition sizes, reducing through the rounds as the
-              difficulty increases.
-            </p>
-            <p>
-              Riders may compete in traditional Punjabi dress or approved
-              equestrian attire. All tack must pass safety inspection before
-              each round.
-            </p>
+                <DownloadIcon className="h-4 w-4" />
+                Download PDF
+              </a>
+            )}
           </div>
-        </div>
-      </section>
 
-      <section className="bg-sand">
-        <div className="mx-auto max-w-6xl px-6 py-16">
-          <SectionHeading>Conduct &amp; Safety</SectionHeading>
-          <ul className="mt-8 max-w-3xl space-y-4">
-            {conduct.map((rule) => (
-              <li key={rule} className="flex gap-3 leading-7 text-brown/85">
-                <span className="mt-2.5 h-2 w-2 shrink-0 rounded-full bg-bronze" />
-                {rule}
-              </li>
-            ))}
-          </ul>
-          <ButtonLink href="/register" className="mt-12">
-            Register Now
-          </ButtonLink>
+          <div className="mt-10">
+            {hasPdf ? (
+              <object
+                data={PDF_PATH}
+                type="application/pdf"
+                className="h-[80vh] w-full rounded-2xl border border-bronze/25"
+              >
+                <p className="p-6 text-center text-brown/70">
+                  Your browser can&apos;t preview PDFs inline.{" "}
+                  <a
+                    href={PDF_PATH}
+                    className="text-bronze underline"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Open the rules PDF directly
+                  </a>
+                  .
+                </p>
+              </object>
+            ) : (
+              <div className="dust-glow flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-bronze/35 px-6 py-24 text-center">
+                <DocumentIcon className="h-12 w-12 text-bronze/50" />
+                <p className="font-display text-sm font-semibold uppercase tracking-[0.2em] text-brown/60">
+                  Rules document coming soon
+                </p>
+                <p className="text-xs text-brown/45">
+                  Add file: public/documents/rules.pdf
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </section>
     </>

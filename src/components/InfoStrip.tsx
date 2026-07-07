@@ -13,6 +13,7 @@ const facts = [
   { icon: UsersIcon, lines: ["International", "Participation"] },
 ];
 
+/* Home-page strip of key event facts (edition, date, venue, participation) */
 export default function InfoStrip() {
   return (
     <section aria-label="Key event facts" className="bg-cream">

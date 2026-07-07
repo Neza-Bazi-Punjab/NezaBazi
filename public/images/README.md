@@ -1,21 +1,21 @@
 # Event Photography
 
-Drop real photos into this folder using the filenames below, then replace the
-matching `<ImagePlaceholder name="..." />` in the page with `next/image`:
+Current photos and where they appear:
 
-```tsx
-import Image from "next/image";
+| Filename | Used on |
+| --- | --- |
+| `hero-rider.webp` | Home hero (dissolves into the page) |
+| `lancesunset.webp` | Home about section (dissolves into the page) |
+| `fullgallop.webp` | Home CTA band (dissolves into the page) |
+| `aboutsport.webp` | About page "The Sport" (plain, un-cropped) |
+| `heritage.webp` | About page "Our Heritage" (plain, un-cropped) |
+| `holla.webp` | Not placed yet — available for a future section |
 
-<Image src="/images/hero-rider.jpg" alt="..." width={900} height={1200} />
-```
+The `/gallery` page is a "coming soon" placeholder until after the
+championship (August 21, 2026) — match-day photography gets added there once
+the event happens, so there are no gallery slots to fill in yet.
 
-| Filename | Used on | Suggested shot |
-| --- | --- | --- |
-| `hero-rider.jpg` | Home hero | Rider at full charge (portrait, 3:4) |
-| `about-sunset.jpg` | Home about section | Rider with lance at sunset (16:9) |
-| `cta-charge.jpg` | Home CTA band | Full-gallop action (4:3) |
-| `about-sport.jpg` | About page | Lance striking the peg (4:3) |
-| `about-heritage.jpg` | About page | Riders in traditional dress (4:3) |
-| `gallery-01.jpg` … `gallery-09.jpg` | Gallery grid | Mix of portrait (3:4) and landscape (4:3) |
-
-Use JPEG around 1600px on the long edge for a good quality/size balance.
+Use WebP/JPEG around 1600px on the long edge for a good quality/size balance.
+Home-page photos use the `DissolvePhoto` component, which softly masks their
+edges so they melt into the parchment background; About-page photos are shown
+plain at their natural aspect ratio.
