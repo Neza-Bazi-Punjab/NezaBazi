@@ -28,7 +28,7 @@ export const navLinks = [
   { href: "/", label: "Home" },
   { href: "/about", label: "About" },
   { href: "/event", label: "Event" },
-  { href: "/gallery", label: "Gallery" },
+  // { href: "/gallery", label: "Gallery" }, temporarily not needed
   { href: "/rules", label: "Rules" },
   { href: "/contact", label: "Contact" },
 ] as const;
@@ -36,7 +36,7 @@ export const navLinks = [
 export const footerQuickLinks = [
   { href: "/about", label: "About" },
   { href: "/rules", label: "Rules" },
-  { href: "/gallery", label: "Gallery" },
+  // { href: "/gallery", label: "Gallery" }, temporarily not needed
   { href: "/contact", label: "Contact" },
   { href: "/players", label: "Players" },
   { href: "/rankings", label: "Rankings" },
