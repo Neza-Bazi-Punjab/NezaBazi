@@ -22,7 +22,7 @@ Requires a `.env.local` with `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABAS
 | --- | --- | --- |
 | 1 | Public website & design | ✅ Done |
 | 2 | Supabase setup + player registration/login | Reviewing |
-| 3 | Player profiles + event registration | In progress |
+| 3 | Player profiles + event registration + admin dashboard | In progress — registration, account management, and admin tools live; /players is still a placeholder |
 | 4 | Admin dashboard + score entry | Planned |
 | 5 | Rankings/stats + audit log & security review | Planned |
 
@@ -37,8 +37,13 @@ src/
     about/ event/ gallery/ rules/ contact/    Content pages
     login/ signup/     Working auth pages (Supabase)
     register/           Registration chooser page (solo vs team)
-      solo/             Solo registration form (profile pre-filled) + success page
-    register-team/      Team registration form (leader pre-filled) + server submit route + success page
+      solo/             Solo registration form (Auth-prefilled) + success page
+    register-team/      Team registration form (Auth-prefilled leader) + server submit route + success page
+    account/            Logged-in user's own account info (view/edit) + active registrations
+    admin/              Admin-only dashboard: view/search/edit/delete solo & team
+                        registrations, manage admin users
+    api/admin/users/    Server-only route for listing/promoting/demoting/
+                        deleting user accounts (uses the Supabase service role key)
     players/ rankings/  "Coming soon" pages, unlock in later phases
     sitemap.ts icon.svg
   components/           Reusable UI (Navbar, Footer, Button, DissolvePhoto,
@@ -60,13 +65,15 @@ event details (date, venue, contact, domain) live in
 
 ## Supabase setup
 
-- **`profiles` table** — extends `auth.users` with `full_name`, `age`, `location`, `phone`, `years_experience`, `horse_age`, `horse_breed`, and `role` (`player`/`admin`). Protected by Row Level Security: users can only read/update their own row.
-- **`solo_registrations` table** — one row per individual rider registration, linked to `profiles` via a unique `profile_id`. `email` and `phone` are also unique across the table, preventing duplicate registrations. Protected by Row Level Security: users can only read/update their own registration.
-- **`teams` table** — one row per team, linked to its leader via a unique `leader_profile_id` (one team per leader). Protected by Row Level Security: only the leader can read/update their own team.
-- **`team_members` table** — 4 rows per team (the leader + 3 riders), linked via `team_id`. `email` and `phone` are unique across the whole table, preventing the same person appearing on multiple teams. Protected by Row Level Security via a subquery checking the parent team's leader.
-- **Auto-profile trigger** — `handle_new_user()` fires on every new `auth.users` signup and creates a matching `profiles` row automatically using the metadata submitted with the account.
-- **Auth flow** — `/signup` creates an account (name, age, location, phone, email, password, years of experience, horse age, horse breed); `/login` signs in. Email confirmation is currently **off** for easier local testing — turn back on before public launch.
-- **Registration flow** — `/register` lets a logged-in user choose solo or team registration. `/register/solo` pre-fills from their profile. `/register-team` pre-fills the leader's own details as Rider 1, and includes recovery handling if a team was partially created but not all members saved.
+- **Auth is the source of truth** — `full_name`, `age`, `location`, `phone`, and `email` are stored and read directly from Supabase Auth (`auth.users.user_metadata` and `auth.users.email`), not from a separate `profiles` table. This keeps account info consistent across signup, `/account`, registration prefill, and the navbar.
+- **`profiles` table** — trimmed to just `id`, `role` (`player`/`admin`), `created_at`, and `updated_at`. Its only jobs are tracking who's an admin and giving `solo_registrations`/`teams` a stable `id` to link against. Protected by Row Level Security via a recursion-safe `is_admin()` helper function.
+- **`solo_registrations` table** — one row per individual rider registration, linked via a unique `profile_id`. `email` and `phone` are also unique across the table, preventing duplicate registrations. Admins are exempt from the one-per-person rule for testing purposes; `email`/`phone` uniqueness still applies to everyone.
+- **`teams` table** — one row per team, linked to its leader via a unique `leader_profile_id` (one team per leader, admins exempt). `team_members` holds 4 rows per team (the leader + 3 riders); `email` and `phone` are unique across the whole table so the same person can't appear on multiple teams. Deleting a team cascades to delete its members automatically.
+- **Auto-profile trigger** — `handle_new_user()` fires on every new `auth.users` signup and creates a bare `profiles` row (just the `id`) — all other account fields go straight into Auth metadata instead.
+- **Auth flow** — `/signup` creates an account (name, age, location, phone, email, password, years of experience, horse age, horse breed), saved directly to Auth. `/login` signs in, and supports a `?redirect=` parameter (sanitized to internal paths only) so gated pages return the user where they came from. Email confirmation is currently **off** for easier local testing — turn back on before public launch.
+- **Registration flow** — `/register` lets a logged-in user choose solo or team registration, both pre-filled from their Auth account info (locked/read-only for regular users). Admins bypass prefill and the one-registration limit, so they can repeatedly test both flows.
+- **Account management** — `/account` lets a logged-in user view and edit their own info (saved via `supabase.auth.updateUser()`) and see their active solo/team registration status.
+- **Admin dashboard** — `/admin` (role-gated) lets admins search, view, inline-edit, and delete solo and team registrations, and manage other admins (promote/demote/delete) via a server-only API route using the Supabase service role key.
 
 ## Notes
 
@@ -75,7 +82,7 @@ event details (date, venue, contact, domain) live in
   parchment background, echoing the poster.
 - `/gallery` is a "coming soon" placeholder — match-day photography is added
   after the championship (August 21, 2026).
-- `/players` and `/rankings` are still placeholder pages that unlock in later phases. `/login`, `/signup`, `/register`, `/register/solo`, and `/register-team` are all live.
+- `/players` and `/rankings` are still placeholder pages that unlock in later phases. `/login`, `/signup`, `/register`, `/register/solo`, `/register-team`, `/account`, and `/admin` are all live.
 
 - The logo mark comes from [public/brand](public/brand/README.md); the
   favicon is a derived single-tone version at [src/app/icon.svg](src/app/icon.svg).
