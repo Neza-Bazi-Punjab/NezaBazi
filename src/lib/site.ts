@@ -10,7 +10,6 @@ export const site = {
   cupName: "Gurdaspur Cup",
   prize: "₹1,00,000",
   email: "nezabazipunjab@gmail.com",
-  phone: "+91 568943893",
   instagram: "https://www.instagram.com/nezabazipunjab",
   socialHandle: "@nezabazipunjab",
   // TODO: replace with the real channel URL once it exists.

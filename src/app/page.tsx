@@ -48,10 +48,6 @@ const categories = [
     title: "Team Relay",
     detail: "Teams of riders combine scores across consecutive runs.",
   },
-  {
-    title: "International Exhibition",
-    detail: "Showcase runs by visiting international riders.",
-  },
 ];
 
 const highlights = [
@@ -187,7 +183,7 @@ export default function Home() {
       <section className="bg-cream">
         <Reveal className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
           <SectionHeading>Categories</SectionHeading>
-          <ul className="mt-10 grid gap-8 md:grid-cols-3">
+          <ul className="mt-10 grid gap-8 md:grid-cols-2">
             {categories.map((cat) => (
               <li key={cat.title}>
                 <h3 className="font-display text-lg font-bold uppercase tracking-wide text-bronze-dark">

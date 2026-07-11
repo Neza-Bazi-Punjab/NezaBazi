@@ -94,17 +94,6 @@ export default function AboutPage() {
             </li>
             <li>
               <span className="font-display text-sm font-bold uppercase tracking-[0.15em] text-ink">
-                Phone:{" "}
-              </span>
-              <a
-                href={`tel:${site.phone.replace(/\s/g, "")}`}
-                className="text-bronze underline"
-              >
-                {site.phone}
-              </a>
-            </li>
-            <li>
-              <span className="font-display text-sm font-bold uppercase tracking-[0.15em] text-ink">
                 Instagram:{" "}
               </span>
               <a

@@ -6,7 +6,6 @@ import {
   InstagramIcon,
   MailIcon,
   MapPinIcon,
-  PhoneIcon,
   TrophyIcon,
   YoutubeIcon,
 } from "./icons";
@@ -68,14 +67,6 @@ export default function Footer() {
                 className="flex items-center gap-2.5 hover:text-cream"
               >
                 <MailIcon className="h-4 w-4 shrink-0" /> {site.email}
-              </a>
-            </li>
-            <li>
-              <a
-                href={`tel:${site.phone.replace(/\s/g, "")}`}
-                className="flex items-center gap-2.5 hover:text-cream"
-              >
-                <PhoneIcon className="h-4 w-4 shrink-0" /> {site.phone}
               </a>
             </li>
             <li>
