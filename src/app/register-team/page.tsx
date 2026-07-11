@@ -11,13 +11,43 @@ export const metadata: Metadata = {
   description: `Team registration for the ${site.title}.`,
 };
 
+type RegistrationMetadata = {
+  full_name?: string;
+  age?: number | string;
+  location?: string;
+  phone?: string;
+  years_experience?: number | string;
+  horse_age?: number | string;
+  horse_breed?: string;
+};
+
+const getMetadataNumber = (value: number | string | undefined) => {
+  if (value == null || value === "") {
+    return undefined;
+  }
+
+  const numberValue = Number(value);
+  return Number.isNaN(numberValue) ? undefined : numberValue;
+};
+
 export default async function RegisterTeamPage() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: existingTeam } = user
+  const { data: profile } = user
+    ? await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle()
+    : { data: null };
+
+  const isAdmin = profile?.role === "admin";
+  const authMetadata = user?.user_metadata as RegistrationMetadata | undefined;
+
+  const { data: existingTeam } = user && !isAdmin
     ? await supabase
         .from("teams")
         .select("id, team_name")
@@ -32,15 +62,7 @@ export default async function RegisterTeamPage() {
         .eq("team_id", existingTeam.id)
     : { count: 0 };
 
-  const { data: profile } = user
-    ? await supabase
-        .from("profiles")
-        .select("full_name, age, location, phone, years_experience, horse_age, horse_breed")
-        .eq("id", user.id)
-        .maybeSingle()
-    : { data: null };
-
-  const hasCompleteTeam = Boolean(existingTeam && teamMemberCount === 4);
+  const hasCompleteTeam = !isAdmin && Boolean(existingTeam && teamMemberCount === 4);
 
   return (
     <>
@@ -75,17 +97,24 @@ export default async function RegisterTeamPage() {
                 <TeamRegisterForm
                   existingTeamId={existingTeam?.id}
                   initialTeamName={existingTeam?.team_name}
-                  leaderProfile={{
-                    full_name: profile?.full_name,
-                    age: profile?.age,
-                    location: profile?.location,
-                    phone: profile?.phone,
-                    email: user.email,
-                    years_experience: profile?.years_experience,
-                    horse_age: profile?.horse_age,
-                    horse_breed: profile?.horse_breed,
-                  }}
-                  lockTeamName={Boolean(existingTeam)}
+                  leaderProfile={
+                    isAdmin
+                      ? undefined
+                      : {
+                          full_name: authMetadata?.full_name,
+                          age: getMetadataNumber(authMetadata?.age),
+                          location: authMetadata?.location,
+                          phone: authMetadata?.phone,
+                          email: user.email,
+                          years_experience: getMetadataNumber(
+                            authMetadata?.years_experience
+                          ),
+                          horse_age: getMetadataNumber(authMetadata?.horse_age),
+                          horse_breed: authMetadata?.horse_breed,
+                        }
+                  }
+                  lockTeamName={!isAdmin && Boolean(existingTeam)}
+                  lockLeaderProfileFields={!isAdmin}
                 />
               </>
             )
@@ -99,7 +128,7 @@ export default async function RegisterTeamPage() {
                 </p>
 
                 <Link
-                  href="/login"
+                  href="/login?redirect=/register-team"
                   className="block w-full rounded-lg bg-bronze-deep px-6 py-3 text-center font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze"
                 >
                   Log In to Register

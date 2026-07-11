@@ -101,9 +101,12 @@ export default function Navbar() {
           {!authLoading &&
             (userLabel ? (
               <div className="flex items-center gap-4">
-                <span className="font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70">
-                  {userLabel}
-                </span>
+                <Link
+                  href="/account"
+                  className="nav-underline font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70 transition-colors hover:text-bronze"
+                >
+                  My Account
+                </Link>
                 <button
                   type="button"
                   onClick={handleLogout}
@@ -190,9 +193,14 @@ export default function Navbar() {
               <li className="border-b border-bronze/10 py-4">
                 {userLabel ? (
                   <div className="space-y-3">
-                    <p className="font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70">
-                      {userLabel}
-                    </p>
+                    <Link
+                      href="/account"
+                      onClick={() => setOpen(false)}
+                      tabIndex={open ? undefined : -1}
+                      className="block font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70 transition-colors hover:text-bronze"
+                    >
+                      My Account
+                    </Link>
                     <button
                       type="button"
                       onClick={handleLogout}

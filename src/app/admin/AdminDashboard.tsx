@@ -1,0 +1,1953 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+
+export type SoloRegistration = {
+  id: string;
+  profile_id: string;
+  full_name: string;
+  age: number;
+  location: string;
+  phone: string;
+  email: string;
+  years_experience: number;
+  horse_age: number;
+  horse_breed: string;
+  created_at: string;
+};
+
+export type Team = {
+  id: string;
+  team_name: string;
+  leader_profile_id: string;
+  created_at: string;
+};
+
+export type TeamMember = {
+  id: string;
+  team_id: string;
+  full_name: string;
+  age: number;
+  location: string;
+  phone: string;
+  email: string;
+  years_experience: number;
+  horse_age: number;
+  horse_breed: string;
+  is_leader: boolean;
+  created_at: string;
+};
+
+type AdminDashboardProps = {
+  currentAdminId: string;
+  soloRegistrations: SoloRegistration[];
+  teams: Team[];
+  teamMembers: TeamMember[];
+};
+
+type ActiveTab = "profiles" | "solo" | "team";
+
+type AdminProfileUser = {
+  id: string;
+  email: string;
+  role: "admin" | "player";
+  created_at: string;
+  full_name?: string | null;
+  phone?: string | null;
+};
+
+type RoleChangeConfirmation = {
+  userId: string;
+  newRole: "admin" | "player";
+  step: 1 | 2;
+};
+
+type ProfileDeleteConfirmation = {
+  userId: string;
+  step: 1 | 2;
+};
+
+type LinkedRegistration = {
+  id: string;
+  type: "solo" | "team_member";
+  label: string;
+  email: string;
+  teamName?: string | null;
+};
+
+type EmailSyncDialog = {
+  profileUser: AdminProfileUser;
+  newEmail: string;
+  registrations: LinkedRegistration[];
+};
+
+type SoloRegistrationDraft = Partial<
+  Omit<SoloRegistration, "age" | "years_experience" | "horse_age"> & {
+    age: string;
+    years_experience: string;
+    horse_age: string;
+  }
+>;
+
+type TeamMemberDraft = Partial<
+  Omit<TeamMember, "age" | "years_experience" | "horse_age"> & {
+    age: string;
+    years_experience: string;
+    horse_age: string;
+  }
+>;
+
+type EditableRegistrationDraft = SoloRegistrationDraft | TeamMemberDraft;
+type EditableRegistrationField =
+  | "full_name"
+  | "age"
+  | "location"
+  | "phone"
+  | "email"
+  | "years_experience"
+  | "horse_age"
+  | "horse_breed";
+type DatabaseError = {
+  code?: string;
+  message?: string;
+  details?: string;
+  hint?: string;
+};
+
+const editableRegistrationFields: Array<{
+  field: EditableRegistrationField;
+  label: string;
+}> = [
+  { field: "full_name", label: "Full name" },
+  { field: "age", label: "Age" },
+  { field: "location", label: "Location" },
+  { field: "phone", label: "Phone number" },
+  { field: "email", label: "Email" },
+  { field: "years_experience", label: "Years of experience" },
+  { field: "horse_age", label: "Horse age" },
+  { field: "horse_breed", label: "Horse breed" },
+];
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const dateFormatter = new Intl.DateTimeFormat("en-US", {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+});
+
+const soloRegisteredDateFormatter = new Intl.DateTimeFormat("en-US", {
+  year: "2-digit",
+  month: "numeric",
+  day: "numeric",
+});
+
+const formatDate = (value: string) => dateFormatter.format(new Date(value));
+const formatSoloRegisteredDate = (value: string) =>
+  soloRegisteredDateFormatter.format(new Date(value));
+
+const matchesPerson = (
+  person: Pick<SoloRegistration | TeamMember, "full_name" | "email" | "phone">,
+  query: string
+) =>
+  person.full_name.toLowerCase().includes(query) ||
+  person.email.toLowerCase().includes(query) ||
+  person.phone.toLowerCase().includes(query);
+
+const linkedRegistrationKey = (registration: Pick<LinkedRegistration, "type" | "id">) =>
+  `${registration.type}:${registration.id}`;
+
+const draftValue = (
+  draft: EditableRegistrationDraft,
+  field: EditableRegistrationField
+) => String(draft[field] ?? "").trim();
+
+const getRequiredFieldError = (
+  draft: EditableRegistrationDraft,
+  ownerLabel?: string
+) => {
+  const missingField = editableRegistrationFields.find(
+    ({ field }) => draftValue(draft, field) === ""
+  );
+
+  if (!missingField) {
+    return null;
+  }
+
+  return ownerLabel
+    ? `${missingField.label} is required for ${ownerLabel}.`
+    : `${missingField.label} is required.`;
+};
+
+const getEmailFormatError = (
+  draft: EditableRegistrationDraft,
+  ownerLabel?: string
+) => {
+  const email = draftValue(draft, "email");
+
+  if (emailPattern.test(email)) {
+    return null;
+  }
+
+  return ownerLabel
+    ? `Please enter a valid email address for ${ownerLabel}.`
+    : "Please enter a valid email address.";
+};
+
+const getDuplicateErrorMessage = (
+  error: DatabaseError,
+  ownerLabel?: string
+) => {
+  const errorText = [
+    error.code,
+    error.message,
+    error.details,
+    error.hint,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  const isUniqueError =
+    error.code === "23505" ||
+    errorText.includes("duplicate key") ||
+    errorText.includes("unique constraint") ||
+    errorText.includes("violates unique");
+
+  if (!isUniqueError) {
+    return null;
+  }
+
+  const suffix = ownerLabel ? ` for ${ownerLabel}` : "";
+
+  if (errorText.includes("email")) {
+    return `This email is already registered${suffix}.`;
+  }
+
+  if (errorText.includes("phone")) {
+    return `This phone number is already registered${suffix}.`;
+  }
+
+  return `This email or phone number is already in use${suffix}.`;
+};
+
+export default function AdminDashboard({
+  currentAdminId,
+  soloRegistrations,
+  teams,
+  teamMembers,
+}: AdminDashboardProps) {
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<ActiveTab>("profiles");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [profileUsers, setProfileUsers] = useState<AdminProfileUser[]>([]);
+  const [profilesLoading, setProfilesLoading] = useState(false);
+  const [profilesLoaded, setProfilesLoaded] = useState(false);
+  const [profilesError, setProfilesError] = useState<string | null>(null);
+  const [confirmingRoleChange, setConfirmingRoleChange] =
+    useState<RoleChangeConfirmation | null>(null);
+  const [savingProfileId, setSavingProfileId] = useState<string | null>(null);
+  const [profileRowError, setProfileRowError] = useState<{
+    id: string;
+    message: string;
+  } | null>(null);
+  const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
+  const [profileEmailDraft, setProfileEmailDraft] = useState("");
+  const [emailSyncDialog, setEmailSyncDialog] = useState<EmailSyncDialog | null>(null);
+  const [selectedLinkedRegistrationKeys, setSelectedLinkedRegistrationKeys] = useState<string[]>([]);
+  const [emailSyncError, setEmailSyncError] = useState<string | null>(null);
+  const [confirmingProfileDelete, setConfirmingProfileDelete] =
+    useState<ProfileDeleteConfirmation | null>(null);
+  const [isAddAdminOpen, setIsAddAdminOpen] = useState(false);
+  const [addAdminSearch, setAddAdminSearch] = useState("");
+  const [pendingAddAdminId, setPendingAddAdminId] = useState<string | null>(null);
+  const [addAdminError, setAddAdminError] = useState<string | null>(null);
+  const [editingSoloId, setEditingSoloId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<SoloRegistrationDraft | null>(null);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
+  const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
+  const [teamNameDraft, setTeamNameDraft] = useState("");
+  const [memberDrafts, setMemberDrafts] = useState<Record<string, TeamMemberDraft>>({});
+  const [confirmingDeleteTeamId, setConfirmingDeleteTeamId] = useState<string | null>(null);
+  const [savingTeamId, setSavingTeamId] = useState<string | null>(null);
+  const [teamEditError, setTeamEditError] = useState<{
+    id: string;
+    message: string;
+  } | null>(null);
+  const [supabase] = useState(() => createClient());
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+
+  const loadProfileUsers = useCallback(async () => {
+    setProfilesLoading(true);
+    setProfilesError(null);
+
+    const response = await fetch("/api/admin/users");
+    const result = (await response.json()) as AdminProfileUser[] | { error?: string };
+
+    setProfilesLoading(false);
+
+    if (!response.ok || !Array.isArray(result)) {
+      setProfilesError(
+        Array.isArray(result) ? "Unable to load profiles." : result.error ?? "Unable to load profiles."
+      );
+      return;
+    }
+
+    setProfileUsers(result);
+    setProfilesLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "profiles" && !profilesLoaded && !profilesLoading) {
+      const timeoutId = window.setTimeout(() => {
+        void loadProfileUsers();
+      }, 0);
+
+      return () => window.clearTimeout(timeoutId);
+    }
+  }, [activeTab, loadProfileUsers, profilesLoaded, profilesLoading]);
+
+  const startRoleChange = (profileUser: AdminProfileUser) => {
+    setConfirmingRoleChange({
+      userId: profileUser.id,
+      newRole: profileUser.role === "admin" ? "player" : "admin",
+      step: 1,
+    });
+    setEditingProfileId(null);
+    setProfileEmailDraft("");
+    setConfirmingProfileDelete(null);
+    setProfileRowError(null);
+  };
+
+  const cancelRoleChange = () => {
+    setConfirmingRoleChange(null);
+    setProfileRowError(null);
+  };
+
+  const confirmRoleChange = async (profileUser: AdminProfileUser) => {
+    if (!confirmingRoleChange || confirmingRoleChange.userId !== profileUser.id) {
+      return;
+    }
+
+    const isSelfDemotion =
+      profileUser.id === currentAdminId && confirmingRoleChange.newRole === "player";
+
+    if (isSelfDemotion && confirmingRoleChange.step === 1) {
+      setConfirmingRoleChange({ ...confirmingRoleChange, step: 2 });
+      return;
+    }
+
+    setSavingProfileId(profileUser.id);
+    setProfileRowError(null);
+
+    const response = await fetch("/api/admin/users", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        userId: profileUser.id,
+        newRole: confirmingRoleChange.newRole,
+      }),
+    });
+    const result = (await response.json()) as { ok?: boolean; error?: string };
+
+    setSavingProfileId(null);
+
+    if (!response.ok) {
+      setProfileRowError({
+        id: profileUser.id,
+        message: result.error ?? "Unable to update this profile.",
+      });
+      return;
+    }
+
+    setConfirmingRoleChange(null);
+    await loadProfileUsers();
+  };
+
+  const startEditingProfile = (profileUser: AdminProfileUser) => {
+    setEditingProfileId(profileUser.id);
+    setProfileEmailDraft(profileUser.email);
+    setConfirmingRoleChange(null);
+    setConfirmingProfileDelete(null);
+    setProfileRowError(null);
+  };
+
+  const cancelEditingProfile = () => {
+    setEditingProfileId(null);
+    setProfileEmailDraft("");
+    setProfileRowError(null);
+    setEmailSyncDialog(null);
+    setSelectedLinkedRegistrationKeys([]);
+    setEmailSyncError(null);
+  };
+
+  const commitProfileEmail = async (
+    profileUser: AdminProfileUser,
+    email: string,
+    registrationsToSync: LinkedRegistration[]
+  ) => {
+    setSavingProfileId(profileUser.id);
+    setEmailSyncError(null);
+    setProfileRowError(null);
+
+    const response = await fetch("/api/admin/users", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        userId: profileUser.id,
+        email,
+        linkedRegistrationUpdates: registrationsToSync.map((registration) => ({
+          id: registration.id,
+          type: registration.type,
+        })),
+      }),
+    });
+    const result = (await response.json()) as {
+      ok?: boolean;
+      error?: string;
+      warnings?: string[];
+    };
+
+    setSavingProfileId(null);
+
+    if (!response.ok) {
+      const message =
+        typeof result.error === "string" && result.error.trim() !== ""
+          ? result.error
+          : "Unable to update this email.";
+
+      if (emailSyncDialog) {
+        setEmailSyncError(message);
+      } else {
+        setProfileRowError({
+          id: profileUser.id,
+          message,
+        });
+      }
+      return;
+    }
+
+    setEditingProfileId(null);
+    setProfileEmailDraft("");
+    setEmailSyncDialog(null);
+    setSelectedLinkedRegistrationKeys([]);
+    setEmailSyncError(null);
+
+    if (result.warnings && result.warnings.length > 0) {
+      setProfileRowError({
+        id: profileUser.id,
+        message: `Login email updated. ${result.warnings.join(" ")}`,
+      });
+    }
+
+    await loadProfileUsers();
+  };
+
+  const saveProfileEmail = async (profileUser: AdminProfileUser) => {
+    const trimmedEmail = profileEmailDraft.trim();
+
+    setProfileRowError(null);
+    setEmailSyncError(null);
+
+    if (!emailPattern.test(trimmedEmail)) {
+      setProfileRowError({
+        id: profileUser.id,
+        message: "Please enter a valid email address.",
+      });
+      return;
+    }
+
+    setSavingProfileId(profileUser.id);
+
+    const response = await fetch(
+      `/api/admin/users?linkedUserId=${encodeURIComponent(profileUser.id)}`
+    );
+    const result = (await response.json()) as {
+      registrations?: LinkedRegistration[];
+      error?: string;
+    };
+
+    setSavingProfileId(null);
+
+    if (!response.ok || !Array.isArray(result.registrations)) {
+      setProfileRowError({
+        id: profileUser.id,
+        message: result.error ?? "Unable to check linked registrations.",
+      });
+      return;
+    }
+
+    if (result.registrations.length === 0) {
+      await commitProfileEmail(profileUser, trimmedEmail, []);
+      return;
+    }
+
+    setEmailSyncDialog({
+      profileUser,
+      newEmail: trimmedEmail,
+      registrations: result.registrations,
+    });
+    setSelectedLinkedRegistrationKeys(
+      result.registrations.map((registration) => linkedRegistrationKey(registration))
+    );
+  };
+
+  const startDeletingProfile = (profileUser: AdminProfileUser) => {
+    setConfirmingProfileDelete({ userId: profileUser.id, step: 1 });
+    setEditingProfileId(null);
+    setProfileEmailDraft("");
+    setConfirmingRoleChange(null);
+    setProfileRowError(null);
+  };
+
+  const cancelDeletingProfile = () => {
+    setConfirmingProfileDelete(null);
+    setProfileRowError(null);
+  };
+
+  const confirmDeleteProfile = async (profileUser: AdminProfileUser) => {
+    if (!confirmingProfileDelete || confirmingProfileDelete.userId !== profileUser.id) {
+      return;
+    }
+
+    const isSelfDelete = profileUser.id === currentAdminId;
+
+    if (isSelfDelete && confirmingProfileDelete.step === 1) {
+      setConfirmingProfileDelete({ ...confirmingProfileDelete, step: 2 });
+      return;
+    }
+
+    setSavingProfileId(profileUser.id);
+    setProfileRowError(null);
+
+    const response = await fetch("/api/admin/users", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ userId: profileUser.id }),
+    });
+    const result = (await response.json()) as { ok?: boolean; error?: string };
+
+    setSavingProfileId(null);
+
+    if (!response.ok) {
+      setProfileRowError({
+        id: profileUser.id,
+        message: result.error ?? "Unable to delete this account.",
+      });
+      return;
+    }
+
+    setConfirmingProfileDelete(null);
+    await loadProfileUsers();
+  };
+
+  const openAddAdminPicker = () => {
+    setIsAddAdminOpen(true);
+    setAddAdminError(null);
+    setPendingAddAdminId(null);
+  };
+
+  const closeAddAdminPicker = () => {
+    setIsAddAdminOpen(false);
+    setAddAdminSearch("");
+    setPendingAddAdminId(null);
+    setAddAdminError(null);
+  };
+
+  const confirmAddAdmin = async (profileUser: AdminProfileUser) => {
+    setSavingProfileId(profileUser.id);
+    setAddAdminError(null);
+
+    const response = await fetch("/api/admin/users", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        userId: profileUser.id,
+        newRole: "admin",
+      }),
+    });
+    const result = (await response.json()) as { ok?: boolean; error?: string };
+
+    setSavingProfileId(null);
+
+    if (!response.ok) {
+      setAddAdminError(result.error ?? "Unable to promote this user.");
+      return;
+    }
+
+    closeAddAdminPicker();
+    await loadProfileUsers();
+  };
+
+  const startEditingSolo = (registration: SoloRegistration) => {
+    setEditingSoloId(registration.id);
+    setConfirmingDeleteId(null);
+    setRowError(null);
+    setEditDraft({
+      full_name: registration.full_name,
+      age: String(registration.age),
+      location: registration.location,
+      phone: registration.phone,
+      email: registration.email,
+      years_experience: String(registration.years_experience),
+      horse_age: String(registration.horse_age),
+      horse_breed: registration.horse_breed,
+    });
+  };
+
+  const cancelEditingSolo = () => {
+    setEditingSoloId(null);
+    setEditDraft(null);
+    setRowError(null);
+  };
+
+  const updateEditDraft = (field: keyof SoloRegistrationDraft, value: string) => {
+    setEditDraft((currentDraft) => ({
+      ...(currentDraft ?? {}),
+      [field]: value,
+    }));
+  };
+
+  const saveSoloRegistration = async (registrationId: string) => {
+    if (!editDraft) {
+      return;
+    }
+
+    setRowError(null);
+
+    const requiredFieldError = getRequiredFieldError(editDraft);
+
+    if (requiredFieldError) {
+      setRowError({ id: registrationId, message: requiredFieldError });
+      return;
+    }
+
+    const emailFormatError = getEmailFormatError(editDraft);
+
+    if (emailFormatError) {
+      setRowError({ id: registrationId, message: emailFormatError });
+      return;
+    }
+
+    setSavingId(registrationId);
+
+    const { error } = await supabase
+      .from("solo_registrations")
+      .update({
+        full_name: editDraft.full_name,
+        age: Number(editDraft.age),
+        location: editDraft.location,
+        phone: editDraft.phone,
+        email: editDraft.email,
+        years_experience: Number(editDraft.years_experience),
+        horse_age: Number(editDraft.horse_age),
+        horse_breed: editDraft.horse_breed,
+      })
+      .eq("id", registrationId);
+
+    setSavingId(null);
+
+    if (error) {
+      setRowError({
+        id: registrationId,
+        message: getDuplicateErrorMessage(error) ?? error.message,
+      });
+      return;
+    }
+
+    setEditingSoloId(null);
+    setEditDraft(null);
+    router.refresh();
+  };
+
+  const startDeletingSolo = (registrationId: string) => {
+    setConfirmingDeleteId(registrationId);
+    setEditingSoloId(null);
+    setEditDraft(null);
+    setRowError(null);
+  };
+
+  const cancelDeletingSolo = () => {
+    setConfirmingDeleteId(null);
+    setRowError(null);
+  };
+
+  const deleteSoloRegistration = async (registrationId: string) => {
+    setSavingId(registrationId);
+    setRowError(null);
+
+    const { error } = await supabase
+      .from("solo_registrations")
+      .delete()
+      .eq("id", registrationId);
+
+    setSavingId(null);
+
+    if (error) {
+      setRowError({ id: registrationId, message: error.message });
+      return;
+    }
+
+    setConfirmingDeleteId(null);
+    router.refresh();
+  };
+
+  const startEditingTeam = (team: Team, members: TeamMember[]) => {
+    setEditingTeamId(team.id);
+    setConfirmingDeleteTeamId(null);
+    setTeamEditError(null);
+    setTeamNameDraft(team.team_name);
+    setMemberDrafts(
+      members.reduce<Record<string, TeamMemberDraft>>((drafts, member) => {
+        drafts[member.id] = {
+          full_name: member.full_name,
+          age: String(member.age),
+          location: member.location,
+          phone: member.phone,
+          email: member.email,
+          years_experience: String(member.years_experience),
+          horse_age: String(member.horse_age),
+          horse_breed: member.horse_breed,
+        };
+        return drafts;
+      }, {})
+    );
+  };
+
+  const cancelEditingTeam = () => {
+    setEditingTeamId(null);
+    setTeamNameDraft("");
+    setMemberDrafts({});
+    setTeamEditError(null);
+  };
+
+  const updateMemberDraft = (
+    memberId: string,
+    field: keyof TeamMemberDraft,
+    value: string
+  ) => {
+    setMemberDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [memberId]: {
+        ...(currentDrafts[memberId] ?? {}),
+        [field]: value,
+      },
+    }));
+  };
+
+  const saveTeamRegistration = async (team: Team, members: TeamMember[]) => {
+    setTeamEditError(null);
+
+    if (teamNameDraft.trim() === "") {
+      setTeamEditError({ id: team.id, message: "Team name is required." });
+      return;
+    }
+
+    for (const member of members) {
+      const draft = memberDrafts[member.id];
+      const ownerLabel =
+        draftValue(draft ?? {}, "full_name") || member.full_name || "a team member";
+
+      if (!draft) {
+        setTeamEditError({
+          id: team.id,
+          message: `Missing draft values for ${ownerLabel}.`,
+        });
+        return;
+      }
+
+      const requiredFieldError = getRequiredFieldError(draft, ownerLabel);
+
+      if (requiredFieldError) {
+        setTeamEditError({ id: team.id, message: requiredFieldError });
+        return;
+      }
+
+      const emailFormatError = getEmailFormatError(draft, ownerLabel);
+
+      if (emailFormatError) {
+        setTeamEditError({ id: team.id, message: emailFormatError });
+        return;
+      }
+    }
+
+    setSavingTeamId(team.id);
+
+    const { error: teamError } = await supabase
+      .from("teams")
+      .update({ team_name: teamNameDraft })
+      .eq("id", team.id);
+
+    if (teamError) {
+      setSavingTeamId(null);
+      setTeamEditError({
+        id: team.id,
+        message: `Failed to update team name: ${teamError.message}`,
+      });
+      return;
+    }
+
+    for (const member of members) {
+      const draft = memberDrafts[member.id];
+
+      if (!draft) {
+        setSavingTeamId(null);
+        setTeamEditError({
+          id: team.id,
+          message: `Failed to update ${member.full_name}: missing draft values.`,
+        });
+        return;
+      }
+
+      const { error: memberError } = await supabase
+        .from("team_members")
+        .update({
+          full_name: draft.full_name,
+          age: Number(draft.age),
+          location: draft.location,
+          phone: draft.phone,
+          email: draft.email,
+          years_experience: Number(draft.years_experience),
+          horse_age: Number(draft.horse_age),
+          horse_breed: draft.horse_breed,
+        })
+        .eq("id", member.id);
+
+      if (memberError) {
+        setSavingTeamId(null);
+        const duplicateMessage = getDuplicateErrorMessage(
+          memberError,
+          draft.full_name ?? member.full_name
+        );
+
+        setTeamEditError({
+          id: team.id,
+          message:
+            duplicateMessage ??
+            `Failed to update ${draft.full_name ?? member.full_name}: ${
+              memberError.message
+            }`,
+        });
+        return;
+      }
+    }
+
+    setSavingTeamId(null);
+    setEditingTeamId(null);
+    setTeamNameDraft("");
+    setMemberDrafts({});
+    router.refresh();
+  };
+
+  const startDeletingTeam = (teamId: string) => {
+    setConfirmingDeleteTeamId(teamId);
+    setEditingTeamId(null);
+    setTeamNameDraft("");
+    setMemberDrafts({});
+    setTeamEditError(null);
+  };
+
+  const cancelDeletingTeam = () => {
+    setConfirmingDeleteTeamId(null);
+    setTeamEditError(null);
+  };
+
+  const deleteTeamRegistration = async (teamId: string) => {
+    setSavingTeamId(teamId);
+    setTeamEditError(null);
+
+    const { error: teamError } = await supabase
+      .from("teams")
+      .delete()
+      .eq("id", teamId);
+
+    setSavingTeamId(null);
+
+    if (teamError) {
+      setTeamEditError({
+        id: teamId,
+        message: `Failed to delete team: ${teamError.message}`,
+      });
+      return;
+    }
+
+    setConfirmingDeleteTeamId(null);
+    router.refresh();
+  };
+
+  const teamMembersByTeamId = useMemo(
+    () =>
+      teamMembers.reduce<Record<string, TeamMember[]>>((groups, member) => {
+        groups[member.team_id] = [...(groups[member.team_id] ?? []), member];
+        return groups;
+      }, {}),
+    [teamMembers]
+  );
+
+  const filteredSoloRegistrations = useMemo(
+    () =>
+      normalizedQuery
+        ? soloRegistrations.filter((registration) =>
+            matchesPerson(registration, normalizedQuery)
+          )
+        : soloRegistrations,
+    [normalizedQuery, soloRegistrations]
+  );
+
+  const filteredTeams = useMemo(
+    () =>
+      normalizedQuery
+        ? teams.filter((team) => {
+            const members = teamMembersByTeamId[team.id] ?? [];
+            return (
+              team.team_name.toLowerCase().includes(normalizedQuery) ||
+              members.some((member) => matchesPerson(member, normalizedQuery))
+            );
+          })
+        : teams,
+    [normalizedQuery, teamMembersByTeamId, teams]
+  );
+
+  const adminProfileUsers = useMemo(
+    () => profileUsers.filter((profileUser) => profileUser.role === "admin"),
+    [profileUsers]
+  );
+
+  const nonAdminProfileUsers = useMemo(
+    () => profileUsers.filter((profileUser) => profileUser.role !== "admin"),
+    [profileUsers]
+  );
+
+  const filteredAdminProfileUsers = useMemo(
+    () =>
+      normalizedQuery
+        ? adminProfileUsers.filter(
+            (profileUser) =>
+              profileUser.email.toLowerCase().includes(normalizedQuery) ||
+              (profileUser.full_name ?? "").toLowerCase().includes(normalizedQuery) ||
+              (profileUser.phone ?? "").toLowerCase().includes(normalizedQuery)
+          )
+        : adminProfileUsers,
+    [adminProfileUsers, normalizedQuery]
+  );
+
+  const filteredAddAdminUsers = useMemo(() => {
+    const normalizedAddAdminSearch = addAdminSearch.trim().toLowerCase();
+
+    return normalizedAddAdminSearch
+      ? nonAdminProfileUsers.filter((profileUser) =>
+          profileUser.email.toLowerCase().includes(normalizedAddAdminSearch)
+        )
+      : nonAdminProfileUsers;
+  }, [addAdminSearch, nonAdminProfileUsers]);
+
+  return (
+    <div className="space-y-8">
+      <div className="flex flex-col gap-4 border-b border-bronze/20 pb-6 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => setActiveTab("profiles")}
+            className={`rounded-lg px-5 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] transition-colors ${
+              activeTab === "profiles"
+                ? "bg-bronze-deep text-cream hover:bg-bronze"
+                : "border border-bronze/20 text-bronze-dark hover:border-bronze/40"
+            }`}
+          >
+            Profiles
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("solo")}
+            className={`rounded-lg px-5 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] transition-colors ${
+              activeTab === "solo"
+                ? "bg-bronze-deep text-cream hover:bg-bronze"
+                : "border border-bronze/20 text-bronze-dark hover:border-bronze/40"
+            }`}
+          >
+            Solo Registrations
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("team")}
+            className={`rounded-lg px-5 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] transition-colors ${
+              activeTab === "team"
+                ? "bg-bronze-deep text-cream hover:bg-bronze"
+                : "border border-bronze/20 text-bronze-dark hover:border-bronze/40"
+            }`}
+          >
+            Team Registrations
+          </button>
+        </div>
+
+        <div className="font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70">
+          {soloRegistrations.length} solo registrations · {teams.length} teams registered
+        </div>
+      </div>
+
+      <div>
+        <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
+          Search
+        </label>
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search by name, email, or phone..."
+          className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+        />
+      </div>
+
+      {activeTab === "profiles" ? (
+        <section className="space-y-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-bronze-dark">
+              Profiles
+            </h2>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <p className="text-sm text-brown/80">
+                {profilesLoading ? "Loading..." : `${filteredAdminProfileUsers.length} admins`}
+              </p>
+              <button
+                type="button"
+                onClick={openAddAdminPicker}
+                className="rounded-lg bg-bronze-deep px-4 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-cream transition-colors hover:bg-bronze"
+              >
+                Add Admin
+              </button>
+            </div>
+          </div>
+
+          {isAddAdminOpen && (
+            <div className="space-y-4 rounded-lg border border-bronze/20 bg-sand p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h3 className="font-display text-lg font-bold uppercase tracking-wide text-bronze-dark">
+                  Add Admin
+                </h3>
+                <button
+                  type="button"
+                  onClick={closeAddAdminPicker}
+                  className="w-fit rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40"
+                >
+                  Cancel
+                </button>
+              </div>
+
+              <div>
+                <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
+                  Search by Email
+                </label>
+                <input
+                  type="search"
+                  value={addAdminSearch}
+                  onChange={(event) => {
+                    setAddAdminSearch(event.target.value);
+                    setPendingAddAdminId(null);
+                    setAddAdminError(null);
+                  }}
+                  placeholder="Search non-admin users..."
+                  className="mt-2 w-full rounded-lg border border-bronze/20 bg-cream px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+                />
+              </div>
+
+              {addAdminError && <p className="text-sm text-red-700">{addAdminError}</p>}
+
+              <div className="max-h-72 overflow-y-auto rounded-lg border border-bronze/20 bg-cream">
+                {filteredAddAdminUsers.length > 0 ? (
+                  <div className="divide-y divide-bronze/10">
+                    {filteredAddAdminUsers.map((profileUser) => {
+                      const isPendingAddAdmin = pendingAddAdminId === profileUser.id;
+                      const isSavingProfile = savingProfileId === profileUser.id;
+
+                      return (
+                        <div
+                          key={profileUser.id}
+                          className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <p className="font-semibold text-ink">{profileUser.email}</p>
+
+                          {isPendingAddAdmin ? (
+                            <div className="flex flex-col gap-2 sm:items-end">
+                              <p className="text-xs text-brown/80">
+                                Promote {profileUser.email} to admin?
+                              </p>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => confirmAddAdmin(profileUser)}
+                                  disabled={isSavingProfile}
+                                  className="rounded-lg bg-bronze-deep px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-cream transition-colors hover:bg-bronze disabled:opacity-60"
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setPendingAddAdminId(null);
+                                    setAddAdminError(null);
+                                  }}
+                                  disabled={isSavingProfile}
+                                  className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40 disabled:opacity-60"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPendingAddAdminId(profileUser.id);
+                                setAddAdminError(null);
+                              }}
+                              className="w-fit rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40"
+                            >
+                              Select
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="px-4 py-6 text-brown/80">
+                    No non-admin users found.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {emailSyncDialog && (
+            <div className="space-y-4 rounded-lg border border-bronze/20 bg-sand p-5">
+              <div>
+                <h3 className="font-display text-lg font-bold uppercase tracking-wide text-bronze-dark">
+                  Sync Registration Emails
+                </h3>
+                <p className="mt-2 text-sm text-brown/80">
+                  This profile has linked registrations. Choose whether their email
+                  fields should also change to {emailSyncDialog.newEmail}.
+                </p>
+              </div>
+
+              <div className="space-y-3 rounded-lg border border-bronze/20 bg-cream p-4">
+                {emailSyncDialog.registrations.map((registration) => {
+                  const registrationKey = linkedRegistrationKey(registration);
+
+                  return (
+                    <label
+                      key={registrationKey}
+                      className="flex items-start gap-3 text-sm text-brown"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedLinkedRegistrationKeys.includes(registrationKey)}
+                        onChange={(event) => {
+                          setEmailSyncError(null);
+                          setSelectedLinkedRegistrationKeys((currentKeys) =>
+                            event.target.checked
+                              ? [...currentKeys, registrationKey]
+                              : currentKeys.filter((key) => key !== registrationKey)
+                          );
+                        }}
+                        className="mt-1"
+                      />
+                      <span>
+                        <span className="font-semibold text-ink">
+                          {registration.label}
+                        </span>
+                        <span className="block text-brown/80">
+                          Current email: {registration.email}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              {emailSyncError && <p className="text-sm text-red-700">{emailSyncError}</p>}
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() =>
+                    commitProfileEmail(
+                      emailSyncDialog.profileUser,
+                      emailSyncDialog.newEmail,
+                      emailSyncDialog.registrations.filter((registration) =>
+                        selectedLinkedRegistrationKeys.includes(
+                          linkedRegistrationKey(registration)
+                        )
+                      )
+                    )
+                  }
+                  disabled={savingProfileId === emailSyncDialog.profileUser.id}
+                  className="rounded-lg bg-bronze-deep px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-cream transition-colors hover:bg-bronze disabled:opacity-60"
+                >
+                  Yes, Update These Too
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    commitProfileEmail(
+                      emailSyncDialog.profileUser,
+                      emailSyncDialog.newEmail,
+                      []
+                    )
+                  }
+                  disabled={savingProfileId === emailSyncDialog.profileUser.id}
+                  className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40 disabled:opacity-60"
+                >
+                  No, Don&apos;t Update Registrations
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmailSyncDialog(null);
+                    setSelectedLinkedRegistrationKeys([]);
+                    setEmailSyncError(null);
+                  }}
+                  disabled={savingProfileId === emailSyncDialog.profileUser.id}
+                  className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40 disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {profilesError ? (
+            <p className="rounded-lg border border-bronze/20 bg-sand px-4 py-6 text-red-700">
+              {profilesError}
+            </p>
+          ) : filteredAdminProfileUsers.length > 0 ? (
+            <div className="overflow-x-auto rounded-lg border border-bronze/20 bg-sand">
+              <table className="w-full min-w-[820px] table-fixed border-collapse text-left text-sm text-brown">
+                <thead className="border-b border-bronze/20 bg-parchment">
+                  <tr className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
+                    <th className="w-[340px] min-w-[340px] whitespace-nowrap px-3 py-2">Email</th>
+                    <th className="w-[110px] min-w-[110px] whitespace-nowrap px-3 py-2">Created</th>
+                    <th className="w-[370px] min-w-[370px] whitespace-nowrap px-3 py-2">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredAdminProfileUsers.map((profileUser) => {
+                    const confirmingThisUser =
+                      confirmingRoleChange?.userId === profileUser.id;
+                    const isEditingProfile = editingProfileId === profileUser.id;
+                    const isConfirmingProfileDelete =
+                      confirmingProfileDelete?.userId === profileUser.id;
+                    const isSavingProfile = savingProfileId === profileUser.id;
+                    const roleConfirmationText =
+                      profileUser.id === currentAdminId &&
+                      confirmingRoleChange?.newRole === "player" &&
+                      confirmingRoleChange.step === 2
+                        ? "This will remove your own admin access. Are you REALLY sure?"
+                        : profileUser.id === currentAdminId
+                          ? "Are you sure you want to demote yourself?"
+                          : "Demote this admin to regular user?";
+                    const deleteConfirmationText =
+                      profileUser.id === currentAdminId &&
+                      confirmingProfileDelete?.step === 2
+                        ? "This will permanently delete your login and remove your admin access. This cannot be undone. Are you REALLY sure?"
+                        : profileUser.id === currentAdminId
+                          ? "Are you sure you want to delete your OWN account?"
+                          : "Delete this admin account entirely? This cannot be undone.";
+
+                    return (
+                      <tr
+                        key={profileUser.id}
+                        className="border-b border-bronze/10 last:border-0"
+                      >
+                        <td className="w-[340px] min-w-[340px] whitespace-nowrap px-3 py-2 font-semibold text-ink">
+                          {isEditingProfile ? (
+                            <input
+                              type="email"
+                              value={profileEmailDraft}
+                              onChange={(event) => setProfileEmailDraft(event.target.value)}
+                              className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                            />
+                          ) : (
+                            profileUser.email
+                          )}
+                        </td>
+                        <td className="w-[110px] min-w-[110px] whitespace-nowrap px-3 py-2">
+                          {formatSoloRegisteredDate(profileUser.created_at)}
+                        </td>
+                        <td className="w-[370px] min-w-[370px] whitespace-nowrap px-3 py-2">
+                          {isEditingProfile ? (
+                            <div className="flex flex-col gap-2">
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => saveProfileEmail(profileUser)}
+                                  disabled={isSavingProfile}
+                                  className="rounded-lg bg-bronze-deep px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-cream transition-colors hover:bg-bronze disabled:opacity-60"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={cancelEditingProfile}
+                                  disabled={isSavingProfile}
+                                  className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40 disabled:opacity-60"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                              {profileRowError?.id === profileUser.id && (
+                                <p className="whitespace-normal text-xs text-red-700">
+                                  {profileRowError.message}
+                                </p>
+                              )}
+                            </div>
+                          ) : confirmingThisUser ? (
+                            <div className="flex flex-col gap-2">
+                              <p className="whitespace-normal text-xs text-brown/80">
+                                {roleConfirmationText}
+                              </p>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => confirmRoleChange(profileUser)}
+                                  disabled={isSavingProfile}
+                                  className="rounded-lg bg-bronze-deep px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-cream transition-colors hover:bg-bronze disabled:opacity-60"
+                                >
+                                  Confirm Demote
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={cancelRoleChange}
+                                  disabled={isSavingProfile}
+                                  className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40 disabled:opacity-60"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                              {profileRowError?.id === profileUser.id && (
+                                <p className="whitespace-normal text-xs text-red-700">
+                                  {profileRowError.message}
+                                </p>
+                              )}
+                            </div>
+                          ) : isConfirmingProfileDelete ? (
+                            <div className="flex flex-col gap-2">
+                              <p className="whitespace-normal text-xs text-brown/80">
+                                {deleteConfirmationText}
+                              </p>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => confirmDeleteProfile(profileUser)}
+                                  disabled={isSavingProfile}
+                                  className="rounded-lg bg-bronze-deep px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-cream transition-colors hover:bg-bronze disabled:opacity-60"
+                                >
+                                  Confirm Delete
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={cancelDeletingProfile}
+                                  disabled={isSavingProfile}
+                                  className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40 disabled:opacity-60"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                              {profileRowError?.id === profileUser.id && (
+                                <p className="whitespace-normal text-xs text-red-700">
+                                  {profileRowError.message}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex flex-col gap-2">
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => startEditingProfile(profileUser)}
+                                  className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => startRoleChange(profileUser)}
+                                  className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40"
+                                >
+                                  Demote to User
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => startDeletingProfile(profileUser)}
+                                  className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                              {profileRowError?.id === profileUser.id && (
+                                <p className="whitespace-normal text-xs text-red-700">
+                                  {profileRowError.message}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="rounded-lg border border-bronze/20 bg-sand px-4 py-6 text-brown/80">
+              {profilesLoading ? "Loading profiles..." : "No admins found."}
+            </p>
+          )}
+        </section>
+      ) : activeTab === "solo" ? (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-bronze-dark">
+              Solo Registrations
+            </h2>
+            <p className="text-sm text-brown/80">
+              {filteredSoloRegistrations.length} results
+            </p>
+          </div>
+
+          {filteredSoloRegistrations.length > 0 ? (
+            <div className="overflow-x-auto rounded-lg border border-bronze/20 bg-sand">
+              <table className="w-full min-w-[1300px] table-fixed border-collapse text-left text-sm text-brown">
+                <thead className="border-b border-bronze/20 bg-parchment">
+                  <tr className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
+                    <th className="w-[180px] min-w-[180px] whitespace-nowrap px-3 py-2">Name</th>
+                    <th className="w-[60px] min-w-[60px] whitespace-nowrap px-3 py-2">Age</th>
+                    <th className="w-[135px] min-w-[135px] whitespace-nowrap px-3 py-2">Location</th>
+                    <th className="w-[120px] min-w-[120px] whitespace-nowrap px-3 py-2">Phone</th>
+                    <th className="w-[190px] min-w-[190px] whitespace-nowrap px-3 py-2">Email</th>
+                    <th className="w-[100px] min-w-[100px] whitespace-nowrap px-3 py-2">Experience</th>
+                    <th className="w-[90px] min-w-[90px] whitespace-nowrap px-3 py-2">Horse Age</th>
+                    <th className="w-[120px] min-w-[120px] whitespace-nowrap px-3 py-2">Horse Breed</th>
+                    <th className="w-[70px] min-w-[70px] whitespace-nowrap px-3 py-2">Date</th>
+                    <th className="w-[235px] min-w-[235px] whitespace-nowrap px-3 py-2">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredSoloRegistrations.map((registration) => {
+                    const isEditing = registration.id === editingSoloId;
+                    const isConfirmingDelete = registration.id === confirmingDeleteId;
+                    const isSaving = registration.id === savingId;
+
+                    return (
+                      <tr key={registration.id} className="border-b border-bronze/10 last:border-0">
+                        <td className="w-[180px] min-w-[180px] whitespace-nowrap px-3 py-2 font-semibold text-ink">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editDraft?.full_name ?? ""}
+                              onChange={(event) => updateEditDraft("full_name", event.target.value)}
+                              className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                            />
+                          ) : (
+                            registration.full_name
+                          )}
+                        </td>
+                        <td className="w-[60px] min-w-[60px] whitespace-nowrap px-3 py-2">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              value={editDraft?.age ?? ""}
+                              onChange={(event) => updateEditDraft("age", event.target.value)}
+                              className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                            />
+                          ) : (
+                            registration.age
+                          )}
+                        </td>
+                        <td className="w-[135px] min-w-[135px] whitespace-nowrap px-3 py-2">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editDraft?.location ?? ""}
+                              onChange={(event) => updateEditDraft("location", event.target.value)}
+                              className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                            />
+                          ) : (
+                            registration.location
+                          )}
+                        </td>
+                        <td className="w-[120px] min-w-[120px] whitespace-nowrap px-3 py-2">
+                          {isEditing ? (
+                            <input
+                              type="tel"
+                              value={editDraft?.phone ?? ""}
+                              onChange={(event) => updateEditDraft("phone", event.target.value)}
+                              className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                            />
+                          ) : (
+                            registration.phone
+                          )}
+                        </td>
+                        <td className="w-[190px] min-w-[190px] whitespace-nowrap px-3 py-2">
+                          {isEditing ? (
+                            <input
+                              type="email"
+                              value={editDraft?.email ?? ""}
+                              onChange={(event) => updateEditDraft("email", event.target.value)}
+                              className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                            />
+                          ) : (
+                            registration.email
+                          )}
+                        </td>
+                        <td className="w-[100px] min-w-[100px] whitespace-nowrap px-3 py-2">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              value={editDraft?.years_experience ?? ""}
+                              onChange={(event) =>
+                                updateEditDraft("years_experience", event.target.value)
+                              }
+                              className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                            />
+                          ) : (
+                            registration.years_experience
+                          )}
+                        </td>
+                        <td className="w-[90px] min-w-[90px] whitespace-nowrap px-3 py-2">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              value={editDraft?.horse_age ?? ""}
+                              onChange={(event) => updateEditDraft("horse_age", event.target.value)}
+                              className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                            />
+                          ) : (
+                            registration.horse_age
+                          )}
+                        </td>
+                        <td className="w-[120px] min-w-[120px] whitespace-nowrap px-3 py-2">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editDraft?.horse_breed ?? ""}
+                              onChange={(event) => updateEditDraft("horse_breed", event.target.value)}
+                              className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                            />
+                          ) : (
+                            registration.horse_breed
+                          )}
+                        </td>
+                        <td className="w-[70px] min-w-[70px] whitespace-nowrap px-3 py-2">
+                          {formatSoloRegisteredDate(registration.created_at)}
+                        </td>
+                        <td className="w-[235px] min-w-[235px] whitespace-nowrap px-3 py-2">
+                          {isEditing ? (
+                            <div className="flex flex-col gap-2">
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => saveSoloRegistration(registration.id)}
+                                  disabled={isSaving}
+                                  className="rounded-lg bg-bronze-deep px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-cream transition-colors hover:bg-bronze disabled:opacity-60"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={cancelEditingSolo}
+                                  disabled={isSaving}
+                                  className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40 disabled:opacity-60"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                              {rowError?.id === registration.id && (
+                                <p className="whitespace-normal text-xs text-red-700">
+                                  {rowError.message}
+                                </p>
+                              )}
+                            </div>
+                          ) : isConfirmingDelete ? (
+                            <div className="flex flex-col gap-2">
+                              <p className="whitespace-normal text-xs text-brown/80">
+                                Delete this registration?
+                              </p>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => deleteSoloRegistration(registration.id)}
+                                  disabled={isSaving}
+                                  className="rounded-lg bg-bronze-deep px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-cream transition-colors hover:bg-bronze disabled:opacity-60"
+                                >
+                                  Confirm Delete
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={cancelDeletingSolo}
+                                  disabled={isSaving}
+                                  className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40 disabled:opacity-60"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                              {rowError?.id === registration.id && (
+                                <p className="whitespace-normal text-xs text-red-700">
+                                  {rowError.message}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => startEditingSolo(registration)}
+                                className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => startDeletingSolo(registration.id)}
+                                className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="rounded-lg border border-bronze/20 bg-sand px-4 py-6 text-brown/80">
+              No results found.
+            </p>
+          )}
+        </section>
+      ) : (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-bronze-dark">
+              Team Registrations
+            </h2>
+            <p className="text-sm text-brown/80">{filteredTeams.length} results</p>
+          </div>
+
+          {filteredTeams.length > 0 ? (
+            <div className="space-y-6">
+              {filteredTeams.map((team) => {
+                const members = teamMembersByTeamId[team.id] ?? [];
+                const isEditingTeam = team.id === editingTeamId;
+                const isConfirmingDeleteTeam = team.id === confirmingDeleteTeamId;
+                const isSavingTeam = team.id === savingTeamId;
+
+                return (
+                  <article
+                    key={team.id}
+                    className="rounded-lg border border-bronze/20 bg-sand p-5"
+                  >
+                    <div className="flex flex-col gap-4 border-b border-bronze/20 pb-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0 flex-1">
+                        {isEditingTeam ? (
+                          <input
+                            type="text"
+                            value={teamNameDraft}
+                            onChange={(event) => setTeamNameDraft(event.target.value)}
+                            className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 font-display text-xl font-bold uppercase tracking-wide text-bronze-dark focus:border-bronze focus:outline-none"
+                          />
+                        ) : (
+                          <h3 className="font-display text-xl font-bold uppercase tracking-wide text-bronze-dark">
+                            {team.team_name}
+                          </h3>
+                        )}
+                        <p className="mt-1 text-sm text-brown/80">
+                          {members.length} members
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-3 lg:items-end">
+                        <p className="text-sm text-brown/80">
+                          Registered {formatDate(team.created_at)}
+                        </p>
+
+                        {isEditingTeam ? (
+                          <div className="flex flex-col gap-2 lg:items-end">
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => saveTeamRegistration(team, members)}
+                                disabled={isSavingTeam}
+                                className="rounded-lg bg-bronze-deep px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-cream transition-colors hover:bg-bronze disabled:opacity-60"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelEditingTeam}
+                                disabled={isSavingTeam}
+                                className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40 disabled:opacity-60"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                            {teamEditError?.id === team.id && (
+                              <p className="max-w-sm text-xs text-red-700">
+                                {teamEditError.message}
+                              </p>
+                            )}
+                          </div>
+                        ) : isConfirmingDeleteTeam ? (
+                          <div className="flex flex-col gap-2 lg:items-end">
+                            <p className="text-xs text-brown/80">
+                              Delete this entire team and all its members?
+                            </p>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => deleteTeamRegistration(team.id)}
+                                disabled={isSavingTeam}
+                                className="rounded-lg bg-bronze-deep px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-cream transition-colors hover:bg-bronze disabled:opacity-60"
+                              >
+                                Confirm Delete
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelDeletingTeam}
+                                disabled={isSavingTeam}
+                                className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40 disabled:opacity-60"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                            {teamEditError?.id === team.id && (
+                              <p className="max-w-sm text-xs text-red-700">
+                                {teamEditError.message}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => startEditingTeam(team, members)}
+                              className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => startDeletingTeam(team.id)}
+                              className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {members.length > 0 ? (
+                      <div className="mt-4 overflow-x-auto">
+                        <table className="w-full min-w-[1170px] table-fixed border-collapse text-left text-sm text-brown">
+                          <thead className="border-b border-bronze/20 bg-parchment">
+                            <tr className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
+                              <th className="w-[200px] min-w-[200px] whitespace-nowrap px-3 py-2">Name</th>
+                              <th className="w-[80px] min-w-[80px] whitespace-nowrap px-3 py-2">Age</th>
+                              <th className="w-[160px] min-w-[160px] whitespace-nowrap px-3 py-2">Location</th>
+                              <th className="w-[140px] min-w-[140px] whitespace-nowrap px-3 py-2">Phone</th>
+                              <th className="w-[220px] min-w-[220px] whitespace-nowrap px-3 py-2">Email</th>
+                              <th className="w-[120px] min-w-[120px] whitespace-nowrap px-3 py-2">Experience</th>
+                              <th className="w-[110px] min-w-[110px] whitespace-nowrap px-3 py-2">Horse Age</th>
+                              <th className="w-[140px] min-w-[140px] whitespace-nowrap px-3 py-2">Horse Breed</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {members.map((member) => (
+                              <tr
+                                key={member.id}
+                                className="border-b border-bronze/10 last:border-0"
+                              >
+                                <td className="w-[200px] min-w-[200px] whitespace-nowrap px-3 py-2 font-semibold text-ink">
+                                  {isEditingTeam ? (
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="text"
+                                        value={memberDrafts[member.id]?.full_name ?? ""}
+                                        onChange={(event) =>
+                                          updateMemberDraft(
+                                            member.id,
+                                            "full_name",
+                                            event.target.value
+                                          )
+                                        }
+                                        className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                                      />
+                                      {member.is_leader && (
+                                        <span className="shrink-0 rounded-full bg-bronze px-2 py-1 font-display text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-cream">
+                                          Leader
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-2">
+                                      <span>{member.full_name}</span>
+                                      {member.is_leader && (
+                                        <span className="rounded-full bg-bronze px-2 py-1 font-display text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-cream">
+                                          Leader
+                                        </span>
+                                      )}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="w-[80px] min-w-[80px] whitespace-nowrap px-3 py-2">
+                                  {isEditingTeam ? (
+                                    <input
+                                      type="number"
+                                      value={memberDrafts[member.id]?.age ?? ""}
+                                      onChange={(event) =>
+                                        updateMemberDraft(member.id, "age", event.target.value)
+                                      }
+                                      className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                                    />
+                                  ) : (
+                                    member.age
+                                  )}
+                                </td>
+                                <td className="w-[160px] min-w-[160px] whitespace-nowrap px-3 py-2">
+                                  {isEditingTeam ? (
+                                    <input
+                                      type="text"
+                                      value={memberDrafts[member.id]?.location ?? ""}
+                                      onChange={(event) =>
+                                        updateMemberDraft(
+                                          member.id,
+                                          "location",
+                                          event.target.value
+                                        )
+                                      }
+                                      className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                                    />
+                                  ) : (
+                                    member.location
+                                  )}
+                                </td>
+                                <td className="w-[140px] min-w-[140px] whitespace-nowrap px-3 py-2">
+                                  {isEditingTeam ? (
+                                    <input
+                                      type="tel"
+                                      value={memberDrafts[member.id]?.phone ?? ""}
+                                      onChange={(event) =>
+                                        updateMemberDraft(member.id, "phone", event.target.value)
+                                      }
+                                      className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                                    />
+                                  ) : (
+                                    member.phone
+                                  )}
+                                </td>
+                                <td className="w-[220px] min-w-[220px] whitespace-nowrap px-3 py-2">
+                                  {isEditingTeam ? (
+                                    <input
+                                      type="email"
+                                      value={memberDrafts[member.id]?.email ?? ""}
+                                      onChange={(event) =>
+                                        updateMemberDraft(member.id, "email", event.target.value)
+                                      }
+                                      className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                                    />
+                                  ) : (
+                                    member.email
+                                  )}
+                                </td>
+                                <td className="w-[120px] min-w-[120px] whitespace-nowrap px-3 py-2">
+                                  {isEditingTeam ? (
+                                    <input
+                                      type="number"
+                                      value={memberDrafts[member.id]?.years_experience ?? ""}
+                                      onChange={(event) =>
+                                        updateMemberDraft(
+                                          member.id,
+                                          "years_experience",
+                                          event.target.value
+                                        )
+                                      }
+                                      className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                                    />
+                                  ) : (
+                                    member.years_experience
+                                  )}
+                                </td>
+                                <td className="w-[110px] min-w-[110px] whitespace-nowrap px-3 py-2">
+                                  {isEditingTeam ? (
+                                    <input
+                                      type="number"
+                                      value={memberDrafts[member.id]?.horse_age ?? ""}
+                                      onChange={(event) =>
+                                        updateMemberDraft(
+                                          member.id,
+                                          "horse_age",
+                                          event.target.value
+                                        )
+                                      }
+                                      className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                                    />
+                                  ) : (
+                                    member.horse_age
+                                  )}
+                                </td>
+                                <td className="w-[140px] min-w-[140px] whitespace-nowrap px-3 py-2">
+                                  {isEditingTeam ? (
+                                    <input
+                                      type="text"
+                                      value={memberDrafts[member.id]?.horse_breed ?? ""}
+                                      onChange={(event) =>
+                                        updateMemberDraft(
+                                          member.id,
+                                          "horse_breed",
+                                          event.target.value
+                                        )
+                                      }
+                                      className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                                    />
+                                  ) : (
+                                    member.horse_breed
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p className="mt-4 rounded-lg border border-bronze/20 bg-cream px-4 py-6 text-brown/80">
+                        No members submitted yet.
+                      </p>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="rounded-lg border border-bronze/20 bg-sand px-4 py-6 text-brown/80">
+              No results found.
+            </p>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}

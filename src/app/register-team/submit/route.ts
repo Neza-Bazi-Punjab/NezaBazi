@@ -41,7 +41,18 @@ export async function POST(request: Request) {
     );
   }
 
-  let teamId = existingTeamId;
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profileError) {
+    return NextResponse.json({ error: profileError.message }, { status: 400 });
+  }
+
+  const isAdmin = profile?.role === "admin";
+  let teamId = isAdmin ? undefined : existingTeamId;
 
   if (teamId) {
     const { data: existingTeam, error: existingTeamError } = await supabase
