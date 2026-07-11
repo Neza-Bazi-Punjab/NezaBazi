@@ -4,10 +4,7 @@ import { site } from "@/lib/site";
 const routes = [
   "",
   "/about",
-  "/event",
-  "/gallery",
   "/rules",
-  "/contact",
   "/register",
   "/login",
   "/players",

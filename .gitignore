@@ -28,6 +28,9 @@
 .claude/
 CLAUDE.md
 AGENTS.md
+PRODUCT.md
+DESIGN.md
+.impeccable/
 
 # debug
 npm-debug.log*

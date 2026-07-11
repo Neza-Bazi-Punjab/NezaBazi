@@ -149,10 +149,20 @@ export function CloseIcon(props: IconProps) {
   );
 }
 
-export function FacebookIcon(props: IconProps) {
+export function MailIcon(props: IconProps) {
   return (
-    <svg {...base({ ...props, fill: "currentColor", stroke: "none" })}>
-      <path d="M13.5 21v-7h2.4l.4-3h-2.8V9.1c0-.9.3-1.5 1.6-1.5h1.3V4.9c-.2 0-1-.1-1.9-.1-1.9 0-3.3 1.2-3.3 3.4V11H8.5v3h2.7v7h2.3Z" />
+    <svg {...base(props)}>
+      <rect x="3.5" y="5.5" width="17" height="13" rx="2" />
+      <path d="m4.5 7 7.5 6 7.5-6" />
+    </svg>
+  );
+}
+
+export function PlayIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M10.2 9.2l4.6 2.8-4.6 2.8V9.2Z" fill="currentColor" stroke="none" />
     </svg>
   );
 }
