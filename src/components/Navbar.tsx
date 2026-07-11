@@ -1,20 +1,73 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { navLinks } from "@/lib/site";
 import Logo from "./Logo";
 import { CloseIcon, MenuIcon } from "./icons";
+
+const getUserLabel = ({
+  email,
+  user_metadata,
+}: {
+  email?: string;
+  user_metadata?: { full_name?: string };
+}) => user_metadata?.full_name ?? email ?? "Player";
 
 /* Sticky top navigation: animated hover/active underlines on desktop and a
    mobile dropdown that smoothly expands and collapses (kept mounted so both
    directions animate). */
 export default function Navbar() {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [userLabel, setUserLabel] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [supabase] = useState(() => createClient());
   const pathname = usePathname();
+  const mobileLinks = [...navLinks];
 
-  const mobileLinks = [...navLinks, { href: "/login", label: "Login" }];
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    setOpen(false);
+    await supabase.auth.signOut();
+    router.push("/");
+    router.refresh();
+    setLoggingOut(false);
+  };
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!mounted) {
+        return;
+      }
+
+      setUserLabel(user ? getUserLabel(user) : null);
+      setAuthLoading(false);
+    };
+
+    loadUser();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserLabel(session?.user ? getUserLabel(session.user) : null);
+      setAuthLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
 
   return (
     <header className="sticky top-0 z-50 border-b border-bronze/15 bg-sand/90 backdrop-blur">
@@ -45,12 +98,37 @@ export default function Navbar() {
         </ul>
 
         <div className="hidden items-center gap-5 lg:flex">
-          <Link
-            href="/login"
-            className="nav-underline font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70 transition-colors hover:text-bronze"
-          >
-            Login
-          </Link>
+          {!authLoading &&
+            (userLabel ? (
+              <div className="flex items-center gap-4">
+                <span className="font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70">
+                  {userLabel}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  disabled={loggingOut}
+                  className="nav-underline font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70 transition-colors hover:text-bronze disabled:opacity-60"
+                >
+                  {loggingOut ? "Logging out..." : "Log Out"}
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-5">
+                <Link
+                  href="/login"
+                  className="nav-underline font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70 transition-colors hover:text-bronze"
+                >
+                  Log In
+                </Link>
+                <Link
+                  href="/signup"
+                  className="nav-underline font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70 transition-colors hover:text-bronze"
+                >
+                  Sign Up
+                </Link>
+              </div>
+            ))}
           <Link
             href="/register"
             className="rounded-full bg-bronze px-6 py-2.5 font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream shadow-sm transition-[background-color,transform,box-shadow] duration-[var(--dur-base)] ease-[var(--ease-soft)] hover:bg-bronze-dark hover:shadow-md motion-safe:hover:-translate-y-0.5"
@@ -108,6 +186,49 @@ export default function Navbar() {
                 </Link>
               </li>
             ))}
+            {!authLoading && (
+              <li className="border-b border-bronze/10 py-4">
+                {userLabel ? (
+                  <div className="space-y-3">
+                    <p className="font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70">
+                      {userLabel}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      disabled={loggingOut}
+                      tabIndex={open ? undefined : -1}
+                      className="font-display text-sm font-semibold uppercase tracking-[0.15em] text-ink transition-colors hover:text-bronze disabled:opacity-60"
+                    >
+                      {loggingOut ? "Logging out..." : "Log Out"}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    <Link
+                      href="/login"
+                      onClick={() => setOpen(false)}
+                      tabIndex={open ? undefined : -1}
+                      className={`font-display text-sm font-semibold uppercase tracking-[0.15em] transition-colors hover:text-bronze ${
+                        pathname === "/login" ? "text-bronze" : "text-ink"
+                      }`}
+                    >
+                      Log In
+                    </Link>
+                    <Link
+                      href="/signup"
+                      onClick={() => setOpen(false)}
+                      tabIndex={open ? undefined : -1}
+                      className={`font-display text-sm font-semibold uppercase tracking-[0.15em] transition-colors hover:text-bronze ${
+                        pathname === "/signup" ? "text-bronze" : "text-ink"
+                      }`}
+                    >
+                      Sign Up
+                    </Link>
+                  </div>
+                )}
+              </li>
+            )}
             <li className="pt-4">
               <Link
                 href="/register"

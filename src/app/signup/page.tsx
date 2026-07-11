@@ -9,8 +9,14 @@ import { createClient } from "@/lib/supabase/client";
 export default function SignupPage() {
   const router = useRouter();
   const [fullName, setFullName] = useState("");
+  const [age, setAge] = useState("");
+  const [location, setLocation] = useState("");
+  const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [yearsExperience, setYearsExperience] = useState("");
+  const [horseAge, setHorseAge] = useState("");
+  const [horseBreed, setHorseBreed] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -27,6 +33,12 @@ export default function SignupPage() {
       options: {
         data: {
           full_name: fullName,
+          age: Number(age),
+          location,
+          phone,
+          years_experience: Number(yearsExperience),
+          horse_age: Number(horseAge),
+          horse_breed: horseBreed,
         },
       },
     });
@@ -38,7 +50,7 @@ export default function SignupPage() {
       return;
     }
 
-    router.push("/login?registered=true");
+    router.push("/signup/success");
   };
 
   return (
@@ -80,6 +92,46 @@ export default function SignupPage() {
 
             <div>
               <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
+                Age
+              </label>
+              <input
+                type="number"
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                required
+                min={1}
+                className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
+                Location
+              </label>
+              <input
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                required
+                className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
+                Phone Number
+              </label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                required
+                className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
                 Password
               </label>
               <input
@@ -88,6 +140,47 @@ export default function SignupPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={6}
+                className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
+                Years of Neza Bazi Experience
+              </label>
+              <input
+                type="number"
+                value={yearsExperience}
+                onChange={(e) => setYearsExperience(e.target.value)}
+                required
+                min={0}
+                className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
+                Horse Age
+              </label>
+              <input
+                type="number"
+                value={horseAge}
+                onChange={(e) => setHorseAge(e.target.value)}
+                required
+                min={0}
+                className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
+                Horse Breed
+              </label>
+              <input
+                type="text"
+                value={horseBreed}
+                onChange={(e) => setHorseBreed(e.target.value)}
+                required
                 className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
               />
             </div>
