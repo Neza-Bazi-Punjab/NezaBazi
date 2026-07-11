@@ -124,7 +124,7 @@ export default function TeamRegisterForm({
           onChange={(e) => setTeamName(e.target.value)}
           required
           disabled={lockTeamName}
-          className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+          className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none disabled:opacity-70"
         />
       </div>
 
@@ -143,7 +143,7 @@ export default function TeamRegisterForm({
               value={rider.fullName}
               onChange={(e) => updateRider(index, "fullName", e.target.value)}
               required
-              className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              className="mt-2 w-full rounded-lg border border-bronze/20 bg-cream px-4 py-3 text-brown focus:border-bronze focus:outline-none"
             />
           </div>
 
@@ -157,7 +157,7 @@ export default function TeamRegisterForm({
               onChange={(e) => updateRider(index, "age", e.target.value)}
               required
               min={1}
-              className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              className="mt-2 w-full rounded-lg border border-bronze/20 bg-cream px-4 py-3 text-brown focus:border-bronze focus:outline-none"
             />
           </div>
 
@@ -170,7 +170,7 @@ export default function TeamRegisterForm({
               value={rider.location}
               onChange={(e) => updateRider(index, "location", e.target.value)}
               required
-              className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              className="mt-2 w-full rounded-lg border border-bronze/20 bg-cream px-4 py-3 text-brown focus:border-bronze focus:outline-none"
             />
           </div>
 
@@ -183,7 +183,7 @@ export default function TeamRegisterForm({
               value={rider.phone}
               onChange={(e) => updateRider(index, "phone", e.target.value)}
               required
-              className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              className="mt-2 w-full rounded-lg border border-bronze/20 bg-cream px-4 py-3 text-brown focus:border-bronze focus:outline-none"
             />
           </div>
 
@@ -196,7 +196,7 @@ export default function TeamRegisterForm({
               value={rider.email}
               onChange={(e) => updateRider(index, "email", e.target.value)}
               required
-              className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              className="mt-2 w-full rounded-lg border border-bronze/20 bg-cream px-4 py-3 text-brown focus:border-bronze focus:outline-none"
             />
           </div>
 
@@ -210,7 +210,7 @@ export default function TeamRegisterForm({
               onChange={(e) => updateRider(index, "yearsExperience", e.target.value)}
               required
               min={0}
-              className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              className="mt-2 w-full rounded-lg border border-bronze/20 bg-cream px-4 py-3 text-brown focus:border-bronze focus:outline-none"
             />
           </div>
 
@@ -224,7 +224,7 @@ export default function TeamRegisterForm({
               onChange={(e) => updateRider(index, "horseAge", e.target.value)}
               required
               min={0}
-              className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              className="mt-2 w-full rounded-lg border border-bronze/20 bg-cream px-4 py-3 text-brown focus:border-bronze focus:outline-none"
             />
           </div>
 
@@ -237,7 +237,7 @@ export default function TeamRegisterForm({
               value={rider.horseBreed}
               onChange={(e) => updateRider(index, "horseBreed", e.target.value)}
               required
-              className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              className="mt-2 w-full rounded-lg border border-bronze/20 bg-cream px-4 py-3 text-brown focus:border-bronze focus:outline-none"
             />
           </div>
         </div>

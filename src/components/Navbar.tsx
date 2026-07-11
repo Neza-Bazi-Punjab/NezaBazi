@@ -27,7 +27,18 @@ export default function Navbar() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [supabase] = useState(() => createClient());
   const pathname = usePathname();
-  const mobileLinks = [...navLinks];
+
+  /* Shared styling for mobile menu rows so nav links, auth links and the
+     user/logout rows all read as one consistent list with equal tap areas. */
+  const mobileRowClass =
+    "block border-b border-bronze/10 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] transition-colors hover:text-bronze";
+  const mobileItemClass =
+    "transition-[opacity,transform] duration-[var(--dur-base)] ease-[var(--ease-soft)] motion-reduce:transition-none";
+  const mobileItemStyle = (index: number): React.CSSProperties => ({
+    transitionDelay: open ? `${index * 40}ms` : "0ms",
+    opacity: open ? 1 : 0,
+    transform: open ? "none" : "translateY(-6px)",
+  });
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -101,7 +112,7 @@ export default function Navbar() {
           {!authLoading &&
             (userLabel ? (
               <div className="flex items-center gap-4">
-                <span className="font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70">
+                <span className="font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/80">
                   {userLabel}
                 </span>
                 <button
@@ -143,7 +154,7 @@ export default function Navbar() {
           aria-expanded={open}
           aria-controls="mobile-menu"
           aria-label={open ? "Close menu" : "Open menu"}
-          className="text-ink transition-colors hover:text-bronze lg:hidden"
+          className="-m-2 p-2 text-ink transition-colors hover:text-bronze lg:hidden"
         >
           {open ? <CloseIcon className="h-7 w-7" /> : <MenuIcon className="h-7 w-7" />}
         </button>
@@ -164,21 +175,13 @@ export default function Navbar() {
             }`}
             aria-hidden={!open}
           >
-            {mobileLinks.map((link, i) => (
-              <li
-                key={link.href}
-                className="transition-[opacity,transform] duration-[var(--dur-base)] ease-[var(--ease-soft)] motion-reduce:transition-none"
-                style={{
-                  transitionDelay: open ? `${i * 40}ms` : "0ms",
-                  opacity: open ? 1 : 0,
-                  transform: open ? "none" : "translateY(-6px)",
-                }}
-              >
+            {navLinks.map((link, i) => (
+              <li key={link.href} className={mobileItemClass} style={mobileItemStyle(i)}>
                 <Link
                   href={link.href}
                   onClick={() => setOpen(false)}
                   tabIndex={open ? undefined : -1}
-                  className={`block border-b border-bronze/10 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] transition-colors hover:text-bronze ${
+                  className={`${mobileRowClass} ${
                     pathname === link.href ? "text-bronze" : "text-ink"
                   }`}
                 >
@@ -186,50 +189,70 @@ export default function Navbar() {
                 </Link>
               </li>
             ))}
-            {!authLoading && (
-              <li className="border-b border-bronze/10 py-4">
-                {userLabel ? (
-                  <div className="space-y-3">
-                    <p className="font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70">
+            {!authLoading &&
+              (userLabel ? (
+                <>
+                  <li
+                    className={mobileItemClass}
+                    style={mobileItemStyle(navLinks.length)}
+                  >
+                    <p className="border-b border-bronze/10 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/80">
                       {userLabel}
                     </p>
+                  </li>
+                  <li
+                    className={mobileItemClass}
+                    style={mobileItemStyle(navLinks.length + 1)}
+                  >
                     <button
                       type="button"
                       onClick={handleLogout}
                       disabled={loggingOut}
                       tabIndex={open ? undefined : -1}
-                      className="font-display text-sm font-semibold uppercase tracking-[0.15em] text-ink transition-colors hover:text-bronze disabled:opacity-60"
+                      className={`${mobileRowClass} w-full text-left text-ink disabled:opacity-60`}
                     >
                       {loggingOut ? "Logging out..." : "Log Out"}
                     </button>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-3">
+                  </li>
+                </>
+              ) : (
+                <>
+                  <li
+                    className={mobileItemClass}
+                    style={mobileItemStyle(navLinks.length)}
+                  >
                     <Link
                       href="/login"
                       onClick={() => setOpen(false)}
                       tabIndex={open ? undefined : -1}
-                      className={`font-display text-sm font-semibold uppercase tracking-[0.15em] transition-colors hover:text-bronze ${
+                      className={`${mobileRowClass} ${
                         pathname === "/login" ? "text-bronze" : "text-ink"
                       }`}
                     >
                       Log In
                     </Link>
+                  </li>
+                  <li
+                    className={mobileItemClass}
+                    style={mobileItemStyle(navLinks.length + 1)}
+                  >
                     <Link
                       href="/signup"
                       onClick={() => setOpen(false)}
                       tabIndex={open ? undefined : -1}
-                      className={`font-display text-sm font-semibold uppercase tracking-[0.15em] transition-colors hover:text-bronze ${
+                      className={`${mobileRowClass} ${
                         pathname === "/signup" ? "text-bronze" : "text-ink"
                       }`}
                     >
                       Sign Up
                     </Link>
-                  </div>
-                )}
-              </li>
-            )}
-            <li className="pt-4">
+                  </li>
+                </>
+              ))}
+            <li
+              className={`pt-4 ${mobileItemClass}`}
+              style={mobileItemStyle(navLinks.length + 2)}
+            >
               <Link
                 href="/register"
                 onClick={() => setOpen(false)}
