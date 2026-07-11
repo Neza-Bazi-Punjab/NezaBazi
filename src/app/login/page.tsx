@@ -6,6 +6,14 @@ import PageHeader from "@/components/PageHeader";
 import SectionHeading from "@/components/SectionHeading";
 import { createClient } from "@/lib/supabase/client";
 
+function getSafeRedirect(value: string | null): string {
+  if (!value) return "/";
+  if (!value.startsWith("/")) return "/";
+  if (value.startsWith("//")) return "/";
+  if (value.includes("://")) return "/";
+  return value;
+}
+
 export default function LoginPage() {
   return (
     <Suspense fallback={null}>
@@ -17,7 +25,7 @@ export default function LoginPage() {
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirect") ?? "/";
+  const redirectTo = getSafeRedirect(searchParams.get("redirect"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
