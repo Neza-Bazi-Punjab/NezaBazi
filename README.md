@@ -31,16 +31,25 @@ npm run build
 src/
   app/                 App Router routes (one folder per page)
     layout.tsx         Root layout: fonts, <Navbar>, <Footer>, metadata
-    page.tsx           Home page
+    page.tsx           Home page (hero with all key facts, schedule,
+                       categories, highlights)
     globals.css        Tailwind v4 theme (@theme) + shared animation tokens
-    about/ event/ gallery/ rules/ contact/    Content pages
-    register/ login/ players/ rankings/        "Coming soon" pages
+    about/ rules/      Content pages (About incl. contact, Rulebook)
+    register/          Registration info page ("opens soon")
+    login/ players/ rankings/    Unlinked "coming soon" pages (later phases)
     sitemap.ts icon.svg
   components/           Reusable UI (Navbar, Footer, Button, DissolvePhoto,
                         Reveal, icons, section building blocks, …)
   lib/site.ts          Single source of truth for event details, nav links
 public/                Static assets: images/, flags/, brand/, documents/
 ```
+
+The nav is deliberately just three tabs — Home, About, Rulebook — plus the
+Login link and the Register Now button (`/register` has no tab of its own;
+it's reached via the button, page CTAs and the footer). Contact channels
+(email, phone, Instagram, YouTube) live in the footer and on the About page.
+Per the organisers, no clubs, sponsors or organising bodies are named
+anywhere on the site.
 
 Each component starts with a one-line comment describing what it does; shared
 event details (date, venue, contact, domain) live in
@@ -51,12 +60,14 @@ event details (date, venue, contact, domain) live in
 - Contextual photos live in [public/images](public/images/README.md) and use
   the `DissolvePhoto` component, which masks their edges so they melt into the
   parchment background, echoing the poster.
-- `/gallery` is a "coming soon" placeholder — match-day photography is added
-  after the championship (August 21, 2026).
-- `/register`, `/login`, `/players` and `/rankings` are placeholder pages that
-  unlock in later phases.
+- `/login`, `/players` and `/rankings` are unlinked placeholder pages that
+  unlock in later phases; `/register` describes the registration flow until
+  online registration opens (Phase 2). A gallery returns after the
+  championship (August 21, 2026) once match-day photography exists.
 - The logo mark comes from [public/brand](public/brand/README.md); the
   favicon is a derived single-tone version at [src/app/icon.svg](src/app/icon.svg).
-- `/rules` embeds a PDF from `public/documents/rules.pdf` when present (see
-  [public/documents/README.md](public/documents/README.md)), otherwise it shows
-  a "coming soon" placeholder.
+- `/rules` (the Rulebook tab) embeds a PDF from `public/documents/rules.pdf`
+  when present (see [public/documents/README.md](public/documents/README.md))
+  and a YouTube rules video once `rulesVideoUrl` is set in
+  [src/lib/site.ts](src/lib/site.ts); until then each shows a "coming soon"
+  placeholder. The YouTube channel link (`youtube`) is a placeholder too.

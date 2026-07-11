@@ -11,7 +11,8 @@ export const metadata: Metadata = {
 const steps = [
   {
     title: "Visit & Register",
-    detail: `Come back to ${site.url.replace("https://", "")} and hit Register Now once registration opens.`,
+    detail:
+      "Come back to this website and hit Register Now once registration opens.",
   },
   {
     title: "Rider Profile & Horse Details",
