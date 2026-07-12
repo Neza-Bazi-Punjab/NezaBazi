@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import SectionHeading from "@/components/SectionHeading";
-import { createClient } from "@/lib/supabase/client";
 
 export type AccountProfile = {
   id: string;
@@ -49,11 +48,18 @@ export type AccountTeamMember = {
   created_at: string;
 };
 
+export type AccountTeamMembership = {
+  member: AccountTeamMember;
+  team: AccountTeam | null;
+  teammates: Array<{ id: string; full_name: string; is_leader: boolean }>;
+};
+
 type AccountPageClientProps = {
   profile: AccountProfile;
   soloRegistration: AccountSoloRegistration | null;
   team: AccountTeam | null;
   teamMembers: AccountTeamMember[];
+  memberships: AccountTeamMembership[];
 };
 
 type ProfileDraft = {
@@ -80,42 +86,6 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
 
 const formatDate = (value: string) => dateFormatter.format(new Date(value));
 
-const getDuplicateErrorMessage = (error: {
-  code?: string;
-  message?: string;
-  details?: string;
-  hint?: string;
-}) => {
-  const errorText = [
-    error.code,
-    error.message,
-    error.details,
-    error.hint,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  if (
-    error.code === "23505" ||
-    errorText.includes("duplicate") ||
-    errorText.includes("unique") ||
-    errorText.includes("already")
-  ) {
-    if (errorText.includes("email")) {
-      return "This email is already in use.";
-    }
-
-    if (errorText.includes("phone")) {
-      return "This phone number is already in use.";
-    }
-
-    return "This email or phone number is already in use.";
-  }
-
-  return error.message;
-};
-
 const Detail = ({ label, value }: { label: string; value: string | number }) => (
   <div>
     <p className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
@@ -130,6 +100,7 @@ export default function AccountPageClient({
   soloRegistration,
   team,
   teamMembers,
+  memberships,
 }: AccountPageClientProps) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -143,7 +114,6 @@ export default function AccountPageClient({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [supabase] = useState(() => createClient());
 
   const resetDraft = () => {
     setDraft({
@@ -166,6 +136,12 @@ export default function AccountPageClient({
 
     if (draft.age.trim() === "") {
       return "Age is required.";
+    }
+
+    const ageNumber = Number(draft.age.trim());
+
+    if (!Number.isInteger(ageNumber) || ageNumber < 1 || ageNumber > 120) {
+      return "Please enter a valid age.";
     }
 
     if (draft.location.trim() === "") {
@@ -200,48 +176,50 @@ export default function AccountPageClient({
 
     setSaving(true);
 
-    const nextEmail = draft.email.trim();
-    const emailChanged = nextEmail !== profile.email;
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError) {
-      setSaving(false);
-      setError(userError.message);
-      return;
-    }
-
-    const { data, error: updateError } = await supabase.auth.updateUser({
-      email: nextEmail,
-      data: {
-        ...(user?.user_metadata ?? {}),
-        full_name: draft.full_name.trim(),
-        age: Number(draft.age),
+    const response = await fetch("/api/account/profile", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        fullName: draft.full_name.trim(),
+        age: draft.age.trim(),
         location: draft.location.trim(),
         phone: draft.phone.trim(),
-      },
+        email: draft.email.trim(),
+      }),
     });
+    const result = (await response.json()) as {
+      ok?: boolean;
+      error?: string;
+      emailRequiresConfirmation?: boolean;
+      syncedCount?: number;
+      warnings?: string[];
+    };
 
     setSaving(false);
 
-    if (updateError) {
-      console.error("[account.updateUser]", updateError);
-      setError(getDuplicateErrorMessage(updateError) ?? "Unable to update profile.");
+    if (!response.ok) {
+      setError(result.error ?? "Unable to update profile.");
       return;
     }
 
-    const emailRequiresConfirmation =
-      emailChanged && data.user?.email !== nextEmail;
-
     setEditing(false);
-    setSuccess(
-      emailRequiresConfirmation
+
+    if (result.warnings && result.warnings.length > 0) {
+      setError(`Your account was updated, but: ${result.warnings.join(" ")}`);
+    } else {
+      const baseMessage = result.emailRequiresConfirmation
         ? "Profile updated. Check your new email inbox to confirm the email change."
-        : "Profile updated."
-    );
+        : "Profile updated.";
+
+      setSuccess(
+        (result.syncedCount ?? 0) > 0
+          ? `${baseMessage} Your registration details were updated to match.`
+          : baseMessage
+      );
+    }
+
     router.refresh();
   };
 
@@ -380,7 +358,7 @@ export default function AccountPageClient({
         <SectionHeading>Active Registrations</SectionHeading>
 
         <div className="mt-10 space-y-6">
-          {!soloRegistration && !team ? (
+          {!soloRegistration && !team && memberships.length === 0 ? (
             <div className="space-y-6 rounded-lg border border-bronze/20 bg-sand p-6">
               <p className="leading-7 text-brown/85">
                 You haven&apos;t registered yet.
@@ -420,6 +398,53 @@ export default function AccountPageClient({
                   </div>
                 </article>
               )}
+
+              {memberships.map(({ member, team: membershipTeam, teammates }) => (
+                <article
+                  key={member.id}
+                  className="space-y-6 rounded-lg border border-bronze/20 bg-sand p-6"
+                >
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <h3 className="font-display text-xl font-bold uppercase tracking-wide text-bronze-dark">
+                      {membershipTeam?.team_name ?? "Team"}
+                    </h3>
+                    <p className="text-sm text-brown/80">
+                      Registered {formatDate(member.created_at)}
+                    </p>
+                  </div>
+
+                  <p className="leading-7 text-brown/85">
+                    You are registered as a rider on this team by its team leader.
+                  </p>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Detail label="Full Name" value={member.full_name} />
+                    <Detail label="Age" value={member.age} />
+                    <Detail label="Location" value={member.location} />
+                    <Detail label="Phone" value={member.phone} />
+                    <Detail label="Email" value={member.email} />
+                    <Detail label="Experience" value={member.years_experience} />
+                    <Detail label="Horse Age" value={member.horse_age} />
+                    <Detail label="Horse Breed" value={member.horse_breed} />
+                  </div>
+
+                  {teammates.length > 0 && (
+                    <div>
+                      <p className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
+                        Teammates
+                      </p>
+                      <p className="mt-1 text-brown/85">
+                        {teammates
+                          .map(
+                            (teammate) =>
+                              `${teammate.full_name}${teammate.is_leader ? " (Team Leader)" : ""}`
+                          )
+                          .join(", ")}
+                      </p>
+                    </div>
+                  )}
+                </article>
+              ))}
 
               {team && (
                 <article className="space-y-6 rounded-lg border border-bronze/20 bg-sand p-6">

@@ -4,15 +4,9 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import SectionHeading from "@/components/SectionHeading";
+import { getSafeRedirect } from "@/lib/safe-redirect";
 import { createClient } from "@/lib/supabase/client";
-
-function getSafeRedirect(value: string | null): string {
-  if (!value) return "/";
-  if (!value.startsWith("/")) return "/";
-  if (value.startsWith("//")) return "/";
-  if (value.includes("://")) return "/";
-  return value;
-}
+import { syncAccountRegistrations } from "@/lib/sync-account-registrations";
 
 export default function LoginPage() {
   return (
@@ -39,12 +33,14 @@ function LoginPageContent() {
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-    setLoading(false);
-
     if (error) {
+      setLoading(false);
       setError(error.message);
       return;
     }
+
+    await syncAccountRegistrations();
+    setLoading(false);
 
     router.push(redirectTo);
     router.refresh();

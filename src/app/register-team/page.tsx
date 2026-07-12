@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import PageHeader from "@/components/PageHeader";
 import SectionHeading from "@/components/SectionHeading";
+import { escapeIlikePattern } from "@/lib/supabase/query";
 import { createClient } from "@/lib/supabase/server";
 import { site } from "@/lib/site";
 import TeamRegisterForm from "./TeamRegisterForm";
@@ -62,6 +64,41 @@ export default async function RegisterTeamPage() {
         .eq("team_id", existingTeam.id)
     : { count: 0 };
 
+  let hasTeamMembership = false;
+  let membershipTeamName: string | null = null;
+
+  if (user && !isAdmin && user.email) {
+    const serviceSupabase = createSupabaseAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    );
+    const { data: membership, error: membershipError } = await serviceSupabase
+      .from("team_members")
+      .select("team_id")
+      .ilike("email", escapeIlikePattern(user.email))
+      .eq("is_leader", false)
+      .limit(1)
+      .maybeSingle();
+
+    if (membershipError) {
+      console.error("Unable to check the user's existing team membership", membershipError);
+    } else if (membership) {
+      hasTeamMembership = true;
+      const { data: membershipTeam, error: membershipTeamError } = await serviceSupabase
+        .from("teams")
+        .select("team_name")
+        .eq("id", membership.team_id)
+        .maybeSingle();
+
+      if (membershipTeamError) {
+        console.error("Unable to load the user's existing team", membershipTeamError);
+      } else {
+        membershipTeamName = membershipTeam?.team_name ?? "your current team";
+      }
+    }
+  }
+
   const hasCompleteTeam = !isAdmin && Boolean(existingTeam && teamMemberCount === 4);
 
   return (
@@ -74,13 +111,15 @@ export default async function RegisterTeamPage() {
       <section className="bg-cream">
         <div className="mx-auto max-w-xl px-6 py-16">
           {user ? (
-            hasCompleteTeam ? (
+            hasCompleteTeam || hasTeamMembership ? (
               <>
                 <SectionHeading>Team Already Registered</SectionHeading>
 
                 <div className="mt-10 space-y-6">
                   <p className="leading-7 text-brown/85">
-                    You have already registered a team.
+                    {hasTeamMembership
+                      ? `You are already registered on ${membershipTeamName ?? "your current team"}. A player can only be on one team.`
+                      : "You have already registered a team."}
                   </p>
                 </div>
               </>

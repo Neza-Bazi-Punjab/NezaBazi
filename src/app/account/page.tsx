@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import PageHeader from "@/components/PageHeader";
 import SectionHeading from "@/components/SectionHeading";
+import { escapeIlikePattern } from "@/lib/supabase/query";
 import { createClient } from "@/lib/supabase/server";
 import { site } from "@/lib/site";
 import AccountPageClient, {
@@ -9,6 +11,7 @@ import AccountPageClient, {
   type AccountSoloRegistration,
   type AccountTeam,
   type AccountTeamMember,
+  type AccountTeamMembership,
 } from "./AccountPage";
 
 export const metadata: Metadata = {
@@ -94,6 +97,67 @@ export default async function AccountPage() {
         .eq("team_id", team.id)
     : { data: null };
 
+  /* Rider rows created by another team's leader carry no profile linkage, and
+     RLS only lets leaders read their own team's rows — so look up memberships
+     by login email with the server-only service role. Escape LIKE wildcards so
+     the case-insensitive match stays exact. */
+  let memberships: AccountTeamMembership[] = [];
+
+  if (user.email) {
+    const serviceSupabase = createSupabaseAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    );
+
+    const { data: memberRows } = await serviceSupabase
+      .from("team_members")
+      .select(
+        "id, team_id, full_name, age, location, phone, email, years_experience, horse_age, horse_breed, is_leader, created_at"
+      )
+      .ilike("email", escapeIlikePattern(user.email))
+      .eq("is_leader", false);
+
+    const membershipRows = (memberRows ?? []) as AccountTeamMember[];
+    const membershipTeamIds = membershipRows.map((row) => row.team_id);
+
+    if (membershipTeamIds.length > 0) {
+      const [{ data: membershipTeams }, { data: membershipRosters }] =
+        await Promise.all([
+          serviceSupabase
+            .from("teams")
+            .select("id, team_name, created_at")
+            .in("id", membershipTeamIds),
+          serviceSupabase
+            .from("team_members")
+            .select("id, team_id, full_name, is_leader")
+            .in("team_id", membershipTeamIds),
+        ]);
+
+      const teamsById = new Map(
+        ((membershipTeams ?? []) as AccountTeam[]).map((membershipTeam) => [
+          membershipTeam.id,
+          membershipTeam,
+        ])
+      );
+      const rosters = (membershipRosters ?? []) as Array<{
+        id: string;
+        team_id: string;
+        full_name: string;
+        is_leader: boolean;
+      }>;
+
+      memberships = membershipRows.map((row) => ({
+        member: row,
+        team: teamsById.get(row.team_id) ?? null,
+        teammates: rosters.filter(
+          (rosterMember) =>
+            rosterMember.team_id === row.team_id && rosterMember.id !== row.id
+        ),
+      }));
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -119,6 +183,7 @@ export default async function AccountPage() {
             }
             team={(team ?? null) as AccountTeam | null}
             teamMembers={(teamMembers ?? []) as AccountTeamMember[]}
+            memberships={memberships}
           />
         </div>
       </section>

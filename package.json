@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --no-warnings --test src/lib/supabase/query.test.mts src/lib/safe-redirect.test.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
