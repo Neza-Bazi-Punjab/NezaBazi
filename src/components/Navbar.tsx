@@ -112,9 +112,12 @@ export default function Navbar() {
           {!authLoading &&
             (userLabel ? (
               <div className="flex items-center gap-4">
-                <span className="font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/80">
-                  {userLabel}
-                </span>
+                <Link
+                  href="/account"
+                  className="nav-underline font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70 transition-colors hover:text-bronze"
+                >
+                  My Account
+                </Link>
                 <button
                   type="button"
                   onClick={handleLogout}
@@ -196,9 +199,14 @@ export default function Navbar() {
                     className={mobileItemClass}
                     style={mobileItemStyle(navLinks.length)}
                   >
-                    <p className="border-b border-bronze/10 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/80">
-                      {userLabel}
-                    </p>
+                    <Link
+                      href="/account"
+                      onClick={() => setOpen(false)}
+                      tabIndex={open ? undefined : -1}
+                      className={`${mobileRowClass} text-brown/80`}
+                    >
+                      My Account
+                    </Link>
                   </li>
                   <li
                     className={mobileItemClass}

@@ -17,7 +17,18 @@ type InitialValues = {
 
 const numberToInputValue = (value?: number | null) => (value == null ? "" : String(value));
 
-export default function RegisterForm({ initialValues }: { initialValues?: InitialValues }) {
+const inputClassName =
+  "mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none";
+const lockedInputClassName =
+  "mt-2 w-full cursor-not-allowed rounded-lg border border-bronze/20 bg-parchment px-4 py-3 text-brown/70 focus:outline-none";
+
+export default function RegisterForm({
+  initialValues,
+  lockProfileFields = false,
+}: {
+  initialValues?: InitialValues;
+  lockProfileFields?: boolean;
+}) {
   const router = useRouter();
   const [fullName, setFullName] = useState(initialValues?.full_name ?? "");
   const [age, setAge] = useState(numberToInputValue(initialValues?.age));
@@ -86,7 +97,8 @@ export default function RegisterForm({ initialValues }: { initialValues?: Initia
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
           required
-          className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+          readOnly={lockProfileFields}
+          className={lockProfileFields ? lockedInputClassName : inputClassName}
         />
       </div>
 
@@ -100,7 +112,8 @@ export default function RegisterForm({ initialValues }: { initialValues?: Initia
           onChange={(e) => setAge(e.target.value)}
           required
           min={1}
-          className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+          readOnly={lockProfileFields}
+          className={lockProfileFields ? lockedInputClassName : inputClassName}
         />
       </div>
 
@@ -113,7 +126,8 @@ export default function RegisterForm({ initialValues }: { initialValues?: Initia
           value={location}
           onChange={(e) => setLocation(e.target.value)}
           required
-          className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+          readOnly={lockProfileFields}
+          className={lockProfileFields ? lockedInputClassName : inputClassName}
         />
       </div>
 
@@ -126,7 +140,8 @@ export default function RegisterForm({ initialValues }: { initialValues?: Initia
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           required
-          className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+          readOnly={lockProfileFields}
+          className={lockProfileFields ? lockedInputClassName : inputClassName}
         />
       </div>
 
@@ -139,7 +154,8 @@ export default function RegisterForm({ initialValues }: { initialValues?: Initia
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+          readOnly={lockProfileFields}
+          className={lockProfileFields ? lockedInputClassName : inputClassName}
         />
       </div>
 
@@ -153,7 +169,7 @@ export default function RegisterForm({ initialValues }: { initialValues?: Initia
           onChange={(e) => setYearsExperience(e.target.value)}
           required
           min={0}
-          className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+          className={inputClassName}
         />
       </div>
 
@@ -167,7 +183,7 @@ export default function RegisterForm({ initialValues }: { initialValues?: Initia
           onChange={(e) => setHorseAge(e.target.value)}
           required
           min={0}
-          className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+          className={inputClassName}
         />
       </div>
 
@@ -180,7 +196,7 @@ export default function RegisterForm({ initialValues }: { initialValues?: Initia
           value={horseBreed}
           onChange={(e) => setHorseBreed(e.target.value)}
           required
-          className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+          className={inputClassName}
         />
       </div>
 

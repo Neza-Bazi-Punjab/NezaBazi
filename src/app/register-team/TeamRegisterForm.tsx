@@ -52,17 +52,23 @@ const leaderProfileToRider = (leaderProfile?: LeaderProfile): RiderInput => ({
 });
 
 const riderLabels = ["Rider 1 (Team Leader)", "Rider 2", "Rider 3", "Rider 4"];
+const inputClassName =
+  "mt-2 w-full rounded-lg border border-bronze/20 bg-cream px-4 py-3 text-brown focus:border-bronze focus:outline-none";
+const lockedInputClassName =
+  "mt-2 w-full cursor-not-allowed rounded-lg border border-bronze/20 bg-parchment px-4 py-3 text-brown/70 focus:outline-none";
 
 export default function TeamRegisterForm({
   existingTeamId,
   initialTeamName = "",
   leaderProfile,
   lockTeamName = false,
+  lockLeaderProfileFields = false,
 }: {
   existingTeamId?: string;
   initialTeamName?: string;
   leaderProfile?: LeaderProfile;
   lockTeamName?: boolean;
+  lockLeaderProfileFields?: boolean;
 }) {
   const router = useRouter();
   const [teamName, setTeamName] = useState(initialTeamName);
@@ -130,6 +136,11 @@ export default function TeamRegisterForm({
 
       {riders.map((rider, index) => (
         <div key={riderLabels[index]} className="space-y-6 rounded-lg border border-bronze/20 bg-sand p-6">
+          {(() => {
+            const lockLeaderField = lockLeaderProfileFields && index === 0;
+
+            return (
+              <>
           <h3 className="font-display text-lg font-bold uppercase tracking-wide text-bronze-dark">
             {riderLabels[index]}
           </h3>
@@ -143,7 +154,8 @@ export default function TeamRegisterForm({
               value={rider.fullName}
               onChange={(e) => updateRider(index, "fullName", e.target.value)}
               required
-              className="mt-2 w-full rounded-lg border border-bronze/20 bg-cream px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              readOnly={lockLeaderField}
+              className={lockLeaderField ? lockedInputClassName : inputClassName}
             />
           </div>
 
@@ -157,7 +169,8 @@ export default function TeamRegisterForm({
               onChange={(e) => updateRider(index, "age", e.target.value)}
               required
               min={1}
-              className="mt-2 w-full rounded-lg border border-bronze/20 bg-cream px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              readOnly={lockLeaderField}
+              className={lockLeaderField ? lockedInputClassName : inputClassName}
             />
           </div>
 
@@ -170,7 +183,8 @@ export default function TeamRegisterForm({
               value={rider.location}
               onChange={(e) => updateRider(index, "location", e.target.value)}
               required
-              className="mt-2 w-full rounded-lg border border-bronze/20 bg-cream px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              readOnly={lockLeaderField}
+              className={lockLeaderField ? lockedInputClassName : inputClassName}
             />
           </div>
 
@@ -183,7 +197,8 @@ export default function TeamRegisterForm({
               value={rider.phone}
               onChange={(e) => updateRider(index, "phone", e.target.value)}
               required
-              className="mt-2 w-full rounded-lg border border-bronze/20 bg-cream px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              readOnly={lockLeaderField}
+              className={lockLeaderField ? lockedInputClassName : inputClassName}
             />
           </div>
 
@@ -196,7 +211,8 @@ export default function TeamRegisterForm({
               value={rider.email}
               onChange={(e) => updateRider(index, "email", e.target.value)}
               required
-              className="mt-2 w-full rounded-lg border border-bronze/20 bg-cream px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              readOnly={lockLeaderField}
+              className={lockLeaderField ? lockedInputClassName : inputClassName}
             />
           </div>
 
@@ -210,7 +226,7 @@ export default function TeamRegisterForm({
               onChange={(e) => updateRider(index, "yearsExperience", e.target.value)}
               required
               min={0}
-              className="mt-2 w-full rounded-lg border border-bronze/20 bg-cream px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              className={inputClassName}
             />
           </div>
 
@@ -224,7 +240,7 @@ export default function TeamRegisterForm({
               onChange={(e) => updateRider(index, "horseAge", e.target.value)}
               required
               min={0}
-              className="mt-2 w-full rounded-lg border border-bronze/20 bg-cream px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              className={inputClassName}
             />
           </div>
 
@@ -237,9 +253,12 @@ export default function TeamRegisterForm({
               value={rider.horseBreed}
               onChange={(e) => updateRider(index, "horseBreed", e.target.value)}
               required
-              className="mt-2 w-full rounded-lg border border-bronze/20 bg-cream px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              className={inputClassName}
             />
           </div>
+              </>
+            );
+          })()}
         </div>
       ))}
 

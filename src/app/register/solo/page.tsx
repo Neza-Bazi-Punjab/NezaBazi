@@ -11,6 +11,25 @@ export const metadata: Metadata = {
   description: `Solo rider registration for the ${site.title}.`,
 };
 
+type RegistrationMetadata = {
+  full_name?: string;
+  age?: number | string;
+  location?: string;
+  phone?: string;
+  years_experience?: number | string;
+  horse_age?: number | string;
+  horse_breed?: string;
+};
+
+const getMetadataNumber = (value: number | string | undefined) => {
+  if (value == null || value === "") {
+    return undefined;
+  }
+
+  const numberValue = Number(value);
+  return Number.isNaN(numberValue) ? undefined : numberValue;
+};
+
 export default async function SoloRegisterPage() {
   const supabase = await createClient();
   const {
@@ -20,8 +39,19 @@ export default async function SoloRegisterPage() {
   const { data: profile } = user
     ? await supabase
         .from("profiles")
-        .select("full_name, age, location, phone, years_experience, horse_age, horse_breed")
+        .select("role")
         .eq("id", user.id)
+        .maybeSingle()
+    : { data: null };
+
+  const isAdmin = profile?.role === "admin";
+  const authMetadata = user?.user_metadata as RegistrationMetadata | undefined;
+
+  const { data: existingRegistration } = !isAdmin && user
+    ? await supabase
+        .from("solo_registrations")
+        .select("id")
+        .eq("profile_id", user.id)
         .maybeSingle()
     : { data: null };
 
@@ -35,21 +65,40 @@ export default async function SoloRegisterPage() {
       <section className="bg-cream">
         <div className="mx-auto max-w-xl px-6 py-16">
           {user ? (
-            <>
-              <SectionHeading>Rider Details</SectionHeading>
-              <RegisterForm
-                initialValues={{
-                  full_name: profile?.full_name,
-                  age: profile?.age,
-                  location: profile?.location,
-                  phone: profile?.phone,
-                  email: user.email,
-                  years_experience: profile?.years_experience,
-                  horse_age: profile?.horse_age,
-                  horse_breed: profile?.horse_breed,
-                }}
-              />
-            </>
+            !isAdmin && existingRegistration ? (
+              <>
+                <SectionHeading>Already Registered</SectionHeading>
+
+                <div className="mt-10 space-y-6">
+                  <p className="leading-7 text-brown/85">
+                    You have already registered for solo competition.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <SectionHeading>Rider Details</SectionHeading>
+                <RegisterForm
+                  lockProfileFields={!isAdmin}
+                  initialValues={
+                    isAdmin
+                      ? undefined
+                      : {
+                          full_name: authMetadata?.full_name,
+                          age: getMetadataNumber(authMetadata?.age),
+                          location: authMetadata?.location,
+                          phone: authMetadata?.phone,
+                          email: user.email,
+                          years_experience: getMetadataNumber(
+                            authMetadata?.years_experience
+                          ),
+                          horse_age: getMetadataNumber(authMetadata?.horse_age),
+                          horse_breed: authMetadata?.horse_breed,
+                        }
+                  }
+                />
+              </>
+            )
           ) : (
             <>
               <SectionHeading>Login Required</SectionHeading>
@@ -60,7 +109,7 @@ export default async function SoloRegisterPage() {
                 </p>
 
                 <Link
-                  href="/login"
+                  href="/login?redirect=/register/solo"
                   className="block w-full rounded-lg bg-bronze-deep px-6 py-3 text-center font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze"
                 >
                   Log In to Register
