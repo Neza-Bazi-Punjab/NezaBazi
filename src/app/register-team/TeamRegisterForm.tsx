@@ -53,7 +53,7 @@ const leaderProfileToRider = (leaderProfile?: LeaderProfile): RiderInput => ({
 
 const riderLabels = ["Rider 1 (Team Leader)", "Rider 2", "Rider 3", "Rider 4"];
 const inputClassName =
-  "mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none";
+  "mt-2 w-full rounded-lg border border-bronze/20 bg-cream px-4 py-3 text-brown focus:border-bronze focus:outline-none";
 const lockedInputClassName =
   "mt-2 w-full cursor-not-allowed rounded-lg border border-bronze/20 bg-parchment px-4 py-3 text-brown/70 focus:outline-none";
 
@@ -130,7 +130,7 @@ export default function TeamRegisterForm({
           onChange={(e) => setTeamName(e.target.value)}
           required
           disabled={lockTeamName}
-          className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+          className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none disabled:opacity-70"
         />
       </div>
 

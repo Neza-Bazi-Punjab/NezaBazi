@@ -7,13 +7,12 @@ Current photos and where they appear:
 | `hero-rider.webp` | Home hero (dissolves into the page) |
 | `lancesunset.webp` | Home about section (dissolves into the page) |
 | `fullgallop.webp` | Home CTA band (dissolves into the page) |
-| `aboutsport.webp` | About page "The Sport" (plain, un-cropped) |
-| `heritage.webp` | About page "Our Heritage" (plain, un-cropped) |
-| `holla.webp` | Not placed yet — available for a future section |
+| `aboutsport.webp` | About page (plain, un-cropped) |
+| `heritage.webp` | Not placed — available for a future section |
+| `holla.webp` | Not placed — available for a future section |
 
-The `/gallery` page is a "coming soon" placeholder until after the
-championship (August 21, 2026) — match-day photography gets added there once
-the event happens, so there are no gallery slots to fill in yet.
+There is no gallery page right now; match-day photography gets its own page
+after the championship (August 21, 2026).
 
 Use WebP/JPEG around 1600px on the long edge for a good quality/size balance.
 Home-page photos use the `DissolvePhoto` component, which softly masks their
