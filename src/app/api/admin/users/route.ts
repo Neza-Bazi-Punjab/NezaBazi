@@ -32,6 +32,22 @@ const getMetadataString = (metadata: object | null | undefined, key: string) => 
   return typeof value === "string" ? value : "";
 };
 
+const getUserSubjectName = (
+  user:
+    | {
+        email?: string | null;
+        user_metadata?: object | null;
+      }
+    | null
+    | undefined
+) => {
+  if (!user) {
+    return null;
+  }
+
+  return getMetadataString(user.user_metadata, "full_name") || user.email || null;
+};
+
 const getErrorText = (error: unknown) => {
   if (!error) {
     return "";
@@ -130,7 +146,7 @@ const verifyAdminRequest = async () => {
     };
   }
 
-  return { ok: true as const };
+  return { ok: true as const, adminId: user.id };
 };
 
 const createServiceRoleClient = () =>
@@ -144,6 +160,40 @@ const createServiceRoleClient = () =>
       },
     }
   );
+
+type ServiceRoleClient = ReturnType<typeof createServiceRoleClient>;
+
+const insertAuditLog = async (
+  serviceSupabase: ServiceRoleClient,
+  actorId: string,
+  {
+    action,
+    targetTable,
+    targetId,
+    details,
+  }: {
+    action: string;
+    targetTable: string;
+    targetId: string;
+    details: unknown;
+  }
+) => {
+  try {
+    const { error } = await serviceSupabase.from("admin_audit_log").insert({
+      actor_id: actorId,
+      action,
+      target_table: targetTable,
+      target_id: targetId,
+      details,
+    });
+
+    if (error) {
+      console.error("Admin audit log insert failed", error);
+    }
+  } catch (error) {
+    console.error("Admin audit log insert failed", error);
+  }
+};
 
 export async function GET(request: Request) {
   const adminCheck = await verifyAdminRequest();
@@ -304,6 +354,15 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Profile not found." }, { status: 404 });
   }
 
+  const { data: targetUserData, error: targetUserError } =
+    await serviceSupabase.auth.admin.getUserById(userId);
+
+  if (targetUserError) {
+    console.error("Supabase admin user lookup error before update", targetUserError);
+  }
+
+  const targetSubjectName = getUserSubjectName(targetUserData?.user);
+
   if (targetProfile.role === "admin" && newRole === "player") {
     const { count, error: adminCountError } = await serviceSupabase
       .from("profiles")
@@ -337,6 +396,8 @@ export async function PATCH(request: Request) {
     const duplicateUser = usersData.users.find(
       (user) => user.id !== userId && user.email?.toLowerCase() === normalizedEmail
     );
+    const targetUser = usersData.users.find((user) => user.id === userId);
+    const oldEmail = targetUserData?.user?.email ?? targetUser?.email ?? null;
 
     if (duplicateUser) {
       return NextResponse.json(
@@ -384,6 +445,19 @@ export async function PATCH(request: Request) {
       }
     }
 
+    await insertAuditLog(serviceSupabase, adminCheck.adminId, {
+      action: "edit_user_email",
+      targetTable: "profiles",
+      targetId: userId,
+      details: {
+        subject_name: targetSubjectName ?? oldEmail ?? email,
+        old_email: oldEmail,
+        new_email: email,
+        linked_registration_updates: body.linkedRegistrationUpdates ?? [],
+        warnings: registrationWarnings,
+      },
+    });
+
     if (registrationWarnings.length > 0 && !newRole) {
       return NextResponse.json({ ok: true, warnings: registrationWarnings });
     }
@@ -398,6 +472,17 @@ export async function PATCH(request: Request) {
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 400 });
     }
+
+    await insertAuditLog(serviceSupabase, adminCheck.adminId, {
+      action: newRole === "admin" ? "promote_admin" : "demote_admin",
+      targetTable: "profiles",
+      targetId: userId,
+      details: {
+        subject_name: targetSubjectName,
+        old_role: targetProfile.role,
+        new_role: newRole,
+      },
+    });
   }
 
   return NextResponse.json({ ok: true });
@@ -450,6 +535,13 @@ export async function DELETE(request: Request) {
     }
   }
 
+  const { data: targetUserData, error: targetUserError } =
+    await serviceSupabase.auth.admin.getUserById(userId);
+
+  if (targetUserError) {
+    console.error("Supabase admin user lookup error before delete", targetUserError);
+  }
+
   const { error: deleteUserError } = await serviceSupabase.auth.admin.deleteUser(userId);
 
   if (deleteUserError) {
@@ -464,6 +556,17 @@ export async function DELETE(request: Request) {
   if (deleteProfileError) {
     return NextResponse.json({ error: deleteProfileError.message }, { status: 400 });
   }
+
+  await insertAuditLog(serviceSupabase, adminCheck.adminId, {
+    action: "delete_user",
+    targetTable: "profiles",
+    targetId: userId,
+    details: {
+      subject_name: getUserSubjectName(targetUserData?.user),
+      email: targetUserData?.user?.email ?? null,
+      role: targetProfile.role,
+    },
+  });
 
   return NextResponse.json({ ok: true });
 }
