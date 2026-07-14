@@ -173,6 +173,28 @@ const soloRegisteredDateFormatter = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
 });
 
+const adminTableInputClass =
+  "block w-full min-w-0 rounded-lg border border-bronze/20 bg-cream px-2 py-2 text-brown focus:border-bronze focus:outline-none";
+
+function AdminTableText({
+  value,
+  className = "",
+}: {
+  value: string | number;
+  className?: string;
+}) {
+  const text = String(value);
+
+  return (
+    <span
+      className={`block min-w-0 max-w-full truncate ${className}`}
+      title={text}
+    >
+      {text}
+    </span>
+  );
+}
+
 const formatDate = (value: string) => dateFormatter.format(new Date(value));
 const formatSoloRegisteredDate = (value: string) =>
   soloRegisteredDateFormatter.format(new Date(value));
@@ -1703,20 +1725,32 @@ export default function AdminDashboard({
           </div>
 
           {filteredSoloRegistrations.length > 0 ? (
-            <div className="overflow-x-auto rounded-lg border border-bronze/20 bg-sand">
-              <table className="w-full min-w-[1300px] table-fixed border-collapse text-left text-sm text-brown">
+            <div className="max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-bronze/20 bg-sand">
+              <table className="w-full min-w-[1535px] table-fixed border-collapse text-left text-sm text-brown">
+                <colgroup>
+                  <col className="w-[190px]" />
+                  <col className="w-[90px]" />
+                  <col className="w-[220px]" />
+                  <col className="w-[145px]" />
+                  <col className="w-[240px]" />
+                  <col className="w-[115px]" />
+                  <col className="w-[110px]" />
+                  <col className="w-[145px]" />
+                  <col className="w-[90px]" />
+                  <col className="w-[190px]" />
+                </colgroup>
                 <thead className="border-b border-bronze/20 bg-parchment">
                   <tr className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
-                    <th className="w-[180px] min-w-[180px] whitespace-nowrap px-3 py-2">Name</th>
-                    <th className="w-[60px] min-w-[60px] whitespace-nowrap px-3 py-2">Age</th>
-                    <th className="w-[135px] min-w-[135px] whitespace-nowrap px-3 py-2">Location</th>
-                    <th className="w-[120px] min-w-[120px] whitespace-nowrap px-3 py-2">Phone</th>
-                    <th className="w-[190px] min-w-[190px] whitespace-nowrap px-3 py-2">Email</th>
-                    <th className="w-[100px] min-w-[100px] whitespace-nowrap px-3 py-2">Experience</th>
-                    <th className="w-[90px] min-w-[90px] whitespace-nowrap px-3 py-2">Horse Age</th>
-                    <th className="w-[120px] min-w-[120px] whitespace-nowrap px-3 py-2">Horse Breed</th>
-                    <th className="w-[70px] min-w-[70px] whitespace-nowrap px-3 py-2">Date</th>
-                    <th className="w-[235px] min-w-[235px] whitespace-nowrap px-3 py-2">Actions</th>
+                    <th className="whitespace-nowrap px-3 py-2">Name</th>
+                    <th className="whitespace-nowrap px-3 py-2">Age</th>
+                    <th className="whitespace-nowrap px-3 py-2">Location</th>
+                    <th className="whitespace-nowrap px-3 py-2">Phone</th>
+                    <th className="whitespace-nowrap px-3 py-2">Email</th>
+                    <th className="whitespace-nowrap px-3 py-2">Experience</th>
+                    <th className="whitespace-nowrap px-3 py-2">Horse Age</th>
+                    <th className="whitespace-nowrap px-3 py-2">Horse Breed</th>
+                    <th className="whitespace-nowrap px-3 py-2">Date</th>
+                    <th className="whitespace-nowrap px-3 py-2">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1727,67 +1761,67 @@ export default function AdminDashboard({
 
                     return (
                       <tr key={registration.id} className="border-b border-bronze/10 last:border-0">
-                        <td className="w-[180px] min-w-[180px] whitespace-nowrap px-3 py-2 font-semibold text-ink">
+                        <td className="overflow-hidden whitespace-nowrap px-3 py-2 font-semibold text-ink">
                           {isEditing ? (
                             <input
                               type="text"
                               value={editDraft?.full_name ?? ""}
                               onChange={(event) => updateEditDraft("full_name", event.target.value)}
-                              className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                              className={adminTableInputClass}
                             />
                           ) : (
-                            registration.full_name
+                            <AdminTableText value={registration.full_name} />
                           )}
                         </td>
-                        <td className="w-[60px] min-w-[60px] whitespace-nowrap px-3 py-2">
+                        <td className="overflow-hidden whitespace-nowrap px-3 py-2">
                           {isEditing ? (
                             <input
                               type="number"
                               value={editDraft?.age ?? ""}
                               onChange={(event) => updateEditDraft("age", event.target.value)}
-                              className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                              className={adminTableInputClass}
                             />
                           ) : (
                             registration.age
                           )}
                         </td>
-                        <td className="w-[135px] min-w-[135px] whitespace-nowrap px-3 py-2">
+                        <td className="overflow-hidden whitespace-nowrap px-3 py-2">
                           {isEditing ? (
                             <input
                               type="text"
                               value={editDraft?.location ?? ""}
                               onChange={(event) => updateEditDraft("location", event.target.value)}
-                              className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                              className={adminTableInputClass}
                             />
                           ) : (
-                            registration.location
+                            <AdminTableText value={registration.location} />
                           )}
                         </td>
-                        <td className="w-[120px] min-w-[120px] whitespace-nowrap px-3 py-2">
+                        <td className="overflow-hidden whitespace-nowrap px-3 py-2">
                           {isEditing ? (
                             <input
                               type="tel"
                               value={editDraft?.phone ?? ""}
                               onChange={(event) => updateEditDraft("phone", event.target.value)}
-                              className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                              className={adminTableInputClass}
                             />
                           ) : (
-                            registration.phone
+                            <AdminTableText value={registration.phone} />
                           )}
                         </td>
-                        <td className="w-[190px] min-w-[190px] whitespace-nowrap px-3 py-2">
+                        <td className="overflow-hidden whitespace-nowrap px-3 py-2">
                           {isEditing ? (
                             <input
                               type="email"
                               value={editDraft?.email ?? ""}
                               onChange={(event) => updateEditDraft("email", event.target.value)}
-                              className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                              className={adminTableInputClass}
                             />
                           ) : (
-                            registration.email
+                            <AdminTableText value={registration.email} />
                           )}
                         </td>
-                        <td className="w-[100px] min-w-[100px] whitespace-nowrap px-3 py-2">
+                        <td className="overflow-hidden whitespace-nowrap px-3 py-2">
                           {isEditing ? (
                             <input
                               type="number"
@@ -1795,40 +1829,40 @@ export default function AdminDashboard({
                               onChange={(event) =>
                                 updateEditDraft("years_experience", event.target.value)
                               }
-                              className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                              className={adminTableInputClass}
                             />
                           ) : (
                             registration.years_experience
                           )}
                         </td>
-                        <td className="w-[90px] min-w-[90px] whitespace-nowrap px-3 py-2">
+                        <td className="overflow-hidden whitespace-nowrap px-3 py-2">
                           {isEditing ? (
                             <input
                               type="number"
                               value={editDraft?.horse_age ?? ""}
                               onChange={(event) => updateEditDraft("horse_age", event.target.value)}
-                              className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                              className={adminTableInputClass}
                             />
                           ) : (
                             registration.horse_age
                           )}
                         </td>
-                        <td className="w-[120px] min-w-[120px] whitespace-nowrap px-3 py-2">
+                        <td className="overflow-hidden whitespace-nowrap px-3 py-2">
                           {isEditing ? (
                             <input
                               type="text"
                               value={editDraft?.horse_breed ?? ""}
                               onChange={(event) => updateEditDraft("horse_breed", event.target.value)}
-                              className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                              className={adminTableInputClass}
                             />
                           ) : (
-                            registration.horse_breed
+                            <AdminTableText value={registration.horse_breed} />
                           )}
                         </td>
-                        <td className="w-[70px] min-w-[70px] whitespace-nowrap px-3 py-2">
+                        <td className="overflow-hidden whitespace-nowrap px-3 py-2">
                           {formatSoloRegisteredDate(registration.created_at)}
                         </td>
-                        <td className="w-[235px] min-w-[235px] whitespace-nowrap px-3 py-2">
+                        <td className="overflow-hidden whitespace-nowrap px-3 py-2">
                           {isEditing ? (
                             <div className="flex flex-col gap-2">
                               <div className="flex gap-2">
@@ -2287,18 +2321,28 @@ export default function AdminDashboard({
                     </div>
 
                     {members.length > 0 ? (
-                      <div className="mt-4 overflow-x-auto">
-                        <table className="w-full min-w-[1170px] table-fixed border-collapse text-left text-sm text-brown">
+                      <div className="mt-4 max-w-full overflow-x-auto overscroll-x-contain">
+                        <table className="w-full min-w-[1390px] table-fixed border-collapse text-left text-sm text-brown">
+                          <colgroup>
+                            <col className="w-[230px]" />
+                            <col className="w-[90px]" />
+                            <col className="w-[280px]" />
+                            <col className="w-[160px]" />
+                            <col className="w-[250px]" />
+                            <col className="w-[120px]" />
+                            <col className="w-[110px]" />
+                            <col className="w-[150px]" />
+                          </colgroup>
                           <thead className="border-b border-bronze/20 bg-parchment">
                             <tr className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
-                              <th className="w-[200px] min-w-[200px] whitespace-nowrap px-3 py-2">Name</th>
-                              <th className="w-[80px] min-w-[80px] whitespace-nowrap px-3 py-2">Age</th>
-                              <th className="w-[160px] min-w-[160px] whitespace-nowrap px-3 py-2">Location</th>
-                              <th className="w-[140px] min-w-[140px] whitespace-nowrap px-3 py-2">Phone</th>
-                              <th className="w-[220px] min-w-[220px] whitespace-nowrap px-3 py-2">Email</th>
-                              <th className="w-[120px] min-w-[120px] whitespace-nowrap px-3 py-2">Experience</th>
-                              <th className="w-[110px] min-w-[110px] whitespace-nowrap px-3 py-2">Horse Age</th>
-                              <th className="w-[140px] min-w-[140px] whitespace-nowrap px-3 py-2">Horse Breed</th>
+                              <th className="whitespace-nowrap px-3 py-2">Name</th>
+                              <th className="whitespace-nowrap px-3 py-2">Age</th>
+                              <th className="whitespace-nowrap px-3 py-2">Location</th>
+                              <th className="whitespace-nowrap px-3 py-2">Phone</th>
+                              <th className="whitespace-nowrap px-3 py-2">Email</th>
+                              <th className="whitespace-nowrap px-3 py-2">Experience</th>
+                              <th className="whitespace-nowrap px-3 py-2">Horse Age</th>
+                              <th className="whitespace-nowrap px-3 py-2">Horse Breed</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -2307,9 +2351,9 @@ export default function AdminDashboard({
                                 key={member.id}
                                 className="border-b border-bronze/10 last:border-0"
                               >
-                                <td className="w-[200px] min-w-[200px] whitespace-nowrap px-3 py-2 font-semibold text-ink">
+                                <td className="overflow-hidden whitespace-nowrap px-3 py-2 font-semibold text-ink">
                                   {isEditingTeam ? (
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex min-w-0 items-center gap-2">
                                       <input
                                         type="text"
                                         value={memberDrafts[member.id]?.full_name ?? ""}
@@ -2320,7 +2364,7 @@ export default function AdminDashboard({
                                             event.target.value
                                           )
                                         }
-                                        className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                                        className={adminTableInputClass}
                                       />
                                       {member.is_leader && (
                                         <span className="shrink-0 rounded-full bg-bronze px-2 py-1 font-display text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-cream">
@@ -2329,17 +2373,20 @@ export default function AdminDashboard({
                                       )}
                                     </div>
                                   ) : (
-                                    <span className="inline-flex items-center gap-2">
-                                      <span>{member.full_name}</span>
+                                    <span className="flex min-w-0 items-center gap-2">
+                                      <AdminTableText
+                                        value={member.full_name}
+                                        className="flex-1"
+                                      />
                                       {member.is_leader && (
-                                        <span className="rounded-full bg-bronze px-2 py-1 font-display text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-cream">
+                                        <span className="shrink-0 rounded-full bg-bronze px-2 py-1 font-display text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-cream">
                                           Leader
                                         </span>
                                       )}
                                     </span>
                                   )}
                                 </td>
-                                <td className="w-[80px] min-w-[80px] whitespace-nowrap px-3 py-2">
+                                <td className="overflow-hidden whitespace-nowrap px-3 py-2">
                                   {isEditingTeam ? (
                                     <input
                                       type="number"
@@ -2347,13 +2394,13 @@ export default function AdminDashboard({
                                       onChange={(event) =>
                                         updateMemberDraft(member.id, "age", event.target.value)
                                       }
-                                      className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                                      className={adminTableInputClass}
                                     />
                                   ) : (
                                     member.age
                                   )}
                                 </td>
-                                <td className="w-[160px] min-w-[160px] whitespace-nowrap px-3 py-2">
+                                <td className="overflow-hidden whitespace-nowrap px-3 py-2">
                                   {isEditingTeam ? (
                                     <input
                                       type="text"
@@ -2365,13 +2412,13 @@ export default function AdminDashboard({
                                           event.target.value
                                         )
                                       }
-                                      className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                                      className={adminTableInputClass}
                                     />
                                   ) : (
-                                    member.location
+                                    <AdminTableText value={member.location} />
                                   )}
                                 </td>
-                                <td className="w-[140px] min-w-[140px] whitespace-nowrap px-3 py-2">
+                                <td className="overflow-hidden whitespace-nowrap px-3 py-2">
                                   {isEditingTeam ? (
                                     <input
                                       type="tel"
@@ -2379,13 +2426,13 @@ export default function AdminDashboard({
                                       onChange={(event) =>
                                         updateMemberDraft(member.id, "phone", event.target.value)
                                       }
-                                      className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                                      className={adminTableInputClass}
                                     />
                                   ) : (
-                                    member.phone
+                                    <AdminTableText value={member.phone} />
                                   )}
                                 </td>
-                                <td className="w-[220px] min-w-[220px] whitespace-nowrap px-3 py-2">
+                                <td className="overflow-hidden whitespace-nowrap px-3 py-2">
                                   {isEditingTeam ? (
                                     <input
                                       type="email"
@@ -2393,13 +2440,13 @@ export default function AdminDashboard({
                                       onChange={(event) =>
                                         updateMemberDraft(member.id, "email", event.target.value)
                                       }
-                                      className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                                      className={adminTableInputClass}
                                     />
                                   ) : (
-                                    member.email
+                                    <AdminTableText value={member.email} />
                                   )}
                                 </td>
-                                <td className="w-[120px] min-w-[120px] whitespace-nowrap px-3 py-2">
+                                <td className="overflow-hidden whitespace-nowrap px-3 py-2">
                                   {isEditingTeam ? (
                                     <input
                                       type="number"
@@ -2411,13 +2458,13 @@ export default function AdminDashboard({
                                           event.target.value
                                         )
                                       }
-                                      className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                                      className={adminTableInputClass}
                                     />
                                   ) : (
                                     member.years_experience
                                   )}
                                 </td>
-                                <td className="w-[110px] min-w-[110px] whitespace-nowrap px-3 py-2">
+                                <td className="overflow-hidden whitespace-nowrap px-3 py-2">
                                   {isEditingTeam ? (
                                     <input
                                       type="number"
@@ -2429,13 +2476,13 @@ export default function AdminDashboard({
                                           event.target.value
                                         )
                                       }
-                                      className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                                      className={adminTableInputClass}
                                     />
                                   ) : (
                                     member.horse_age
                                   )}
                                 </td>
-                                <td className="w-[140px] min-w-[140px] whitespace-nowrap px-3 py-2">
+                                <td className="overflow-hidden whitespace-nowrap px-3 py-2">
                                   {isEditingTeam ? (
                                     <input
                                       type="text"
@@ -2447,10 +2494,10 @@ export default function AdminDashboard({
                                           event.target.value
                                         )
                                       }
-                                      className="w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none"
+                                      className={adminTableInputClass}
                                     />
                                   ) : (
-                                    member.horse_breed
+                                    <AdminTableText value={member.horse_breed} />
                                   )}
                                 </td>
                               </tr>

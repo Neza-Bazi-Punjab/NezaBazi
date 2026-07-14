@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --no-warnings --test src/lib/supabase/query.test.mts src/lib/safe-redirect.test.mts src/lib/admin/audit.test.mts"
+    "test": "node --no-warnings --test src/lib/supabase/query.test.mts src/lib/safe-redirect.test.mts src/lib/admin/audit.test.mts src/app/admin/AdminDashboard.layout.test.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
