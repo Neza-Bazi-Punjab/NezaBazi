@@ -3,8 +3,7 @@ export const site = {
   title: "Neza Bazi Punjab Championship 2026",
   description:
     "The Neza Bazi Punjab Championship 2026 — the 1st open tent-pegging championship. Compete for the Gurdaspur Cup on August 21, 2026 in Gurdaspur, Punjab, with international participation.",
-  // Placeholder domain from the poster; update when the real domain is registered.
-  url: "https://www.nbp.com",
+  url: "https://www.nezabazipunjab.com",
   eventDate: "August 21, 2026",
   venue: "Gurdaspur, Punjab",
   cupName: "Gurdaspur Cup",

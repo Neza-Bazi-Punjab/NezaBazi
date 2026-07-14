@@ -41,6 +41,9 @@ export default function SignupPage() {
       email,
       password,
       options: {
+        // Where the confirmation email link lands. The email template appends
+        // token_hash/type; this base must be in Supabase's redirect allowlist.
+        emailRedirectTo: `${window.location.origin}/auth/confirm`,
         data: {
           full_name: fullName,
           age: Number(age),
@@ -59,6 +62,10 @@ export default function SignupPage() {
       return;
     }
 
+    // With email confirmation enabled there is no session yet — the user must
+    // click the emailed link first. Only sync immediately if a session exists
+    // (i.e. confirmation is turned off). When confirmation is on, the callback
+    // performs this sync after the verified session is established.
     if (data.session) {
       await syncAccountRegistrations();
     }
@@ -150,7 +157,7 @@ export default function SignupPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                minLength={6}
+                minLength={8}
                 className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
               />
             </div>

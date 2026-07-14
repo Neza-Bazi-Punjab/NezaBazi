@@ -35,7 +35,13 @@ function LoginPageContent() {
 
     if (error) {
       setLoading(false);
-      setError(error.message);
+      // Supabase blocks sign-in until the email is confirmed; point the user
+      // back to their inbox instead of showing the raw error.
+      setError(
+        error.message.toLowerCase().includes("not confirmed")
+          ? "Please confirm your email first — check your inbox for the confirmation link."
+          : error.message
+      );
       return;
     }
 
@@ -82,6 +88,15 @@ function LoginPageContent() {
                 required
                 className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
               />
+            </div>
+
+            <div className="text-right">
+              <a
+                href="/forgot-password"
+                className="text-sm font-semibold text-bronze-deep underline"
+              >
+                Forgot password?
+              </a>
             </div>
 
             {error && <p className="text-sm text-red-700">{error}</p>}

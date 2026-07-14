@@ -54,9 +54,35 @@ GEONAMES_USERNAME=
 
 The service-role key is server-only. Add it separately to Vercel Preview and Production environment variables. Never put it in a `NEXT_PUBLIC_` variable, browser code, Git, screenshots, or chat. The current local key is a legacy JWT key and should be rotated before public launch because it was previously shared during development.
 
-Email confirmation is currently disabled for local testing. Before public signup, configure confirmation email, the production Site URL, allowed redirect URLs, leaked-password protection, and an SMTP provider. Do not treat an unverified email as proof that a rider owns a team row.
+## Email confirmation, password reset, and auth links
 
-Known caveat for that future work: when a user changes their email on `/account`, the sync route currently writes the new email onto their registration rows immediately. With confirmation disabled this is correct, but once confirmation is enabled the rows would update before the user confirms the new address (and stay wrong if they never confirm). Revisit the sync timing as part of the email-confirmation setup.
+The production domain is `https://www.nezabazipunjab.com`, and the app side is built for confirmation and recovery emails sent through Resend. Dashboard state cannot be verified from the repository, so do not consider confirmation live until every checklist item below has been confirmed in Supabase and Resend:
+
+- `/auth/confirm` (route handler) verifies the emailed one-time token and establishes a session, then redirects to an internal `next` path. It accepts both link styles — `token_hash` + `type` (via `verifyOtp`, works across devices) and `code` (via `exchangeCodeForSession`, default templates, same browser) — and sends failures to `/auth/auth-code-error`.
+- Signup calls `signUp` with `emailRedirectTo` and, when confirmation is on, shows a "check your inbox" success page instead of logging in. After the confirmation callback establishes the session, it syncs the verified account metadata into any solo or team-member row already using that email.
+- `/forgot-password` sends a reset link (`resetPasswordForEmail`); `/reset-password` sets the new password (`updateUser`) from the recovery session. A "Forgot password?" link sits on `/login`.
+- Account email changes no longer stamp an unconfirmed address onto registration rows (`syncEmail: false` while a change is pending). After the user confirms, the next sign-in's POST sync reconciles the solo row by `profile_id`.
+- Signup and password reset require at least 8 characters in the app; use the same or a stronger minimum in Supabase.
+
+Dashboard settings to apply/confirm in Supabase (Authentication → URL Configuration and Email Templates):
+
+1. **Custom SMTP**: confirm Supabase Authentication email settings use the verified Resend sender domain and that a real test email is delivered.
+2. **Confirm Email**: enable it under Authentication → Providers → Email.
+3. **Site URL**: `https://www.nezabazipunjab.com`
+4. **Redirect URLs** (allowlist): `https://www.nezabazipunjab.com/**` and `http://localhost:3000/**` for local dev. Add only the specific Vercel preview pattern you use if preview auth testing is needed.
+5. **Email templates** — for reliable cross-device links, point each action link at the confirm route with the token hash. Examples:
+   - Confirm signup: `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup&next=/account`
+   - Reset password: `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/reset-password`
+   - Change email address: `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email_change&next=/account`
+   - Magic link (if used): `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=magiclink&next=/account`
+
+   If a template is left on the default `{{ .ConfirmationURL }}`, the `code` fallback in `/auth/confirm` still works as long as the link is opened in the same browser that started the request.
+6. **Password policy**: set the minimum to at least 8 characters and enable leaked-password protection under Authentication → Policies if the project plan supports it.
+7. **Resend tracking and limits**: disable click/open tracking for authentication email, then set Supabase's email rate limit to a deliberate value within the Resend plan rather than leaving it unreviewed.
+8. **Rotate the service-role key**: the development key was previously shared. Rotate it in Supabase, replace `SUPABASE_SERVICE_ROLE_KEY` in local and Vercel Preview/Production environments, and redeploy before public signup.
+9. **End-to-end verification**: with a brand-new email, test signup → confirmation → account/team details, unconfirmed login, an expired link, forgot password → reset → login, and an email change. Open at least one confirmation and one recovery link on a different device or private browser session.
+
+Known limitation that remains: rider rows on a team led by someone else are linked only by email, so a confirmed email change does not update those rows automatically. An admin can fix them from the dashboard's email-sync dialog, and verified `profile_id` linking is still the planned long-term fix.
 
 ## Important limitation
 

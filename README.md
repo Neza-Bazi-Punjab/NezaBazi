@@ -71,7 +71,8 @@ public/                Static assets: images/, flags/, brand/, documents/
 
 Each component starts with a one-line comment describing what it does; shared
 event details (date, venue, contact, domain) live in
-[src/lib/site.ts](src/lib/site.ts) — the domain is currently a placeholder.
+[src/lib/site.ts](src/lib/site.ts); the production domain is
+`https://www.nezabazipunjab.com`.
 
 ## Supabase setup
 
@@ -80,7 +81,7 @@ event details (date, venue, contact, domain) live in
 - **`solo_registrations` table** — one row per individual rider registration, linked via `profile_id`. A database trigger prevents a regular player from creating a second solo entry. `email` and `phone` are also unique across the table, preventing duplicate registrations. Admins are exempt from the one-per-person rule for testing purposes; `email`/`phone` uniqueness still applies to everyone.
 - **`teams` table** — one row per team, linked to its leader via `leader_profile_id`. A database trigger prevents a regular player from creating a second team; admins are exempt for testing. `team_members` holds 4 rows per team (the leader + 3 riders); `email` and `phone` are unique across the whole table so the same person can't appear on multiple teams. Deleting a team cascades to delete its members automatically.
 - **Auto-profile trigger** — `handle_new_user()` fires on every new `auth.users` signup and creates a bare `profiles` row (just the `id`) — all other account fields go straight into Auth metadata instead.
-- **Auth flow** — `/signup` creates an account (name, age, location, phone, email, password, years of experience, horse age, horse breed), saved directly to Auth. `/login` signs in, and supports a `?redirect=` parameter (sanitized to internal paths only) so gated pages return the user where they came from. Email confirmation is currently **off** for easier local testing — turn back on before public launch.
+- **Auth flow** — `/signup` creates an account (name, age, location, phone, email, password, years of experience, horse age, horse breed), saved directly to Auth. `/login` signs in, and supports a `?redirect=` parameter (sanitized to internal paths only) so gated pages return the user where they came from. The app is ready for email confirmation through Resend: signup shows a "check your inbox" page, the emailed link is verified by the `/auth/confirm` route handler, and `/forgot-password` + `/reset-password` provide self-service password reset. The production dashboard settings still need to be verified separately; see [docs/supabase-changes.md](docs/supabase-changes.md).
 - **Registration flow** — `/register` lets a logged-in user choose solo or team registration, both pre-filled from their Auth account info (locked/read-only for regular users). A regular player already listed on any team is blocked from registering another team, and all four rider emails/phones are checked before a new team is created; admins retain the testing bypass for their own registration limits.
 - **Registration drafts** — the `registration_drafts` table (owner-only RLS, one row per user per type) autosaves the solo form and the team wizard ~1s after each change, so a half-finished registration survives logout and device switches. The team form is a step wizard (Team name → Riders 1–4 → Review & Submit) with a progress bar; drafts are deleted on successful submission. Full validation still runs only in the submit route.
 - **Location picker** — every location field uses a guided picker: country + state dropdowns from vendored GeoNames data (`src/data/`), village autocomplete (3+ chars, 300ms debounce, 5 suggestions) via a server route that proxies GeoNames with `GEONAMES_USERNAME`, then an editable nearby city/district. Saves one combined string, e.g. `Ladhewali, Jalandhar, Punjab, India`, into the existing `location` columns. Manual entry is always available and is the automatic fallback while `GEONAMES_USERNAME` is unset. Location data © GeoNames, CC BY 4.0.
@@ -96,7 +97,7 @@ The live database changes are documented in [docs/supabase-changes.md](docs/supa
   parchment background, echoing the poster.
 - `/gallery` is a "coming soon" placeholder — match-day photography is added
   after the championship (August 21, 2026).
-- `/players` and `/rankings` are still placeholder pages that unlock in later phases. `/login`, `/signup`, `/register`, `/register/solo`, `/register-team`, `/account`, and `/admin` are all live.
+- `/players` and `/rankings` are still placeholder pages that unlock in later phases. `/login`, `/signup`, `/forgot-password`, `/reset-password`, `/register`, `/register/solo`, `/register-team`, `/account`, and `/admin` are all live.
 
 - The logo mark comes from [public/brand](public/brand/README.md); the
   favicon is a derived single-tone version at [src/app/icon.svg](src/app/icon.svg).

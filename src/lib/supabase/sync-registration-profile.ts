@@ -1,6 +1,9 @@
 import "server-only";
 
-import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
+import {
+  createClient as createSupabaseAdminClient,
+  type User,
+} from "@supabase/supabase-js";
 import { escapeIlikePattern } from "@/lib/supabase/query";
 
 type RegistrationProfile = {
@@ -14,6 +17,39 @@ type RegistrationProfile = {
   yearsExperience?: number | null;
   horseAge?: number | null;
   horseBreed?: string | null;
+  // When false, only non-email fields are written to registration rows. Used
+  // while an email change is awaiting confirmation, so an unconfirmed address
+  // is never propagated onto registrations.
+  syncEmail?: boolean;
+};
+
+type AccountMetadata = {
+  full_name?: unknown;
+  age?: unknown;
+  location?: unknown;
+  phone?: unknown;
+  years_experience?: unknown;
+  horse_age?: unknown;
+  horse_breed?: unknown;
+};
+
+const parseOptionalBoundedInt = (
+  value: unknown,
+  { min, max }: { min: number; max: number }
+) => {
+  if (value == null || value === "") {
+    return null;
+  }
+
+  const normalized = String(value).trim();
+
+  if (!/^-?\d+$/.test(normalized)) {
+    return null;
+  }
+
+  const parsed = Number(normalized);
+
+  return Number.isInteger(parsed) && parsed >= min && parsed <= max ? parsed : null;
 };
 
 const getRegistrationConflictMessage = (error: {
@@ -52,6 +88,7 @@ export const syncRegistrationProfile = async ({
   yearsExperience,
   horseAge,
   horseBreed,
+  syncEmail = true,
 }: RegistrationProfile) => {
   const serviceSupabase = createSupabaseAdminClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -79,9 +116,14 @@ export const syncRegistrationProfile = async ({
 
   const warnings: string[] = [];
   let syncedCount = 0;
+
+  // The solo row belongs to this user (profile_id), so writing the current
+  // confirmed email onto it is always safe and self-heals it after an email
+  // change is confirmed. Skipped while a change is still pending confirmation.
+  const soloUpdates = syncEmail ? { ...profileUpdates, email } : profileUpdates;
   const { data: soloRows, error: soloError } = await serviceSupabase
     .from("solo_registrations")
-    .update(profileUpdates)
+    .update(soloUpdates)
     .eq("profile_id", userId)
     .select("id");
 
@@ -93,24 +135,14 @@ export const syncRegistrationProfile = async ({
     syncedCount += (soloRows ?? []).length;
   }
 
-  if (email !== previousEmail && previousEmail !== "") {
-    const { error: soloEmailError } = await serviceSupabase
-      .from("solo_registrations")
-      .update({ email })
-      .eq("profile_id", userId)
-      .ilike("email", escapeIlikePattern(previousEmail));
-
-    if (soloEmailError) {
-      warnings.push(
-        `Your solo registration email could not be updated: ${getRegistrationConflictMessage(soloEmailError)}`
-      );
-    }
-  }
-
+  // Rider rows on any team are linked only by email, so they are matched by the
+  // email the rows currently hold (previousEmail). The email column is only
+  // rewritten once the new address is confirmed.
   if (previousEmail !== "") {
+    const memberUpdates = syncEmail ? { ...profileUpdates, email } : profileUpdates;
     const { data: memberRows, error: memberError } = await serviceSupabase
       .from("team_members")
-      .update({ ...profileUpdates, email })
+      .update(memberUpdates)
       .ilike("email", escapeIlikePattern(previousEmail))
       .select("id");
 
@@ -124,4 +156,41 @@ export const syncRegistrationProfile = async ({
   }
 
   return { syncedCount, warnings };
+};
+
+export const syncRegistrationProfileFromUser = async (user: User) => {
+  if (!user.email) {
+    return { error: "Your account does not have an email address." } as const;
+  }
+
+  const metadata = user.user_metadata as AccountMetadata;
+  const fullName =
+    typeof metadata.full_name === "string" ? metadata.full_name.trim() : "";
+  const location =
+    typeof metadata.location === "string" ? metadata.location.trim() : "";
+  const phone = typeof metadata.phone === "string" ? metadata.phone.trim() : "";
+  const age = parseOptionalBoundedInt(metadata.age, { min: 1, max: 120 });
+
+  if (!fullName || !location || !phone || age == null) {
+    return {
+      error: "Your account profile is incomplete and could not be synced.",
+    } as const;
+  }
+
+  return syncRegistrationProfile({
+    userId: user.id,
+    previousEmail: user.email,
+    email: user.email.trim().toLowerCase(),
+    fullName,
+    age,
+    location,
+    phone,
+    yearsExperience: parseOptionalBoundedInt(metadata.years_experience, {
+      min: 0,
+      max: 100,
+    }),
+    horseAge: parseOptionalBoundedInt(metadata.horse_age, { min: 0, max: 60 }),
+    horseBreed:
+      typeof metadata.horse_breed === "string" ? metadata.horse_breed.trim() : null,
+  });
 };

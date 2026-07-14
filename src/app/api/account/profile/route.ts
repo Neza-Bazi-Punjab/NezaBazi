@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
-import { syncRegistrationProfile } from "@/lib/supabase/sync-registration-profile";
+import {
+  syncRegistrationProfile,
+  syncRegistrationProfileFromUser,
+} from "@/lib/supabase/sync-registration-profile";
 
 type UpdateProfileRequest = {
   fullName?: string;
@@ -57,16 +60,6 @@ const parseOptionalBoundedInt = (
   return parseBoundedInt(String(value), bounds);
 };
 
-type AccountMetadata = {
-  full_name?: unknown;
-  age?: unknown;
-  location?: unknown;
-  phone?: unknown;
-  years_experience?: unknown;
-  horse_age?: unknown;
-  horse_breed?: unknown;
-};
-
 export async function POST() {
   const supabase = await createServerClient();
   const {
@@ -80,35 +73,11 @@ export async function POST() {
     );
   }
 
-  const metadata = user.user_metadata as AccountMetadata;
-  const fullName = typeof metadata.full_name === "string" ? metadata.full_name.trim() : "";
-  const location = typeof metadata.location === "string" ? metadata.location.trim() : "";
-  const phone = typeof metadata.phone === "string" ? metadata.phone.trim() : "";
-  const age = parseOptionalBoundedInt(metadata.age, { min: 1, max: 120 });
+  const result = await syncRegistrationProfileFromUser(user);
 
-  if (!fullName || !location || !phone || age == null) {
-    return NextResponse.json(
-      { error: "Your account profile is incomplete and could not be synced." },
-      { status: 400 }
-    );
+  if ("error" in result) {
+    return NextResponse.json({ error: result.error }, { status: 400 });
   }
-
-  const result = await syncRegistrationProfile({
-    userId: user.id,
-    previousEmail: user.email,
-    email: user.email.trim().toLowerCase(),
-    fullName,
-    age,
-    location,
-    phone,
-    yearsExperience: parseOptionalBoundedInt(metadata.years_experience, {
-      min: 0,
-      max: 100,
-    }),
-    horseAge: parseOptionalBoundedInt(metadata.horse_age, { min: 0, max: 60 }),
-    horseBreed:
-      typeof metadata.horse_breed === "string" ? metadata.horse_breed.trim() : null,
-  });
 
   return NextResponse.json({ ok: true, ...result });
 }
@@ -205,6 +174,10 @@ export async function PATCH(request: Request) {
       typeof user.user_metadata?.horse_breed === "string"
         ? user.user_metadata.horse_breed.trim()
         : null,
+    // Don't stamp an unconfirmed email onto registrations. Once the user
+    // confirms, the next sign-in's POST sync reconciles the solo row by
+    // profile_id.
+    syncEmail: !emailRequiresConfirmation,
   });
 
   return NextResponse.json({
