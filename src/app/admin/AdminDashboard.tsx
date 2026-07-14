@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
 export type SoloRegistration = {
   id: string;
@@ -40,14 +39,36 @@ export type TeamMember = {
   created_at: string;
 };
 
+export type AuditLogEntry = {
+  id: string;
+  actor_id: string | null;
+  actor_name: string | null;
+  actor_email: string | null;
+  action: string;
+  target_table: string | null;
+  target_id: string | null;
+  details: unknown | null;
+  batch_id: string | null;
+  created_at: string;
+};
+
+export type AuditActor = {
+  id: string;
+  email: string;
+  full_name?: string | null;
+  phone?: string | null;
+};
+
 type AdminDashboardProps = {
   currentAdminId: string;
   soloRegistrations: SoloRegistration[];
   teams: Team[];
   teamMembers: TeamMember[];
+  auditLog: AuditLogEntry[];
+  auditActors: AuditActor[];
 };
 
-type ActiveTab = "profiles" | "solo" | "team";
+type ActiveTab = "profiles" | "solo" | "team" | "audit";
 
 type AdminProfileUser = {
   id: string;
@@ -109,12 +130,20 @@ type EditableRegistrationField =
   | "years_experience"
   | "horse_age"
   | "horse_breed";
-type DatabaseError = {
-  code?: string;
-  message?: string;
-  details?: string;
-  hint?: string;
+type AuditDiffValue = {
+  before: unknown;
+  after: unknown;
 };
+type AuditLogItem =
+  | {
+      type: "entry";
+      entry: AuditLogEntry;
+    }
+  | {
+      type: "batch";
+      batchId: string;
+      entries: AuditLogEntry[];
+    };
 
 const editableRegistrationFields: Array<{
   field: EditableRegistrationField;
@@ -147,6 +176,172 @@ const soloRegisteredDateFormatter = new Intl.DateTimeFormat("en-US", {
 const formatDate = (value: string) => dateFormatter.format(new Date(value));
 const formatSoloRegisteredDate = (value: string) =>
   soloRegisteredDateFormatter.format(new Date(value));
+const formatAuditDate = (value: string) => new Date(value).toLocaleString();
+const formatAuditAction = (action: string) =>
+  action
+    .split("_")
+    .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
+    .join(" ");
+const formatAuditLabel = (value: string) =>
+  value
+    .split("_")
+    .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
+    .join(" ");
+
+const formatAuditTargetTable = (targetTable: string | null) => {
+  if (!targetTable) {
+    return "Unknown";
+  }
+
+  const labels: Record<string, string> = {
+    solo_registrations: "Solo Registration",
+    teams: "Team",
+    team_members: "Team Member",
+    profiles: "User",
+  };
+
+  return labels[targetTable] ?? targetTable;
+};
+
+const shortenId = (value: string | null) => {
+  if (!value) {
+    return "unknown";
+  }
+
+  return value.length > 8 ? `${value.slice(0, 8)}...` : value;
+};
+
+const isAuditDetailRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+const isAuditDiffValue = (value: unknown): value is AuditDiffValue =>
+  isAuditDetailRecord(value) && "before" in value && "after" in value;
+
+const isEmptyAuditValue = (value: unknown) =>
+  value === null ||
+  value === undefined ||
+  value === "" ||
+  (Array.isArray(value) && value.length === 0) ||
+  (isAuditDetailRecord(value) && Object.keys(value).length === 0);
+
+const formatAuditDetailValue = (value: unknown): string => {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item) => !isEmptyAuditValue(item))
+      .map((item) => formatAuditDetailValue(item))
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  if (isAuditDetailRecord(value)) {
+    return Object.entries(value)
+      .filter(([, nestedValue]) => !isEmptyAuditValue(nestedValue))
+      .map(
+        ([nestedKey, nestedValue]) =>
+          `${formatAuditLabel(nestedKey)}: ${formatAuditDetailValue(nestedValue)}`
+      )
+      .join(", ");
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+
+  return String(value);
+};
+
+const getAuditDetailRows = (details: unknown) => {
+  if (!isAuditDetailRecord(details)) {
+    return [];
+  }
+
+  return Object.entries(details)
+    .filter(([key]) => key !== "subject_name")
+    .filter(([, value]) => !isEmptyAuditValue(value))
+    .map(([key, value]) => ({
+      label: formatAuditLabel(key),
+      value: isAuditDiffValue(value)
+        ? `${formatAuditDetailValue(value.before)} → ${formatAuditDetailValue(
+            value.after
+          )}`
+        : formatAuditDetailValue(value),
+    }))
+    .filter((row) => row.value !== "");
+};
+
+const getAuditSubjectName = (details: unknown) => {
+  if (!isAuditDetailRecord(details)) {
+    return null;
+  }
+
+  const subjectName = details.subject_name;
+
+  if (typeof subjectName === "string" && subjectName.trim() !== "") {
+    return subjectName;
+  }
+
+  for (const key of ["full_name", "team_name", "email"]) {
+    const value = details[key];
+
+    if (typeof value === "string" && value.trim() !== "") {
+      return value;
+    }
+  }
+
+  return null;
+};
+
+const getAuditLogItems = (entries: AuditLogEntry[]) => {
+  const items: AuditLogItem[] = [];
+
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+
+    if (!entry.batch_id) {
+      items.push({ type: "entry", entry });
+      continue;
+    }
+
+    const batchEntries = [entry];
+    let nextIndex = index + 1;
+
+    while (entries[nextIndex]?.batch_id === entry.batch_id) {
+      batchEntries.push(entries[nextIndex]);
+      nextIndex += 1;
+    }
+
+    items.push({
+      type: "batch",
+      batchId: entry.batch_id,
+      entries: batchEntries,
+    });
+    index = nextIndex - 1;
+  }
+
+  return items;
+};
+
+const getEarliestAuditEntry = (entries: AuditLogEntry[]) =>
+  entries.reduce((earliestEntry, entry) =>
+    new Date(entry.created_at).getTime() < new Date(earliestEntry.created_at).getTime()
+      ? entry
+      : earliestEntry
+  );
+
+const stringifyAuditDetails = (details: unknown) => {
+  if (details === null || details === undefined) {
+    return "";
+  }
+
+  if (typeof details === "string") {
+    return details;
+  }
+
+  try {
+    return JSON.stringify(details);
+  } catch {
+    return String(details);
+  }
+};
 
 const matchesPerson = (
   person: Pick<SoloRegistration | TeamMember, "full_name" | "email" | "phone">,
@@ -196,40 +391,20 @@ const getEmailFormatError = (
     : "Please enter a valid email address.";
 };
 
-const getDuplicateErrorMessage = (
-  error: DatabaseError,
-  ownerLabel?: string
+const requestRegistrationMutation = async (
+  method: "PATCH" | "DELETE",
+  body: Record<string, unknown>
 ) => {
-  const errorText = [
-    error.code,
-    error.message,
-    error.details,
-    error.hint,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-  const isUniqueError =
-    error.code === "23505" ||
-    errorText.includes("duplicate key") ||
-    errorText.includes("unique constraint") ||
-    errorText.includes("violates unique");
+  const response = await fetch("/api/admin/registrations", {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const result = (await response.json()) as { ok?: boolean; error?: string };
 
-  if (!isUniqueError) {
-    return null;
+  if (!response.ok) {
+    throw new Error(result.error ?? "Unable to update this registration.");
   }
-
-  const suffix = ownerLabel ? ` for ${ownerLabel}` : "";
-
-  if (errorText.includes("email")) {
-    return `This email is already registered${suffix}.`;
-  }
-
-  if (errorText.includes("phone")) {
-    return `This phone number is already registered${suffix}.`;
-  }
-
-  return `This email or phone number is already in use${suffix}.`;
 };
 
 export default function AdminDashboard({
@@ -237,6 +412,8 @@ export default function AdminDashboard({
   soloRegistrations,
   teams,
   teamMembers,
+  auditLog,
+  auditActors,
 }: AdminDashboardProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<ActiveTab>("profiles");
@@ -277,7 +454,9 @@ export default function AdminDashboard({
     id: string;
     message: string;
   } | null>(null);
-  const [supabase] = useState(() => createClient());
+  const [auditActionFilter, setAuditActionFilter] = useState("all");
+  const [auditActorFilter, setAuditActorFilter] = useState("all");
+  const [expandedAuditLogId, setExpandedAuditLogId] = useState<string | null>(null);
   const normalizedQuery = searchQuery.trim().toLowerCase();
 
   const loadProfileUsers = useCallback(async () => {
@@ -642,30 +821,33 @@ export default function AdminDashboard({
 
     setSavingId(registrationId);
 
-    const { error } = await supabase
-      .from("solo_registrations")
-      .update({
-        full_name: editDraft.full_name,
-        age: Number(editDraft.age),
-        location: editDraft.location,
-        phone: editDraft.phone,
-        email: editDraft.email,
-        years_experience: Number(editDraft.years_experience),
-        horse_age: Number(editDraft.horse_age),
-        horse_breed: editDraft.horse_breed,
-      })
-      .eq("id", registrationId);
+    const updatedRegistration = {
+      full_name: String(editDraft.full_name ?? ""),
+      age: Number(editDraft.age),
+      location: String(editDraft.location ?? ""),
+      phone: String(editDraft.phone ?? ""),
+      email: String(editDraft.email ?? ""),
+      years_experience: Number(editDraft.years_experience),
+      horse_age: Number(editDraft.horse_age),
+      horse_breed: String(editDraft.horse_breed ?? ""),
+    };
 
-    setSavingId(null);
-
-    if (error) {
+    try {
+      await requestRegistrationMutation("PATCH", {
+        operation: "edit_solo",
+        targetId: registrationId,
+        payload: updatedRegistration,
+      });
+    } catch (error) {
+      setSavingId(null);
       setRowError({
         id: registrationId,
-        message: getDuplicateErrorMessage(error) ?? error.message,
+        message: error instanceof Error ? error.message : "Unable to update registration.",
       });
       return;
     }
 
+    setSavingId(null);
     setEditingSoloId(null);
     setEditDraft(null);
     router.refresh();
@@ -687,18 +869,21 @@ export default function AdminDashboard({
     setSavingId(registrationId);
     setRowError(null);
 
-    const { error } = await supabase
-      .from("solo_registrations")
-      .delete()
-      .eq("id", registrationId);
-
-    setSavingId(null);
-
-    if (error) {
-      setRowError({ id: registrationId, message: error.message });
+    try {
+      await requestRegistrationMutation("DELETE", {
+        operation: "delete_solo",
+        targetId: registrationId,
+      });
+    } catch (error) {
+      setSavingId(null);
+      setRowError({
+        id: registrationId,
+        message: error instanceof Error ? error.message : "Unable to delete registration.",
+      });
       return;
     }
 
+    setSavingId(null);
     setConfirmingDeleteId(null);
     router.refresh();
   };
@@ -784,63 +969,39 @@ export default function AdminDashboard({
 
     setSavingTeamId(team.id);
 
-    const { error: teamError } = await supabase
-      .from("teams")
-      .update({ team_name: teamNameDraft })
-      .eq("id", team.id);
+    const trimmedTeamName = teamNameDraft.trim();
+    const updatedMembers = members.map((member) => {
+      const draft = memberDrafts[member.id]!;
 
-    if (teamError) {
+      return {
+        id: member.id,
+        full_name: String(draft.full_name ?? ""),
+        age: Number(draft.age),
+        location: String(draft.location ?? ""),
+        phone: String(draft.phone ?? ""),
+        email: String(draft.email ?? ""),
+        years_experience: Number(draft.years_experience),
+        horse_age: Number(draft.horse_age),
+        horse_breed: String(draft.horse_breed ?? ""),
+      };
+    });
+
+    try {
+      await requestRegistrationMutation("PATCH", {
+        operation: "edit_team",
+        targetId: team.id,
+        payload: {
+          team_name: trimmedTeamName,
+          members: updatedMembers,
+        },
+      });
+    } catch (error) {
       setSavingTeamId(null);
       setTeamEditError({
         id: team.id,
-        message: `Failed to update team name: ${teamError.message}`,
+        message: error instanceof Error ? error.message : "Unable to update this team.",
       });
       return;
-    }
-
-    for (const member of members) {
-      const draft = memberDrafts[member.id];
-
-      if (!draft) {
-        setSavingTeamId(null);
-        setTeamEditError({
-          id: team.id,
-          message: `Failed to update ${member.full_name}: missing draft values.`,
-        });
-        return;
-      }
-
-      const { error: memberError } = await supabase
-        .from("team_members")
-        .update({
-          full_name: draft.full_name,
-          age: Number(draft.age),
-          location: draft.location,
-          phone: draft.phone,
-          email: draft.email,
-          years_experience: Number(draft.years_experience),
-          horse_age: Number(draft.horse_age),
-          horse_breed: draft.horse_breed,
-        })
-        .eq("id", member.id);
-
-      if (memberError) {
-        setSavingTeamId(null);
-        const duplicateMessage = getDuplicateErrorMessage(
-          memberError,
-          draft.full_name ?? member.full_name
-        );
-
-        setTeamEditError({
-          id: team.id,
-          message:
-            duplicateMessage ??
-            `Failed to update ${draft.full_name ?? member.full_name}: ${
-              memberError.message
-            }`,
-        });
-        return;
-      }
     }
 
     setSavingTeamId(null);
@@ -867,21 +1028,21 @@ export default function AdminDashboard({
     setSavingTeamId(teamId);
     setTeamEditError(null);
 
-    const { error: teamError } = await supabase
-      .from("teams")
-      .delete()
-      .eq("id", teamId);
-
-    setSavingTeamId(null);
-
-    if (teamError) {
+    try {
+      await requestRegistrationMutation("DELETE", {
+        operation: "delete_team",
+        targetId: teamId,
+      });
+    } catch (error) {
+      setSavingTeamId(null);
       setTeamEditError({
         id: teamId,
-        message: `Failed to delete team: ${teamError.message}`,
+        message: error instanceof Error ? error.message : "Unable to delete this team.",
       });
       return;
     }
 
+    setSavingTeamId(null);
     setConfirmingDeleteTeamId(null);
     router.refresh();
   };
@@ -952,6 +1113,105 @@ export default function AdminDashboard({
       : nonAdminProfileUsers;
   }, [addAdminSearch, nonAdminProfileUsers]);
 
+  const auditActorById = useMemo(
+    () => new Map(auditActors.map((actor) => [actor.id, actor])),
+    [auditActors]
+  );
+
+  const getAuditActorLabel = useCallback(
+    (actorId: string | null, actorName?: string | null, actorEmail?: string | null) => {
+      if (!actorId) {
+        return actorName || actorEmail || "Deleted admin";
+      }
+
+      const actor = auditActorById.get(actorId);
+      return actor?.full_name || actor?.email || actorName || actorEmail || actorId;
+    },
+    [auditActorById]
+  );
+
+  const getAuditTargetLabel = useCallback(
+    (targetTable: string | null, targetId: string | null, details: unknown) => {
+      const tableLabel = formatAuditTargetTable(targetTable);
+      const subjectName = getAuditSubjectName(details);
+
+      if (targetTable === "profiles") {
+        const actor = targetId ? auditActorById.get(targetId) : null;
+        return `${tableLabel} (${
+          subjectName || actor?.full_name || actor?.email || shortenId(targetId)
+        })`;
+      }
+
+      return `${tableLabel} (${subjectName || shortenId(targetId)})`;
+    },
+    [auditActorById]
+  );
+
+  const auditActionOptions = useMemo(
+    () => Array.from(new Set(auditLog.map((entry) => entry.action))).sort(),
+    [auditLog]
+  );
+
+  const auditActorOptions = useMemo(
+    () =>
+      Array.from(new Set(auditLog.map((entry) => entry.actor_id).filter(Boolean)))
+        .map((actorId) => actorId as string)
+        .sort((firstActorId, secondActorId) =>
+          getAuditActorLabel(firstActorId).localeCompare(
+            getAuditActorLabel(secondActorId)
+          )
+        ),
+    [auditLog, getAuditActorLabel]
+  );
+
+  const filteredAuditLog = useMemo(
+    () =>
+      auditLog.filter((entry) => {
+        if (auditActionFilter !== "all" && entry.action !== auditActionFilter) {
+          return false;
+        }
+
+        if (auditActorFilter !== "all" && entry.actor_id !== auditActorFilter) {
+          return false;
+        }
+
+        if (!normalizedQuery) {
+          return true;
+        }
+
+        const actorLabel = getAuditActorLabel(
+          entry.actor_id,
+          entry.actor_name,
+          entry.actor_email
+        );
+        const searchableText = [
+          entry.action,
+          formatAuditAction(entry.action),
+          entry.target_table,
+          entry.target_id,
+          actorLabel,
+          stringifyAuditDetails(entry.details),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        return searchableText.includes(normalizedQuery);
+      }),
+    [
+      auditActionFilter,
+      auditActorFilter,
+      auditLog,
+      getAuditActorLabel,
+      normalizedQuery,
+    ]
+  );
+
+  const auditLogItems = useMemo(
+    () => getAuditLogItems(filteredAuditLog),
+    [filteredAuditLog]
+  );
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4 border-b border-bronze/20 pb-6 lg:flex-row lg:items-center lg:justify-between">
@@ -989,10 +1249,22 @@ export default function AdminDashboard({
           >
             Team Registrations
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("audit")}
+            className={`rounded-lg px-5 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] transition-colors ${
+              activeTab === "audit"
+                ? "bg-bronze-deep text-cream hover:bg-bronze"
+                : "border border-bronze/20 text-bronze-dark hover:border-bronze/40"
+            }`}
+          >
+            Audit Log
+          </button>
         </div>
 
         <div className="font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70">
-          {soloRegistrations.length} solo registrations · {teams.length} teams registered
+          {soloRegistrations.length} solo registrations · {teams.length} teams registered ·{" "}
+          {auditLog.length} audit entries
         </div>
       </div>
 
@@ -1004,7 +1276,11 @@ export default function AdminDashboard({
           type="search"
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="Search by name, email, or phone..."
+          placeholder={
+            activeTab === "audit"
+              ? "Search by action, admin, target, or details..."
+              : "Search by name, email, or phone..."
+          }
           className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
         />
       </div>
@@ -1636,6 +1912,256 @@ export default function AdminDashboard({
           ) : (
             <p className="rounded-lg border border-bronze/20 bg-sand px-4 py-6 text-brown/80">
               No results found.
+            </p>
+          )}
+        </section>
+      ) : activeTab === "audit" ? (
+        <section className="space-y-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-bronze-dark">
+              Audit Log
+            </h2>
+            <p className="text-sm text-brown/80">{filteredAuditLog.length} results</p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
+                Action
+              </label>
+              <select
+                value={auditActionFilter}
+                onChange={(event) => setAuditActionFilter(event.target.value)}
+                className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              >
+                <option value="all">All actions</option>
+                {auditActionOptions.map((action) => (
+                  <option key={action} value={action}>
+                    {formatAuditAction(action)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
+                Admin
+              </label>
+              <select
+                value={auditActorFilter}
+                onChange={(event) => setAuditActorFilter(event.target.value)}
+                className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+              >
+                <option value="all">All admins</option>
+                {auditActorOptions.map((actorId) => (
+                  <option key={actorId} value={actorId}>
+                    {getAuditActorLabel(actorId)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {filteredAuditLog.length > 0 ? (
+            <div className="overflow-x-auto rounded-lg border border-bronze/20 bg-sand">
+              <table className="w-full min-w-[1100px] table-fixed border-collapse text-left text-sm text-brown">
+                <thead className="border-b border-bronze/20 bg-parchment">
+                  <tr className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
+                    <th className="w-[180px] min-w-[180px] whitespace-nowrap px-3 py-2">Date/Time</th>
+                    <th className="w-[220px] min-w-[220px] whitespace-nowrap px-3 py-2">Admin</th>
+                    <th className="w-[210px] min-w-[210px] whitespace-nowrap px-3 py-2">Action</th>
+                    <th className="w-[260px] min-w-[260px] whitespace-nowrap px-3 py-2">Target</th>
+                    <th className="w-[230px] min-w-[230px] whitespace-nowrap px-3 py-2">Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditLogItems.map((item) => {
+                    if (item.type === "batch") {
+                      const firstEntry = item.entries[0];
+                      const earliestEntry = getEarliestAuditEntry(item.entries);
+                      const teamEntry = item.entries.find(
+                        (entry) => entry.action === "edit_team"
+                      );
+                      const memberEntries = item.entries.filter(
+                        (entry) => entry.action === "edit_team_member"
+                      );
+                      const batchDetailSections = [
+                        ...(teamEntry
+                          ? [
+                              {
+                                id: teamEntry.id,
+                                label: `Team: ${
+                                  getAuditSubjectName(teamEntry.details) ??
+                                  shortenId(teamEntry.target_id)
+                                }`,
+                                rows: getAuditDetailRows(teamEntry.details),
+                              },
+                            ]
+                          : []),
+                        ...memberEntries.map((entry) => ({
+                          id: entry.id,
+                          label: `Team Member: ${
+                            getAuditSubjectName(entry.details) ??
+                            shortenId(entry.target_id)
+                          }`,
+                          rows: getAuditDetailRows(entry.details),
+                        })),
+                      ].filter((section) => section.rows.length > 0);
+                      const isExpanded = expandedAuditLogId === item.batchId;
+
+                      return (
+                        <Fragment key={item.batchId}>
+                          <tr className="border-b border-bronze/10 last:border-0">
+                            <td className="w-[180px] min-w-[180px] whitespace-nowrap px-3 py-2">
+                              {formatAuditDate(earliestEntry.created_at)}
+                            </td>
+                            <td className="w-[220px] min-w-[220px] whitespace-nowrap px-3 py-2 font-semibold text-ink">
+                              {getAuditActorLabel(
+                                firstEntry.actor_id,
+                                firstEntry.actor_name,
+                                firstEntry.actor_email
+                              )}
+                            </td>
+                            <td className="w-[210px] min-w-[210px] whitespace-nowrap px-3 py-2">
+                              {item.entries.length === 1
+                                ? formatAuditAction(firstEntry.action)
+                                : "Various"}
+                            </td>
+                            <td className="w-[260px] min-w-[260px] whitespace-nowrap px-3 py-2">
+                              <div>
+                                {teamEntry && (
+                                  <div>
+                                    Team:{" "}
+                                    {getAuditSubjectName(teamEntry.details) ??
+                                      shortenId(teamEntry.target_id)}
+                                  </div>
+                                )}
+
+                                {memberEntries.map((entry) => (
+                                  <div key={entry.id}>
+                                    Team Member:{" "}
+                                    {getAuditSubjectName(entry.details) ??
+                                      shortenId(entry.target_id)}
+                                  </div>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="w-[230px] min-w-[230px] px-3 py-2">
+                              {batchDetailSections.length > 0 ? (
+                                <div className="space-y-2">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setExpandedAuditLogId(
+                                        isExpanded ? null : item.batchId
+                                      )
+                                    }
+                                    className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40"
+                                  >
+                                    {isExpanded ? "Hide" : "View"}
+                                  </button>
+                                  {isExpanded && (
+                                    <div className="max-h-80 space-y-3 overflow-auto rounded-lg border border-bronze/20 bg-cream p-3 text-xs text-brown">
+                                      {batchDetailSections.map((section) => (
+                                        <div
+                                          key={section.id}
+                                          className="space-y-2 border-t border-bronze/10 pt-3 first:border-t-0 first:pt-0"
+                                        >
+                                          <h3 className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark">
+                                            {section.label}
+                                          </h3>
+                                          <div className="space-y-1">
+                                            {section.rows.map((row) => (
+                                              <p key={row.label}>
+                                                <span className="font-semibold text-ink">
+                                                  {row.label}:
+                                                </span>{" "}
+                                                {row.value}
+                                              </p>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-brown/70">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        </Fragment>
+                      );
+                    }
+
+                    const { entry } = item;
+                    const detailRows = getAuditDetailRows(entry.details);
+                    const hasDetails = detailRows.length > 0;
+                    const isExpanded = expandedAuditLogId === entry.id;
+
+                    return (
+                      <tr
+                        key={entry.id}
+                        className="border-b border-bronze/10 last:border-0"
+                      >
+                        <td className="w-[180px] min-w-[180px] whitespace-nowrap px-3 py-2">
+                          {formatAuditDate(entry.created_at)}
+                        </td>
+                        <td className="w-[220px] min-w-[220px] whitespace-nowrap px-3 py-2 font-semibold text-ink">
+                          {getAuditActorLabel(
+                            entry.actor_id,
+                            entry.actor_name,
+                            entry.actor_email
+                          )}
+                        </td>
+                        <td className="w-[210px] min-w-[210px] whitespace-nowrap px-3 py-2">
+                          {formatAuditAction(entry.action)}
+                        </td>
+                        <td className="w-[260px] min-w-[260px] whitespace-nowrap px-3 py-2">
+                          {getAuditTargetLabel(
+                            entry.target_table,
+                            entry.target_id,
+                            entry.details
+                          )}
+                        </td>
+                        <td className="w-[230px] min-w-[230px] px-3 py-2">
+                          {hasDetails ? (
+                            <div className="space-y-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedAuditLogId(isExpanded ? null : entry.id)
+                                }
+                                className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40"
+                              >
+                                {isExpanded ? "Hide" : "View"}
+                              </button>
+                              {isExpanded && (
+                                <div className="max-h-60 space-y-2 overflow-auto rounded-lg border border-bronze/20 bg-cream p-3 text-xs text-brown">
+                                  {detailRows.map((row) => (
+                                    <p key={row.label}>
+                                      <span className="font-semibold text-ink">
+                                        {row.label}:
+                                      </span>{" "}
+                                      {row.value}
+                                    </p>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-brown/70">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="rounded-lg border border-bronze/20 bg-sand px-4 py-6 text-brown/80">
+              No audit log entries found.
             </p>
           )}
         </section>

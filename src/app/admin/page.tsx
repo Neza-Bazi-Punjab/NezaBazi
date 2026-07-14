@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import PageHeader from "@/components/PageHeader";
 import SectionHeading from "@/components/SectionHeading";
 import { createClient } from "@/lib/supabase/server";
 import { site } from "@/lib/site";
 import AdminDashboard, {
+  type AuditActor,
+  type AuditLogEntry,
   type SoloRegistration,
   type Team,
   type TeamMember,
@@ -14,6 +17,27 @@ export const metadata: Metadata = {
   title: "Admin Dashboard",
   description: `Admin dashboard for the ${site.title}.`,
 };
+
+const getMetadataString = (metadata: object | null | undefined, key: string) => {
+  if (!metadata || !(key in metadata)) {
+    return "";
+  }
+
+  const value = (metadata as Record<string, unknown>)[key];
+  return typeof value === "string" ? value : "";
+};
+
+const createServiceRoleClient = () =>
+  createSupabaseAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    }
+  );
 
 export default async function AdminPage() {
   const supabase = await createClient();
@@ -91,6 +115,7 @@ export default async function AdminPage() {
     { data: soloRegistrations },
     { data: teams },
     { data: teamMembers },
+    { data: auditLog },
   ] = await Promise.all([
     supabase
       .from("solo_registrations")
@@ -98,7 +123,30 @@ export default async function AdminPage() {
       .order("created_at", { ascending: false }),
     supabase.from("teams").select("*").order("created_at", { ascending: false }),
     supabase.from("team_members").select("*"),
+    supabase
+      .from("admin_audit_log")
+      .select("*, actor:profiles!actor_id(id)")
+      .order("created_at", { ascending: false })
+      .limit(200),
   ]);
+  const serviceSupabase = createServiceRoleClient();
+  const { data: usersData, error: usersError } =
+    await serviceSupabase.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    });
+
+  if (usersError) {
+    console.error("Unable to load admin audit actor lookup", usersError);
+  }
+
+  const auditActors =
+    usersData?.users.map((authUser) => ({
+      id: authUser.id,
+      email: authUser.email ?? "",
+      full_name: getMetadataString(authUser.user_metadata, "full_name"),
+      phone: getMetadataString(authUser.user_metadata, "phone"),
+    })) ?? [];
 
   return (
     <>
@@ -114,6 +162,8 @@ export default async function AdminPage() {
             soloRegistrations={(soloRegistrations ?? []) as SoloRegistration[]}
             teams={(teams ?? []) as Team[]}
             teamMembers={(teamMembers ?? []) as TeamMember[]}
+            auditLog={(auditLog ?? []) as AuditLogEntry[]}
+            auditActors={auditActors as AuditActor[]}
           />
         </div>
       </section>

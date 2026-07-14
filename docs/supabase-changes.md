@@ -23,6 +23,8 @@ These migration names are present in the current Supabase migration history:
 6. `text_field_length_caps` limits names, locations, breeds, phone numbers, emails, and team names to safe lengths.
 7. `lock_profiles_insert_path` removes client INSERT access and the old insert policy from `profiles`. The signup trigger still creates the profile because it runs as a security-definer trigger.
 8. `registration_drafts_autosave` adds the `registration_drafts` table (one autosaved draft per user per registration type, owner-only RLS, size-capped jsonb payload, `updated_at` refresh trigger). This is the first migration whose SQL is also committed in the repo, under `supabase/migrations/`.
+9. `harden_admin_audit_log` makes audit actors server-trusted, stores actor name/email snapshots, preserves audit rows when an administrator is deleted, removes browser write access to the audit table, and adds service-role-only transactional functions for registration edits and role changes.
+10. `lock_admin_registration_write_paths` removes the old broad admin UPDATE/DELETE RLS policies from registration tables. Admin dashboard writes must now use the protected server route, while players and team leaders keep their existing owner-scoped permissions.
 
 The live database was checked after these changes: existing rows satisfy the constraints, teams have four riders, and teams have one leader. The Supabase security advisor still has intentional or deferred warnings for public trigger-function execution, leaked-password protection, and some RLS performance policies.
 
@@ -35,6 +37,7 @@ The live database was checked after these changes: existing rows satisfy the con
 5. Team registration submits to `/register-team/submit`, where the server validates all four riders, checks duplicate emails and phones, creates the team, and inserts the roster.
 6. Account saves go through `/api/account/profile`. The route authenticates the session, updates Auth, and uses the server-only service role to synchronize matching registration rows.
 7. The account page can show a rider's membership on another person's team by matching the current login email. This is useful during development, but it must be replaced by verified `profile_id` linking before public signup.
+8. Admin registration changes go through `/api/admin/registrations`. The route verifies the administrator, derives the audit actor from that session, and calls a service-role-only PostgreSQL function that commits the data change and audit record together. Admin Auth changes remain in `/api/admin/users`; email changes and deletions create a required audit record before calling Supabase Auth, and role changes use an atomic database function.
 
 ## Environment and deployment
 
@@ -57,4 +60,4 @@ Known caveat for that future work: when a user changes their email on `/account`
 
 ## Important limitation
 
-The seven live migrations were applied to the current Supabase project, but their SQL files are not yet committed in this repository. A fresh Supabase project will not automatically receive these protections from `git clone`. Before production, pull the schema into a reviewed `supabase/migrations` directory and test it with a clean database reset.
+The earlier live migrations were applied before this repository began tracking SQL consistently, so a fresh project still cannot be recreated completely from `git clone`. The registration draft and audit-hardening migrations are committed under `supabase/migrations/`; before production, pull the remaining live schema into reviewed migration files and test a clean database reset.
