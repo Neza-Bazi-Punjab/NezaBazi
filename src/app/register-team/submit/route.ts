@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
+import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
 import { escapeIlikePattern } from "@/lib/supabase/query";
 import { createClient } from "@/lib/supabase/server";
 
@@ -85,6 +86,13 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "You must be logged in to register a team." },
       { status: 401 }
+    );
+  }
+
+  if (!hasConfirmedEmail(user)) {
+    return NextResponse.json(
+      { error: "Confirm your email address before registering a team." },
+      { status: 403 }
     );
   }
 

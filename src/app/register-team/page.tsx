@@ -4,6 +4,7 @@ import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js
 import PageHeader from "@/components/PageHeader";
 import SectionHeading from "@/components/SectionHeading";
 import type { TeamDraftData } from "@/lib/registration-drafts";
+import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
 import { escapeIlikePattern } from "@/lib/supabase/query";
 import { createClient } from "@/lib/supabase/server";
 import { site } from "@/lib/site";
@@ -48,6 +49,7 @@ export default async function RegisterTeamPage() {
     : { data: null };
 
   const isAdmin = profile?.role === "admin";
+  const isEmailConfirmed = hasConfirmedEmail(user);
   const authMetadata = user?.user_metadata as RegistrationMetadata | undefined;
 
   const { data: existingTeam } = user && !isAdmin
@@ -68,7 +70,7 @@ export default async function RegisterTeamPage() {
   let hasTeamMembership = false;
   let membershipTeamName: string | null = null;
 
-  if (user && !isAdmin && user.email) {
+  if (user && !isAdmin && user.email && isEmailConfirmed) {
     const serviceSupabase = createSupabaseAdminClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -122,7 +124,17 @@ export default async function RegisterTeamPage() {
       <section className="bg-cream">
         <div className="mx-auto max-w-xl px-6 py-16">
           {user ? (
-            hasCompleteTeam || hasTeamMembership ? (
+            !isEmailConfirmed ? (
+              <>
+                <SectionHeading>Confirm Your Email</SectionHeading>
+
+                <div className="mt-10 space-y-6">
+                  <p className="leading-7 text-brown/85">
+                    Check your inbox and confirm your email address before registering a team.
+                  </p>
+                </div>
+              </>
+            ) : hasCompleteTeam || hasTeamMembership ? (
               <>
                 <SectionHeading>Team Already Registered</SectionHeading>
 

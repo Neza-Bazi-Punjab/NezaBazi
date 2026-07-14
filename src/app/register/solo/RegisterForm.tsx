@@ -12,6 +12,7 @@ import {
   type SoloDraftData,
 } from "@/lib/registration-drafts";
 import { createClient } from "@/lib/supabase/client";
+import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
 
 type InitialValues = {
   full_name?: string | null;
@@ -122,6 +123,12 @@ export default function RegisterForm({
 
     if (!user) {
       setError("You must be logged in to register.");
+      setLoading(false);
+      return;
+    }
+
+    if (!hasConfirmedEmail(user)) {
+      setError("Confirm your email address before registering.");
       setLoading(false);
       return;
     }

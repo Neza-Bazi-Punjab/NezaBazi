@@ -4,6 +4,7 @@ import {
   createClient as createSupabaseAdminClient,
   type User,
 } from "@supabase/supabase-js";
+import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
 import { escapeIlikePattern } from "@/lib/supabase/query";
 
 type RegistrationProfile = {
@@ -159,6 +160,10 @@ export const syncRegistrationProfile = async ({
 };
 
 export const syncRegistrationProfileFromUser = async (user: User) => {
+  if (!hasConfirmedEmail(user)) {
+    return { error: "Confirm your email address before syncing registration details." } as const;
+  }
+
   if (!user.email) {
     return { error: "Your account does not have an email address." } as const;
   }

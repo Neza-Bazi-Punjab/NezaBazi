@@ -6,6 +6,7 @@ import LocationPicker from "@/components/LocationPicker";
 import PageHeader from "@/components/PageHeader";
 import SectionHeading from "@/components/SectionHeading";
 import { createClient } from "@/lib/supabase/client";
+import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
 import { syncAccountRegistrations } from "@/lib/sync-account-registrations";
 
 export default function SignupPage() {
@@ -63,10 +64,10 @@ export default function SignupPage() {
     }
 
     // With email confirmation enabled there is no session yet — the user must
-    // click the emailed link first. Only sync immediately if a session exists
-    // (i.e. confirmation is turned off). When confirmation is on, the callback
-    // performs this sync after the verified session is established.
-    if (data.session) {
+    // click the emailed link first. Even if a session is returned, sync only
+    // when Supabase reports that the email has been confirmed. Normally the
+    // confirmation callback performs this sync after verification.
+    if (data.session && hasConfirmedEmail(data.user)) {
       await syncAccountRegistrations();
     }
 

@@ -6,6 +6,7 @@ import PageHeader from "@/components/PageHeader";
 import SectionHeading from "@/components/SectionHeading";
 import { getSafeRedirect } from "@/lib/safe-redirect";
 import { createClient } from "@/lib/supabase/client";
+import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
 import { syncAccountRegistrations } from "@/lib/sync-account-registrations";
 
 export default function LoginPage() {
@@ -31,7 +32,7 @@ function LoginPageContent() {
     setError(null);
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
       setLoading(false);
@@ -42,6 +43,13 @@ function LoginPageContent() {
           ? "Please confirm your email first — check your inbox for the confirmation link."
           : error.message
       );
+      return;
+    }
+
+    if (!hasConfirmedEmail(data.user)) {
+      await supabase.auth.signOut();
+      setLoading(false);
+      setError("Please confirm your email first - check your inbox for the confirmation link.");
       return;
     }
 

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import PageHeader from "@/components/PageHeader";
 import SectionHeading from "@/components/SectionHeading";
+import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
 import { escapeIlikePattern } from "@/lib/supabase/query";
 import { createClient } from "@/lib/supabase/server";
 import { site } from "@/lib/site";
@@ -103,7 +104,7 @@ export default async function AccountPage() {
      the case-insensitive match stays exact. */
   let memberships: AccountTeamMembership[] = [];
 
-  if (user.email) {
+  if (user.email && hasConfirmedEmail(user)) {
     const serviceSupabase = createSupabaseAdminClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,

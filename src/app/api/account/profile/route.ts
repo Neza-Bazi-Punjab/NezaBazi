@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import {
   syncRegistrationProfile,
@@ -73,6 +74,13 @@ export async function POST() {
     );
   }
 
+  if (!hasConfirmedEmail(user)) {
+    return NextResponse.json(
+      { error: "Confirm your email address before syncing registration details." },
+      { status: 403 }
+    );
+  }
+
   const result = await syncRegistrationProfileFromUser(user);
 
   if ("error" in result) {
@@ -92,6 +100,13 @@ export async function PATCH(request: Request) {
     return NextResponse.json(
       { error: "You must be logged in to update your account." },
       { status: 401 }
+    );
+  }
+
+  if (!hasConfirmedEmail(user)) {
+    return NextResponse.json(
+      { error: "Confirm your email address before updating your account." },
+      { status: 403 }
     );
   }
 
