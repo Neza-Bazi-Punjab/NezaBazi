@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
-import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
+import {
+  createServiceRoleClient,
+  insertRequiredAuditLog,
+  updateRequiredAuditLog,
+  verifyAdminRequest,
+} from "@/lib/admin/server";
 import { escapeIlikePattern } from "@/lib/supabase/query";
-import { createClient as createServerClient } from "@/lib/supabase/server";
 
 type ProfileRow = {
   id: string;
@@ -31,6 +35,22 @@ const getMetadataString = (metadata: object | null | undefined, key: string) => 
 
   const value = (metadata as Record<string, unknown>)[key];
   return typeof value === "string" ? value : "";
+};
+
+const getUserSubjectName = (
+  user:
+    | {
+        email?: string | null;
+        user_metadata?: object | null;
+      }
+    | null
+    | undefined
+) => {
+  if (!user) {
+    return null;
+  }
+
+  return getMetadataString(user.user_metadata, "full_name") || user.email || null;
 };
 
 const getErrorText = (error: unknown) => {
@@ -97,54 +117,6 @@ const getRegistrationEmailErrorMessage = (error: {
 
   return error.message ?? "unable to update this registration email.";
 };
-
-const verifyAdminRequest = async () => {
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return {
-      ok: false as const,
-      response: NextResponse.json({ error: "Authentication required." }, { status: 401 }),
-    };
-  }
-
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (error) {
-    return {
-      ok: false as const,
-      response: NextResponse.json({ error: error.message }, { status: 400 }),
-    };
-  }
-
-  if (profile?.role !== "admin") {
-    return {
-      ok: false as const,
-      response: NextResponse.json({ error: "Admin access required." }, { status: 403 }),
-    };
-  }
-
-  return { ok: true as const };
-};
-
-const createServiceRoleClient = () =>
-  createSupabaseAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    }
-  );
 
 export async function GET(request: Request) {
   const adminCheck = await verifyAdminRequest();
@@ -360,6 +332,15 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Profile not found." }, { status: 404 });
   }
 
+  const { data: targetUserData, error: targetUserError } =
+    await serviceSupabase.auth.admin.getUserById(userId);
+
+  if (targetUserError) {
+    console.error("Supabase admin user lookup error before update", targetUserError);
+  }
+
+  const targetSubjectName = getUserSubjectName(targetUserData?.user);
+
   if (targetProfile.role === "admin" && newRole === "player") {
     const { count, error: adminCountError } = await serviceSupabase
       .from("profiles")
@@ -393,6 +374,8 @@ export async function PATCH(request: Request) {
     const duplicateUser = usersData.users.find(
       (user) => user.id !== userId && user.email?.toLowerCase() === normalizedEmail
     );
+    const targetUser = usersData.users.find((user) => user.id === userId);
+    const oldEmail = targetUserData?.user?.email ?? targetUser?.email ?? null;
 
     if (duplicateUser) {
       return NextResponse.json(
@@ -401,11 +384,48 @@ export async function PATCH(request: Request) {
       );
     }
 
+    let emailAuditId: string;
+
+    try {
+      emailAuditId = await insertRequiredAuditLog(
+        serviceSupabase,
+        adminCheck.actor,
+        {
+          action: "edit_user_email",
+          target_table: "profiles",
+          target_id: userId,
+          details: {
+            status: "started",
+            subject_name: targetSubjectName ?? oldEmail ?? email,
+            old_email: oldEmail,
+            new_email: email,
+          },
+        }
+      );
+    } catch {
+      return NextResponse.json(
+        { error: "The account was not changed because its audit record could not be created." },
+        { status: 500 }
+      );
+    }
+
     const { error: emailUpdateError } =
       await serviceSupabase.auth.admin.updateUserById(userId, { email });
 
     if (emailUpdateError) {
       console.error("Supabase admin email update error", emailUpdateError);
+
+      try {
+        await updateRequiredAuditLog(serviceSupabase, emailAuditId, {
+          status: "failed",
+          subject_name: targetSubjectName ?? oldEmail ?? email,
+          old_email: oldEmail,
+          new_email: email,
+          error: getAuthEmailErrorMessage(emailUpdateError),
+        });
+      } catch (auditError) {
+        console.error("Unable to mark failed email audit record", auditError);
+      }
 
       return NextResponse.json(
         { error: getAuthEmailErrorMessage(emailUpdateError) },
@@ -440,16 +460,42 @@ export async function PATCH(request: Request) {
       }
     }
 
+    try {
+      await updateRequiredAuditLog(serviceSupabase, emailAuditId, {
+        status: "completed",
+        subject_name: targetSubjectName ?? oldEmail ?? email,
+        old_email: oldEmail,
+        new_email: email,
+        linked_registration_updates: body.linkedRegistrationUpdates ?? [],
+        warnings: registrationWarnings,
+      });
+    } catch {
+      return NextResponse.json(
+        {
+          error:
+            "The email was changed and an audit record exists, but its completion status could not be saved.",
+        },
+        { status: 500 }
+      );
+    }
+
     if (registrationWarnings.length > 0 && !newRole) {
       return NextResponse.json({ ok: true, warnings: registrationWarnings });
     }
   }
 
   if (newRole) {
-    const { error: updateError } = await serviceSupabase
-      .from("profiles")
-      .update({ role: newRole })
-      .eq("id", userId);
+    const { error: updateError } = await serviceSupabase.rpc(
+      "admin_set_profile_role",
+      {
+        p_profile_id: userId,
+        p_new_role: newRole,
+        p_subject_name: targetSubjectName,
+        p_actor_id: adminCheck.actor.id,
+        p_actor_name: adminCheck.actor.name,
+        p_actor_email: adminCheck.actor.email,
+      }
+    );
 
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 400 });
@@ -506,9 +552,55 @@ export async function DELETE(request: Request) {
     }
   }
 
+  const { data: targetUserData, error: targetUserError } =
+    await serviceSupabase.auth.admin.getUserById(userId);
+
+  if (targetUserError) {
+    console.error("Supabase admin user lookup error before delete", targetUserError);
+  }
+
+  const deletedSubjectName = getUserSubjectName(targetUserData?.user);
+  const deleteAuditDetails = {
+    subject_name: deletedSubjectName,
+    email: targetUserData?.user?.email ?? null,
+    role: targetProfile.role,
+  };
+  let deleteAuditId: string;
+
+  try {
+    deleteAuditId = await insertRequiredAuditLog(
+      serviceSupabase,
+      adminCheck.actor,
+      {
+        action: "delete_user",
+        target_table: "profiles",
+        target_id: userId,
+        details: {
+          status: "started",
+          ...deleteAuditDetails,
+        },
+      }
+    );
+  } catch {
+    return NextResponse.json(
+      { error: "The user was not deleted because the audit record could not be created." },
+      { status: 500 }
+    );
+  }
+
   const { error: deleteUserError } = await serviceSupabase.auth.admin.deleteUser(userId);
 
   if (deleteUserError) {
+    try {
+      await updateRequiredAuditLog(serviceSupabase, deleteAuditId, {
+        status: "failed",
+        ...deleteAuditDetails,
+        error: deleteUserError.message,
+      });
+    } catch (auditError) {
+      console.error("Unable to mark failed user-deletion audit record", auditError);
+    }
+
     return NextResponse.json({ error: deleteUserError.message }, { status: 400 });
   }
 
@@ -519,6 +611,21 @@ export async function DELETE(request: Request) {
 
   if (deleteProfileError) {
     return NextResponse.json({ error: deleteProfileError.message }, { status: 400 });
+  }
+
+  try {
+    await updateRequiredAuditLog(serviceSupabase, deleteAuditId, {
+      status: "completed",
+      ...deleteAuditDetails,
+    });
+  } catch {
+    return NextResponse.json(
+      {
+        error:
+          "The user was deleted and an audit record exists, but its completion status could not be saved.",
+      },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({ ok: true });
