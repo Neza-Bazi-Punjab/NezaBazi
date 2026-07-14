@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import LocationPicker from "@/components/LocationPicker";
 import PageHeader from "@/components/PageHeader";
 import SectionHeading from "@/components/SectionHeading";
 import { createClient } from "@/lib/supabase/client";
@@ -23,8 +24,16 @@ export default function SignupPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError(null);
+
+    // The picker only emits a value once a suggestion is chosen (or manual
+    // entry is used), so an empty string means the location isn't confirmed.
+    if (location.trim() === "") {
+      setError("Please select your location (or use manual entry).");
+      return;
+    }
+
+    setLoading(true);
 
     const supabase = createClient();
 
@@ -114,13 +123,9 @@ export default function SignupPage() {
               <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
                 Location
               </label>
-              <input
-                type="text"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                required
-                className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
-              />
+              <div className="mt-2">
+                <LocationPicker value={location} onChange={setLocation} />
+              </div>
             </div>
 
             <div>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import LocationPicker from "@/components/LocationPicker";
 import SectionHeading from "@/components/SectionHeading";
 
 export type AccountProfile = {
@@ -307,11 +308,12 @@ export default function AccountPageClient({
               Location
             </label>
             {editing ? (
-              <input
-                value={draft.location}
-                onChange={(event) => updateDraft("location", event.target.value)}
-                className={inputClassName}
-              />
+              <div className="mt-2">
+                <LocationPicker
+                  value={draft.location}
+                  onChange={(nextLocation) => updateDraft("location", nextLocation)}
+                />
+              </div>
             ) : (
               <p className={displayClassName}>{profile.location || "Not set"}</p>
             )}
@@ -405,9 +407,14 @@ export default function AccountPageClient({
                   className="space-y-6 rounded-lg border border-bronze/20 bg-sand p-6"
                 >
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <h3 className="font-display text-xl font-bold uppercase tracking-wide text-bronze-dark">
-                      {membershipTeam?.team_name ?? "Team"}
-                    </h3>
+                    <div>
+                      <h3 className="font-display text-xl font-bold uppercase tracking-wide text-bronze-dark">
+                        Team Registration
+                      </h3>
+                      <p className="mt-1 font-display text-sm font-semibold uppercase tracking-[0.12em] text-brown/80">
+                        Team: {membershipTeam?.team_name ?? "Unknown"}
+                      </p>
+                    </div>
                     <p className="text-sm text-brown/80">
                       Registered {formatDate(member.created_at)}
                     </p>
@@ -449,9 +456,14 @@ export default function AccountPageClient({
               {team && (
                 <article className="space-y-6 rounded-lg border border-bronze/20 bg-sand p-6">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <h3 className="font-display text-xl font-bold uppercase tracking-wide text-bronze-dark">
-                      {team.team_name}
-                    </h3>
+                    <div>
+                      <h3 className="font-display text-xl font-bold uppercase tracking-wide text-bronze-dark">
+                        Team Registration
+                      </h3>
+                      <p className="mt-1 font-display text-sm font-semibold uppercase tracking-[0.12em] text-brown/80">
+                        Team: {team.team_name}
+                      </p>
+                    </div>
                     <p className="text-sm text-brown/80">
                       Registered {formatDate(team.created_at)}
                     </p>

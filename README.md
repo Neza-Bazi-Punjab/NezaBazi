@@ -15,7 +15,7 @@ npm test
 npm run lint
 npm run build
 ```
-Requires a `.env.local` with `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and the server-only `SUPABASE_SERVICE_ROLE_KEY` (see `.env.example`).
+Requires a `.env.local` with `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and the server-only `SUPABASE_SERVICE_ROLE_KEY` (see `.env.example`). The optional server-only `GEONAMES_USERNAME` (free account at geonames.org with "free web services" enabled) powers the village autocomplete in the location picker; without it the picker falls back to manual entry.
 
 ## Project roadmap
 
@@ -38,8 +38,11 @@ src/
     about/ event/ gallery/ rules/ contact/    Content pages
     login/ signup/     Working auth pages (Supabase)
     register/           Registration chooser page (solo vs team)
-      solo/             Solo registration form (Auth-prefilled) + success page
-    register-team/      Team registration form (Auth-prefilled leader) + server submit route + success page
+      solo/             Solo registration form (Auth-prefilled, autosaved draft) + success page
+    register-team/      Team registration wizard (Team name → Riders 1–4 → Review,
+                        progress bar + autosaved draft) + server submit route + success page
+    api/locations/      Server-only location data: states/ serves the vendored
+                        country→state list, search/ proxies GeoNames village search
     account/            Logged-in user's own account info (view/edit) + active registrations
     admin/              Admin-only dashboard: view/search/edit/delete solo & team
                         registrations, manage admin users
@@ -49,9 +52,12 @@ src/
     players/ rankings/  "Coming soon" pages, unlock in later phases
     sitemap.ts icon.svg
   components/           Reusable UI (Navbar, Footer, Button, DissolvePhoto,
-                        Reveal, icons, section building blocks, …)
+                        Reveal, icons, LocationPicker, section building blocks, …)
+  data/                 Vendored GeoNames reference data (countries.json,
+                        states.json) for the location picker dropdowns
   lib/
     site.ts            Single source of truth for event details, nav links
+    registration-drafts.ts  Client hook + helpers for registration autosave drafts
     supabase/
       client.ts         Supabase client for Client Components (browser)
       server.ts          Supabase client for Server Components/Actions
@@ -76,10 +82,12 @@ event details (date, venue, contact, domain) live in
 - **Auto-profile trigger** — `handle_new_user()` fires on every new `auth.users` signup and creates a bare `profiles` row (just the `id`) — all other account fields go straight into Auth metadata instead.
 - **Auth flow** — `/signup` creates an account (name, age, location, phone, email, password, years of experience, horse age, horse breed), saved directly to Auth. `/login` signs in, and supports a `?redirect=` parameter (sanitized to internal paths only) so gated pages return the user where they came from. Email confirmation is currently **off** for easier local testing — turn back on before public launch.
 - **Registration flow** — `/register` lets a logged-in user choose solo or team registration, both pre-filled from their Auth account info (locked/read-only for regular users). A regular player already listed on any team is blocked from registering another team, and all four rider emails/phones are checked before a new team is created; admins retain the testing bypass for their own registration limits.
+- **Registration drafts** — the `registration_drafts` table (owner-only RLS, one row per user per type) autosaves the solo form and the team wizard ~1s after each change, so a half-finished registration survives logout and device switches. The team form is a step wizard (Team name → Riders 1–4 → Review & Submit) with a progress bar; drafts are deleted on successful submission. Full validation still runs only in the submit route.
+- **Location picker** — every location field uses a guided picker: country + state dropdowns from vendored GeoNames data (`src/data/`), village autocomplete (3+ chars, 300ms debounce, 5 suggestions) via a server route that proxies GeoNames with `GEONAMES_USERNAME`, then an editable nearby city/district. Saves one combined string, e.g. `Ladhewali, Jalandhar, Punjab, India`, into the existing `location` columns. Manual entry is always available and is the automatic fallback while `GEONAMES_USERNAME` is unset. Location data © GeoNames, CC BY 4.0.
 - **Account management** — `/account` lets a logged-in user view and edit their own info and see their active solo/team registration status. Saves go through a server route (`/api/account/profile`) that updates Auth via the user's own session, then uses the service role to sync account details onto the user's registration rows — their solo registration (linked by `profile_id`) and any `team_members` rows matching their previous login email, including rows on teams someone else leads. Signup triggers the same sync immediately when a session is available, and login retries it for confirmation-enabled accounts. Registration emails only follow the login email when they still matched the old one, so admin-set overrides are preserved; unique-constraint conflicts surface as warnings without blocking the account update.
 - **Admin dashboard** — `/admin` (role-gated) lets admins search, view, inline-edit, and delete solo and team registrations, and manage other admins (promote/demote/delete) via a server-only API route using the Supabase service role key.
 
-The live database changes are documented in [docs/supabase-changes.md](docs/supabase-changes.md). They were applied to the current Supabase project and verified there; they are not yet a source-controlled migration set for recreating a fresh project.
+The live database changes are documented in [docs/supabase-changes.md](docs/supabase-changes.md). The earlier changes were applied to the current Supabase project and verified there but are not yet a source-controlled migration set; new migrations (starting with `registration_drafts`) are committed under `supabase/migrations/` as they are applied.
 
 ## Notes
 

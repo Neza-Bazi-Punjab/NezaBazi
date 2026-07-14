@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import SectionHeading from "@/components/SectionHeading";
+import type { SoloDraftData } from "@/lib/registration-drafts";
 import { createClient } from "@/lib/supabase/server";
 import { site } from "@/lib/site";
 import RegisterForm from "./RegisterForm";
@@ -55,6 +56,16 @@ export default async function SoloRegisterPage() {
         .maybeSingle()
     : { data: null };
 
+  // Restore the autosaved draft (RLS limits the read to the user's own row).
+  const { data: draftRow } = user
+    ? await supabase
+        .from("registration_drafts")
+        .select("data")
+        .eq("profile_id", user.id)
+        .eq("draft_type", "solo")
+        .maybeSingle()
+    : { data: null };
+
   return (
     <>
       <PageHeader
@@ -80,6 +91,7 @@ export default async function SoloRegisterPage() {
                 <SectionHeading>Rider Details</SectionHeading>
                 <RegisterForm
                   lockProfileFields={!isAdmin}
+                  initialDraft={(draftRow?.data ?? null) as SoloDraftData | null}
                   initialValues={
                     isAdmin
                       ? undefined

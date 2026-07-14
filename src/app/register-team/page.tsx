@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import PageHeader from "@/components/PageHeader";
 import SectionHeading from "@/components/SectionHeading";
+import type { TeamDraftData } from "@/lib/registration-drafts";
 import { escapeIlikePattern } from "@/lib/supabase/query";
 import { createClient } from "@/lib/supabase/server";
 import { site } from "@/lib/site";
@@ -101,6 +102,16 @@ export default async function RegisterTeamPage() {
 
   const hasCompleteTeam = !isAdmin && Boolean(existingTeam && teamMemberCount === 4);
 
+  // Restore the autosaved wizard draft (RLS limits the read to the user's own row).
+  const { data: draftRow } = user
+    ? await supabase
+        .from("registration_drafts")
+        .select("data")
+        .eq("profile_id", user.id)
+        .eq("draft_type", "team")
+        .maybeSingle()
+    : { data: null };
+
   return (
     <>
       <PageHeader
@@ -136,6 +147,7 @@ export default async function RegisterTeamPage() {
                 <TeamRegisterForm
                   existingTeamId={existingTeam?.id}
                   initialTeamName={existingTeam?.team_name}
+                  initialDraft={(draftRow?.data ?? null) as TeamDraftData | null}
                   leaderProfile={
                     isAdmin
                       ? undefined

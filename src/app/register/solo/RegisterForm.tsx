@@ -1,7 +1,16 @@
+// Solo registration form: prefilled from the account (locked for regular
+// players), autosaved to registration_drafts while typing, submitted straight
+// to solo_registrations under RLS.
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import LocationPicker from "@/components/LocationPicker";
+import {
+  deleteRegistrationDraft,
+  useRegistrationDraft,
+  type SoloDraftData,
+} from "@/lib/registration-drafts";
 import { createClient } from "@/lib/supabase/client";
 
 type InitialValues = {
@@ -22,31 +31,89 @@ const inputClassName =
 const lockedInputClassName =
   "mt-2 w-full cursor-not-allowed rounded-lg border border-bronze/20 bg-parchment px-4 py-3 text-brown/70 focus:outline-none";
 
+const draftStatusText = {
+  idle: "",
+  saving: "Saving draft…",
+  saved: "Draft saved ✓",
+  error: "Draft could not be saved — check your connection.",
+} as const;
+
 export default function RegisterForm({
   initialValues,
   lockProfileFields = false,
+  initialDraft,
 }: {
   initialValues?: InitialValues;
   lockProfileFields?: boolean;
+  initialDraft?: SoloDraftData | null;
 }) {
   const router = useRouter();
-  const [fullName, setFullName] = useState(initialValues?.full_name ?? "");
-  const [age, setAge] = useState(numberToInputValue(initialValues?.age));
-  const [location, setLocation] = useState(initialValues?.location ?? "");
-  const [phone, setPhone] = useState(initialValues?.phone ?? "");
-  const [email, setEmail] = useState(initialValues?.email ?? "");
-  const [yearsExperience, setYearsExperience] = useState(
-    numberToInputValue(initialValues?.years_experience)
+
+  /* Locked profile fields always follow the account; unlocked fields prefer
+     the saved draft so returning users resume where they stopped. */
+  const restore = (
+    locked: boolean,
+    accountValue: string,
+    draftValue: string | undefined
+  ) => (locked ? accountValue : draftValue ?? accountValue);
+
+  const [fullName, setFullName] = useState(() =>
+    restore(lockProfileFields, initialValues?.full_name ?? "", initialDraft?.fullName)
   );
-  const [horseAge, setHorseAge] = useState(numberToInputValue(initialValues?.horse_age));
-  const [horseBreed, setHorseBreed] = useState(initialValues?.horse_breed ?? "");
+  const [age, setAge] = useState(() =>
+    restore(lockProfileFields, numberToInputValue(initialValues?.age), initialDraft?.age)
+  );
+  const [location, setLocation] = useState(() =>
+    restore(lockProfileFields, initialValues?.location ?? "", initialDraft?.location)
+  );
+  const [phone, setPhone] = useState(() =>
+    restore(lockProfileFields, initialValues?.phone ?? "", initialDraft?.phone)
+  );
+  const [email, setEmail] = useState(() =>
+    restore(lockProfileFields, initialValues?.email ?? "", initialDraft?.email)
+  );
+  const [yearsExperience, setYearsExperience] = useState(
+    () =>
+      initialDraft?.yearsExperience ??
+      numberToInputValue(initialValues?.years_experience)
+  );
+  const [horseAge, setHorseAge] = useState(
+    () => initialDraft?.horseAge ?? numberToInputValue(initialValues?.horse_age)
+  );
+  const [horseBreed, setHorseBreed] = useState(
+    () => initialDraft?.horseBreed ?? (initialValues?.horse_breed ?? "")
+  );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const draftData = useMemo<SoloDraftData>(
+    () => ({
+      fullName,
+      age,
+      location,
+      phone,
+      email,
+      yearsExperience,
+      horseAge,
+      horseBreed,
+    }),
+    [fullName, age, location, phone, email, yearsExperience, horseAge, horseBreed]
+  );
+  const { status: draftStatus, flush: saveDraftNow } = useRegistrationDraft(
+    "solo",
+    draftData
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError(null);
+
+    if (location.trim() === "") {
+      setError("Please select your location (or use manual entry).");
+      return;
+    }
+
+    setLoading(true);
 
     const supabase = createClient();
     const {
@@ -71,9 +138,9 @@ export default function RegisterForm({
       horse_breed: horseBreed,
     });
 
-    setLoading(false);
-
     if (error) {
+      setLoading(false);
+
       if (error.code === "23505") {
         setError("You've already registered, or this email/phone is already in use.");
       } else {
@@ -83,6 +150,8 @@ export default function RegisterForm({
       return;
     }
 
+    await deleteRegistrationDraft("solo");
+    setLoading(false);
     router.push("/register/solo/success");
   };
 
@@ -121,14 +190,19 @@ export default function RegisterForm({
         <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
           Location
         </label>
-        <input
-          type="text"
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
-          required
-          readOnly={lockProfileFields}
-          className={lockProfileFields ? lockedInputClassName : inputClassName}
-        />
+        {lockProfileFields ? (
+          <input
+            type="text"
+            value={location}
+            readOnly
+            required
+            className={lockedInputClassName}
+          />
+        ) : (
+          <div className="mt-2">
+            <LocationPicker value={location} onChange={setLocation} />
+          </div>
+        )}
       </div>
 
       <div>
@@ -201,6 +275,19 @@ export default function RegisterForm({
       </div>
 
       {error && <p className="text-sm text-red-700">{error}</p>}
+
+      <div className="flex items-center justify-between gap-4">
+        <button
+          type="button"
+          onClick={saveDraftNow}
+          className="rounded-lg border border-bronze/20 px-4 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40"
+        >
+          Save Draft
+        </button>
+        <p className="text-xs text-brown/70" role="status">
+          {draftStatusText[draftStatus]}
+        </p>
+      </div>
 
       <button
         type="submit"

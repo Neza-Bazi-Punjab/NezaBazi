@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
+import { escapeIlikePattern } from "@/lib/supabase/query";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 
 type ProfileRow = {
@@ -156,9 +157,21 @@ export async function GET(request: Request) {
   const linkedUserId = new URL(request.url).searchParams.get("linkedUserId");
 
   if (linkedUserId) {
+    // Rider rows on other leaders' teams are linked to this account only by
+    // email, so look up the user's current login email first.
+    const { data: targetUserData, error: targetUserError } =
+      await serviceSupabase.auth.admin.getUserById(linkedUserId);
+
+    if (targetUserError) {
+      return NextResponse.json({ error: targetUserError.message }, { status: 400 });
+    }
+
+    const targetEmail = targetUserData.user?.email ?? "";
+
     const [
       { data: soloRegistrations, error: soloError },
       { data: leaderTeams, error: teamsError },
+      { data: riderRows, error: riderError },
     ] = await Promise.all([
       serviceSupabase
         .from("solo_registrations")
@@ -168,6 +181,13 @@ export async function GET(request: Request) {
         .from("teams")
         .select("id, team_name")
         .eq("leader_profile_id", linkedUserId),
+      targetEmail !== ""
+        ? serviceSupabase
+            .from("team_members")
+            .select("id, email, team_id")
+            .ilike("email", escapeIlikePattern(targetEmail))
+            .eq("is_leader", false)
+        : Promise.resolve({ data: [], error: null }),
     ]);
 
     if (soloError) {
@@ -176,6 +196,10 @@ export async function GET(request: Request) {
 
     if (teamsError) {
       return NextResponse.json({ error: teamsError.message }, { status: 400 });
+    }
+
+    if (riderError) {
+      return NextResponse.json({ error: riderError.message }, { status: 400 });
     }
 
     const teamsById = new Map(
@@ -197,6 +221,31 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: teamMembersError.message }, { status: 400 });
     }
 
+    // Team names for rider rows on teams this user doesn't lead.
+    const riderMembers = (riderRows ?? []) as Array<{
+      id: string;
+      email: string;
+      team_id: string;
+    }>;
+    const missingTeamIds = riderMembers
+      .map((member) => member.team_id)
+      .filter((id) => !teamsById.has(id));
+
+    if (missingTeamIds.length > 0) {
+      const { data: riderTeams, error: riderTeamsError } = await serviceSupabase
+        .from("teams")
+        .select("id, team_name")
+        .in("id", missingTeamIds);
+
+      if (riderTeamsError) {
+        return NextResponse.json({ error: riderTeamsError.message }, { status: 400 });
+      }
+
+      for (const team of (riderTeams ?? []) as Array<{ id: string; team_name: string }>) {
+        teamsById.set(team.id, team.team_name);
+      }
+    }
+
     return NextResponse.json({
       registrations: [
         ...((soloRegistrations ?? []) as Array<{ id: string; email: string }>).map(
@@ -214,7 +263,14 @@ export async function GET(request: Request) {
         }>).map((member) => ({
           id: member.id,
           type: "team_member" as const,
-          label: `Team member on ${teamsById.get(member.team_id) ?? "team"}`,
+          label: `Team leader entry on ${teamsById.get(member.team_id) ?? "team"}`,
+          email: member.email,
+          teamName: teamsById.get(member.team_id) ?? null,
+        })),
+        ...riderMembers.map((member) => ({
+          id: member.id,
+          type: "team_member" as const,
+          label: `Rider on ${teamsById.get(member.team_id) ?? "team"} (added by its team leader)`,
           email: member.email,
           teamName: teamsById.get(member.team_id) ?? null,
         })),

@@ -9,6 +9,7 @@ This file explains the database and Auth work that was applied while building th
 - `solo_registrations` stores one solo event entry and links to `profiles.id` through `profile_id`.
 - `teams` stores the team name and its leader profile id.
 - `team_members` stores the four rider rows for a team. Non-leader rider rows currently use the typed email as their temporary link; a verified `profile_id` claim is planned for a later step.
+- `registration_drafts` stores one in-progress solo form or team-wizard draft per user so registration progress survives logout and device switches. Drafts are plain form text (jsonb), readable and writable only by their owner, and deleted when the registration is submitted.
 
 ## Live migrations already applied
 
@@ -21,6 +22,7 @@ These migration names are present in the current Supabase migration history:
 5. `revoke_execute_from_public_on_trigger_functions` corrects the previous revoke by removing the default `PUBLIC` execute grant as well.
 6. `text_field_length_caps` limits names, locations, breeds, phone numbers, emails, and team names to safe lengths.
 7. `lock_profiles_insert_path` removes client INSERT access and the old insert policy from `profiles`. The signup trigger still creates the profile because it runs as a security-definer trigger.
+8. `registration_drafts_autosave` adds the `registration_drafts` table (one autosaved draft per user per registration type, owner-only RLS, size-capped jsonb payload, `updated_at` refresh trigger). This is the first migration whose SQL is also committed in the repo, under `supabase/migrations/`.
 
 The live database was checked after these changes: existing rows satisfy the constraints, teams have four riders, and teams have one leader. The Supabase security advisor still has intentional or deferred warnings for public trigger-function execution, leaked-password protection, and some RLS performance policies.
 
@@ -42,11 +44,16 @@ Local development needs all three variables in `.env.local`:
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+GEONAMES_USERNAME=
 ```
+
+`GEONAMES_USERNAME` is optional and server-only: it enables the village autocomplete in the location picker (register free at geonames.org and enable "free web services" on the account page). Without it, the picker falls back to manual village/city entry.
 
 The service-role key is server-only. Add it separately to Vercel Preview and Production environment variables. Never put it in a `NEXT_PUBLIC_` variable, browser code, Git, screenshots, or chat. The current local key is a legacy JWT key and should be rotated before public launch because it was previously shared during development.
 
 Email confirmation is currently disabled for local testing. Before public signup, configure confirmation email, the production Site URL, allowed redirect URLs, leaked-password protection, and an SMTP provider. Do not treat an unverified email as proof that a rider owns a team row.
+
+Known caveat for that future work: when a user changes their email on `/account`, the sync route currently writes the new email onto their registration rows immediately. With confirmation disabled this is correct, but once confirmation is enabled the rows would update before the user confirms the new address (and stay wrong if they never confirm). Revisit the sync timing as part of the email-confirmation setup.
 
 ## Important limitation
 
