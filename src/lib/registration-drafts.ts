@@ -9,14 +9,18 @@ import { createClient } from "@/lib/supabase/client";
 export type DraftType = "solo" | "team";
 
 export type SoloDraftData = {
+  step?: number;
   fullName?: string;
   age?: string;
   location?: string;
   phone?: string;
   email?: string;
   yearsExperience?: string;
+  horseName?: string;
   horseAge?: string;
   horseBreed?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
 };
 
 export type TeamRiderDraft = {

@@ -12,8 +12,11 @@ export type SoloRegistration = {
   phone: string;
   email: string;
   years_experience: number;
+  horse_name: string | null;
   horse_age: number;
   horse_breed: string;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
   created_at: string;
 };
 
@@ -128,8 +131,11 @@ type EditableRegistrationField =
   | "phone"
   | "email"
   | "years_experience"
+  | "horse_name"
   | "horse_age"
-  | "horse_breed";
+  | "horse_breed"
+  | "emergency_contact_name"
+  | "emergency_contact_phone";
 type AuditDiffValue = {
   before: unknown;
   after: unknown;
@@ -157,6 +163,17 @@ const editableRegistrationFields: Array<{
   { field: "years_experience", label: "Years of experience" },
   { field: "horse_age", label: "Horse age" },
   { field: "horse_breed", label: "Horse breed" },
+];
+
+const soloEditableRegistrationFields: Array<{
+  field: EditableRegistrationField;
+  label: string;
+}> = [
+  ...editableRegistrationFields.slice(0, 6),
+  { field: "horse_name", label: "Horse name" },
+  ...editableRegistrationFields.slice(6),
+  { field: "emergency_contact_name", label: "Emergency contact name" },
+  { field: "emergency_contact_phone", label: "Emergency contact phone" },
 ];
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -373,19 +390,26 @@ const matchesPerson = (
   person.email.toLowerCase().includes(query) ||
   person.phone.toLowerCase().includes(query);
 
+const matchesSoloRegistration = (registration: SoloRegistration, query: string) =>
+  matchesPerson(registration, query) ||
+  (registration.horse_name ?? "").toLowerCase().includes(query) ||
+  (registration.emergency_contact_name ?? "").toLowerCase().includes(query) ||
+  (registration.emergency_contact_phone ?? "").toLowerCase().includes(query);
+
 const linkedRegistrationKey = (registration: Pick<LinkedRegistration, "type" | "id">) =>
   `${registration.type}:${registration.id}`;
 
 const draftValue = (
   draft: EditableRegistrationDraft,
   field: EditableRegistrationField
-) => String(draft[field] ?? "").trim();
+) => String((draft as Partial<Record<EditableRegistrationField, unknown>>)[field] ?? "").trim();
 
 const getRequiredFieldError = (
   draft: EditableRegistrationDraft,
-  ownerLabel?: string
+  ownerLabel?: string,
+  fields = editableRegistrationFields
 ) => {
-  const missingField = editableRegistrationFields.find(
+  const missingField = fields.find(
     ({ field }) => draftValue(draft, field) === ""
   );
 
@@ -802,8 +826,11 @@ export default function AdminDashboard({
       phone: registration.phone,
       email: registration.email,
       years_experience: String(registration.years_experience),
+      horse_name: registration.horse_name ?? "",
       horse_age: String(registration.horse_age),
       horse_breed: registration.horse_breed,
+      emergency_contact_name: registration.emergency_contact_name ?? "",
+      emergency_contact_phone: registration.emergency_contact_phone ?? "",
     });
   };
 
@@ -827,7 +854,11 @@ export default function AdminDashboard({
 
     setRowError(null);
 
-    const requiredFieldError = getRequiredFieldError(editDraft);
+    const requiredFieldError = getRequiredFieldError(
+      editDraft,
+      undefined,
+      soloEditableRegistrationFields
+    );
 
     if (requiredFieldError) {
       setRowError({ id: registrationId, message: requiredFieldError });
@@ -850,8 +881,11 @@ export default function AdminDashboard({
       phone: String(editDraft.phone ?? ""),
       email: String(editDraft.email ?? ""),
       years_experience: Number(editDraft.years_experience),
+      horse_name: String(editDraft.horse_name ?? ""),
       horse_age: Number(editDraft.horse_age),
       horse_breed: String(editDraft.horse_breed ?? ""),
+      emergency_contact_name: String(editDraft.emergency_contact_name ?? ""),
+      emergency_contact_phone: String(editDraft.emergency_contact_phone ?? ""),
     };
 
     try {
@@ -1082,7 +1116,7 @@ export default function AdminDashboard({
     () =>
       normalizedQuery
         ? soloRegistrations.filter((registration) =>
-            matchesPerson(registration, normalizedQuery)
+            matchesSoloRegistration(registration, normalizedQuery)
           )
         : soloRegistrations,
     [normalizedQuery, soloRegistrations]
@@ -1726,7 +1760,7 @@ export default function AdminDashboard({
 
           {filteredSoloRegistrations.length > 0 ? (
             <div className="max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-bronze/20 bg-sand">
-              <table className="w-full min-w-[1535px] table-fixed border-collapse text-left text-sm text-brown">
+              <table className="w-full min-w-[2040px] table-fixed border-collapse text-left text-sm text-brown">
                 <colgroup>
                   <col className="w-[190px]" />
                   <col className="w-[90px]" />
@@ -1734,8 +1768,11 @@ export default function AdminDashboard({
                   <col className="w-[145px]" />
                   <col className="w-[240px]" />
                   <col className="w-[115px]" />
+                  <col className="w-[145px]" />
                   <col className="w-[110px]" />
                   <col className="w-[145px]" />
+                  <col className="w-[190px]" />
+                  <col className="w-[170px]" />
                   <col className="w-[90px]" />
                   <col className="w-[190px]" />
                 </colgroup>
@@ -1747,8 +1784,15 @@ export default function AdminDashboard({
                     <th className="whitespace-nowrap px-3 py-2">Phone</th>
                     <th className="whitespace-nowrap px-3 py-2">Email</th>
                     <th className="whitespace-nowrap px-3 py-2">Experience</th>
+                    <th className="whitespace-nowrap px-3 py-2">Horse Name</th>
                     <th className="whitespace-nowrap px-3 py-2">Horse Age</th>
                     <th className="whitespace-nowrap px-3 py-2">Horse Breed</th>
+                    <th className="whitespace-nowrap px-3 py-2">
+                      Emergency Contact
+                    </th>
+                    <th className="whitespace-nowrap px-3 py-2">
+                      Emergency Phone
+                    </th>
                     <th className="whitespace-nowrap px-3 py-2">Date</th>
                     <th className="whitespace-nowrap px-3 py-2">Actions</th>
                   </tr>
@@ -1838,6 +1882,20 @@ export default function AdminDashboard({
                         <td className="overflow-hidden whitespace-nowrap px-3 py-2">
                           {isEditing ? (
                             <input
+                              type="text"
+                              value={editDraft?.horse_name ?? ""}
+                              onChange={(event) =>
+                                updateEditDraft("horse_name", event.target.value)
+                              }
+                              className={adminTableInputClass}
+                            />
+                          ) : (
+                            <AdminTableText value={registration.horse_name ?? ""} />
+                          )}
+                        </td>
+                        <td className="overflow-hidden whitespace-nowrap px-3 py-2">
+                          {isEditing ? (
+                            <input
                               type="number"
                               value={editDraft?.horse_age ?? ""}
                               onChange={(event) => updateEditDraft("horse_age", event.target.value)}
@@ -1857,6 +1915,44 @@ export default function AdminDashboard({
                             />
                           ) : (
                             <AdminTableText value={registration.horse_breed} />
+                          )}
+                        </td>
+                        <td className="overflow-hidden whitespace-nowrap px-3 py-2">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editDraft?.emergency_contact_name ?? ""}
+                              onChange={(event) =>
+                                updateEditDraft(
+                                  "emergency_contact_name",
+                                  event.target.value
+                                )
+                              }
+                              className={adminTableInputClass}
+                            />
+                          ) : (
+                            <AdminTableText
+                              value={registration.emergency_contact_name ?? ""}
+                            />
+                          )}
+                        </td>
+                        <td className="overflow-hidden whitespace-nowrap px-3 py-2">
+                          {isEditing ? (
+                            <input
+                              type="tel"
+                              value={editDraft?.emergency_contact_phone ?? ""}
+                              onChange={(event) =>
+                                updateEditDraft(
+                                  "emergency_contact_phone",
+                                  event.target.value
+                                )
+                              }
+                              className={adminTableInputClass}
+                            />
+                          ) : (
+                            <AdminTableText
+                              value={registration.emergency_contact_phone ?? ""}
+                            />
                           )}
                         </td>
                         <td className="overflow-hidden whitespace-nowrap px-3 py-2">

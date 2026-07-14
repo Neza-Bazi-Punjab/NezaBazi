@@ -19,8 +19,11 @@ type RegistrationMetadata = {
   location?: string;
   phone?: string;
   years_experience?: number | string;
+  horse_name?: string;
   horse_age?: number | string;
   horse_breed?: string;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
 };
 
 const getMetadataNumber = (value: number | string | undefined) => {
@@ -116,8 +119,13 @@ export default async function SoloRegisterPage() {
                           years_experience: getMetadataNumber(
                             authMetadata?.years_experience
                           ),
+                          horse_name: authMetadata?.horse_name ?? "",
                           horse_age: getMetadataNumber(authMetadata?.horse_age),
-                          horse_breed: authMetadata?.horse_breed,
+                          horse_breed: authMetadata?.horse_breed ?? "",
+                          emergency_contact_name:
+                            authMetadata?.emergency_contact_name ?? "",
+                          emergency_contact_phone:
+                            authMetadata?.emergency_contact_phone ?? "",
                         }
                   }
                 />

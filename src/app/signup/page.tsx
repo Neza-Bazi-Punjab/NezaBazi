@@ -29,9 +29,6 @@ function SignupPageContent() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [yearsExperience, setYearsExperience] = useState("");
-  const [horseAge, setHorseAge] = useState("");
-  const [horseBreed, setHorseBreed] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -65,9 +62,6 @@ function SignupPageContent() {
           age: Number(age),
           location,
           phone,
-          years_experience: Number(yearsExperience),
-          horse_age: Number(horseAge),
-          horse_breed: horseBreed,
           signup_redirect: redirectTo,
         },
       },
@@ -175,47 +169,6 @@ function SignupPageContent() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={8}
-                className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
-                Years of Neza Bazi Experience
-              </label>
-              <input
-                type="number"
-                value={yearsExperience}
-                onChange={(e) => setYearsExperience(e.target.value)}
-                required
-                min={0}
-                className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
-                Horse Age
-              </label>
-              <input
-                type="number"
-                value={horseAge}
-                onChange={(e) => setHorseAge(e.target.value)}
-                required
-                min={0}
-                className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
-                Horse Breed
-              </label>
-              <input
-                type="text"
-                value={horseBreed}
-                onChange={(e) => setHorseBreed(e.target.value)}
-                required
                 className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
               />
             </div>
