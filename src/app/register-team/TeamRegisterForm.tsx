@@ -315,6 +315,7 @@ export default function TeamRegisterForm({
           ) : (
             <div className="mt-2">
               <LocationPicker
+                key={`rider-location-${index}`}
                 value={rider.location}
                 onChange={(nextLocation) => updateRider(index, "location", nextLocation)}
                 tone="cream"

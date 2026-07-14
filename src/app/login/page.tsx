@@ -21,6 +21,7 @@ function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = getSafeRedirect(searchParams.get("redirect"));
+  const signupHref = `/signup?redirect=${encodeURIComponent(redirectTo)}`;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -119,7 +120,7 @@ function LoginPageContent() {
 
             <p className="text-center text-sm text-brown/80">
               New here?{" "}
-              <a href="/signup" className="font-semibold text-bronze-deep underline">
+              <a href={signupHref} className="font-semibold text-bronze-deep underline">
                 Create an account
               </a>
             </p>

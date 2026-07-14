@@ -2,13 +2,23 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import SectionHeading from "@/components/SectionHeading";
+import { getPostSignupRedirect } from "@/lib/safe-redirect";
 
 export const metadata: Metadata = {
   title: "Confirm Your Email",
   description: "Check your inbox to confirm your account.",
 };
 
-export default function SignupSuccessPage() {
+type SignupSuccessPageProps = {
+  searchParams: Promise<{ redirect?: string }>;
+};
+
+export default async function SignupSuccessPage({ searchParams }: SignupSuccessPageProps) {
+  const { redirect } = await searchParams;
+  const loginHref = `/login?redirect=${encodeURIComponent(
+    getPostSignupRedirect(redirect ?? null),
+  )}`;
+
   return (
     <>
       <PageHeader
@@ -33,7 +43,7 @@ export default function SignupSuccessPage() {
 
             <div className="space-y-3">
               <Link
-                href="/login"
+                href={loginHref}
                 className="block w-full rounded-lg bg-bronze-deep px-6 py-3 text-center font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze"
               >
                 Go to Login

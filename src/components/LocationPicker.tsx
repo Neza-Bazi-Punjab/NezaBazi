@@ -4,7 +4,7 @@
 // into the existing `location` columns without schema changes.
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import countries from "@/data/countries.json";
 
 type Country = { code: string; name: string };
@@ -75,6 +75,174 @@ const parseInitialValue = (value: string) => {
     manual: false,
   };
 };
+
+function SearchableSelect({
+  label,
+  options,
+  value,
+  placeholder,
+  disabled = false,
+  tone,
+  onChange,
+}: {
+  label: string;
+  options: Array<{ code: string; name: string }>;
+  value: string;
+  placeholder: string;
+  disabled?: boolean;
+  tone: "sand" | "cream";
+  onChange: (code: string) => void;
+}) {
+  const inputId = useId();
+  const listId = useId();
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const selectedName = options.find((option) => option.code === value)?.name ?? "";
+  const [query, setQuery] = useState(selectedName);
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const filteredOptions = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    if (normalizedQuery === "") {
+      return options.slice(0, 12);
+    }
+
+    return options
+      .filter((option) => option.name.toLowerCase().includes(normalizedQuery))
+      .sort((first, second) => {
+        const firstStarts = first.name.toLowerCase().startsWith(normalizedQuery);
+        const secondStarts = second.name.toLowerCase().startsWith(normalizedQuery);
+
+        if (firstStarts !== secondStarts) {
+          return firstStarts ? -1 : 1;
+        }
+
+        return first.name.localeCompare(second.name);
+      })
+      .slice(0, 12);
+  }, [options, query]);
+
+  const selectOption = (option: { code: string; name: string }) => {
+    setQuery(option.name);
+    setOpen(false);
+    setActiveIndex(0);
+    onChange(option.code);
+  };
+
+  const commitTypedValue = () => {
+    const normalizedQuery = query.trim().toLowerCase();
+    const exactMatch = options.find(
+      (option) => option.name.toLowerCase() === normalizedQuery,
+    );
+
+    if (exactMatch) {
+      setQuery(exactMatch.name);
+      setOpen(false);
+
+      if (exactMatch.code !== value) {
+        onChange(exactMatch.code);
+      }
+    } else if (normalizedQuery === "") {
+      if (value !== "") {
+        onChange("");
+      }
+    } else {
+      setQuery(selectedName);
+    }
+  };
+
+  return (
+    <div
+      ref={wrapperRef}
+      className="relative"
+      onBlur={(event) => {
+        if (!wrapperRef.current?.contains(event.relatedTarget as Node | null)) {
+          setOpen(false);
+          commitTypedValue();
+        }
+      }}
+    >
+      <label htmlFor={inputId} className={labelClassName}>
+        {label}
+      </label>
+      <input
+        id={inputId}
+        type="text"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-activedescendant={
+          open && filteredOptions[activeIndex]
+            ? `${listId}-${filteredOptions[activeIndex].code}`
+            : undefined
+        }
+        autoComplete="off"
+        disabled={disabled}
+        value={query}
+        placeholder={placeholder}
+        className={selectClassName(tone)}
+        onFocus={() => setOpen(true)}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setActiveIndex(0);
+          setOpen(true);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown" && filteredOptions.length > 0) {
+            event.preventDefault();
+            setOpen(true);
+            setActiveIndex((current) => (current + 1) % filteredOptions.length);
+          } else if (event.key === "ArrowUp" && filteredOptions.length > 0) {
+            event.preventDefault();
+            setOpen(true);
+            setActiveIndex(
+              (current) => (current - 1 + filteredOptions.length) % filteredOptions.length,
+            );
+          } else if (event.key === "Enter" && open && filteredOptions[activeIndex]) {
+            event.preventDefault();
+            selectOption(filteredOptions[activeIndex]);
+          } else if (event.key === "Escape") {
+            setOpen(false);
+            setQuery(selectedName);
+          }
+        }}
+      />
+
+      {open && !disabled && (
+        <ul
+          id={listId}
+          role="listbox"
+          className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-bronze/30 bg-cream shadow-lg"
+        >
+          {filteredOptions.map((option, index) => (
+            <li
+              id={`${listId}-${option.code}`}
+              key={option.code}
+              role="option"
+              aria-selected={option.code === value}
+            >
+              <button
+                type="button"
+                onPointerDown={(event) => event.preventDefault()}
+                onPointerUp={() => selectOption(option)}
+                className={`block w-full px-4 py-2.5 text-left text-brown transition-colors hover:bg-sand ${
+                  index === activeIndex ? "bg-sand" : ""
+                }`}
+              >
+                {option.name}
+              </button>
+            </li>
+          ))}
+          {filteredOptions.length === 0 && (
+            <li className="px-4 py-3 text-sm text-brown/70">No matches found</li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export default function LocationPicker({
   value,
@@ -344,41 +512,26 @@ export default function LocationPicker({
 
   return (
     <div ref={containerRef} className="space-y-4">
-      <div>
-        <label className={labelClassName}>Country</label>
-        <select
-          value={countryCode}
-          onChange={(e) => handleCountryChange(e.target.value)}
-          className={selectClassName(tone)}
-        >
-          <option value="">Select a country…</option>
-          {countryList.map((country) => (
-            <option key={country.code} value={country.code}>
-              {country.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      <SearchableSelect
+        label="Country"
+        options={countryList}
+        value={countryCode}
+        placeholder="Type or select a country"
+        tone={tone}
+        onChange={handleCountryChange}
+      />
 
       {countryCode !== "" && (states.length > 0 || statesLoading) && (
-        <div>
-          <label className={labelClassName}>State / Province</label>
-          <select
-            value={stateCode}
-            onChange={(e) => handleStateChange(e.target.value)}
-            disabled={statesLoading}
-            className={selectClassName(tone)}
-          >
-            <option value="">
-              {statesLoading ? "Loading…" : "Select a state…"}
-            </option>
-            {states.map((state) => (
-              <option key={state.code} value={state.code}>
-                {state.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <SearchableSelect
+          key={`state-${countryCode}-${statesLoading ? "loading" : stateCode}`}
+          label="State / Province"
+          options={states}
+          value={stateCode}
+          placeholder={statesLoading ? "Loading..." : "Type or select a state"}
+          disabled={statesLoading}
+          tone={tone}
+          onChange={handleStateChange}
+        />
       )}
 
       {countryCode !== "" && (

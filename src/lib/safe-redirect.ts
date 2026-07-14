@@ -17,3 +17,8 @@ export const getSafeRedirect = (value: string | null): string => {
     return "/";
   }
 };
+
+export const getPostSignupRedirect = (value: string | null): string => {
+  const redirect = getSafeRedirect(value);
+  return redirect === "/" ? "/register" : redirect;
+};

@@ -23,3 +23,18 @@ test("signup and password recovery require at least eight characters", () => {
   assert.match(resetPage, /password\.length < 8/);
   assert.equal((resetPage.match(/minLength=\{8\}/g) ?? []).length, 2);
 });
+
+test("signup confirmation uses the production site and returns through login", () => {
+  const signupPage = readSource("../signup/page.tsx");
+  const loginPage = readSource("../login/page.tsx");
+  const confirmRoute = readSource("./confirm/route.ts");
+  const siteConfig = readSource("../../lib/site.ts");
+
+  assert.match(siteConfig, /url: "https:\/\/www\.nezabazipunjab\.com"/);
+  assert.match(signupPage, /new URL\("\/auth\/confirm", site\.url\)/);
+  assert.match(signupPage, /signup_redirect: redirectTo/);
+  assert.match(loginPage, /\/signup\?redirect=/);
+  assert.match(confirmRoute, /getPostSignupRedirect/);
+  assert.match(confirmRoute, /supabase\.auth\.signOut\(\)/);
+  assert.match(confirmRoute, /new URL\("\/login", request\.url\)/);
+});

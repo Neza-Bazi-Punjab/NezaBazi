@@ -1,16 +1,28 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import LocationPicker from "@/components/LocationPicker";
 import PageHeader from "@/components/PageHeader";
 import SectionHeading from "@/components/SectionHeading";
 import { createClient } from "@/lib/supabase/client";
 import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
 import { syncAccountRegistrations } from "@/lib/sync-account-registrations";
+import { getPostSignupRedirect } from "@/lib/safe-redirect";
+import { site } from "@/lib/site";
 
 export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupPageContent />
+    </Suspense>
+  );
+}
+
+function SignupPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = getPostSignupRedirect(searchParams.get("redirect"));
   const [fullName, setFullName] = useState("");
   const [age, setAge] = useState("");
   const [location, setLocation] = useState("");
@@ -38,13 +50,16 @@ export default function SignupPage() {
 
     const supabase = createClient();
 
+    const confirmationUrl = new URL("/auth/confirm", site.url);
+    confirmationUrl.searchParams.set("flow", "signup");
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         // Where the confirmation email link lands. The email template appends
         // token_hash/type; this base must be in Supabase's redirect allowlist.
-        emailRedirectTo: `${window.location.origin}/auth/confirm`,
+        emailRedirectTo: confirmationUrl.toString(),
         data: {
           full_name: fullName,
           age: Number(age),
@@ -53,6 +68,7 @@ export default function SignupPage() {
           years_experience: Number(yearsExperience),
           horse_age: Number(horseAge),
           horse_breed: horseBreed,
+          signup_redirect: redirectTo,
         },
       },
     });
@@ -73,7 +89,7 @@ export default function SignupPage() {
 
     setLoading(false);
 
-    router.push("/signup/success");
+    router.push(`/signup/success?redirect=${encodeURIComponent(redirectTo)}`);
   };
 
   return (
