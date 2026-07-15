@@ -1,3 +1,54 @@
+alter table public.solo_registrations
+  add column if not exists horse_name text,
+  add column if not exists emergency_contact_name text,
+  add column if not exists emergency_contact_phone text;
+
+do $constraints$
+begin
+  if not exists (
+    select 1
+    from pg_catalog.pg_constraint
+    where conrelid = 'public.solo_registrations'::pg_catalog.regclass
+      and conname = 'solo_registrations_horse_name_required'
+  ) then
+    alter table public.solo_registrations
+      add constraint solo_registrations_horse_name_required
+      check (
+        horse_name is not null
+        and char_length(btrim(horse_name)) between 1 and 200
+      ) not valid;
+  end if;
+
+  if not exists (
+    select 1
+    from pg_catalog.pg_constraint
+    where conrelid = 'public.solo_registrations'::pg_catalog.regclass
+      and conname = 'solo_registrations_emergency_contact_name_required'
+  ) then
+    alter table public.solo_registrations
+      add constraint solo_registrations_emergency_contact_name_required
+      check (
+        emergency_contact_name is not null
+        and char_length(btrim(emergency_contact_name)) between 1 and 200
+      ) not valid;
+  end if;
+
+  if not exists (
+    select 1
+    from pg_catalog.pg_constraint
+    where conrelid = 'public.solo_registrations'::pg_catalog.regclass
+      and conname = 'solo_registrations_emergency_contact_phone_required'
+  ) then
+    alter table public.solo_registrations
+      add constraint solo_registrations_emergency_contact_phone_required
+      check (
+        emergency_contact_phone is not null
+        and char_length(btrim(emergency_contact_phone)) between 1 and 30
+      ) not valid;
+  end if;
+end
+$constraints$;
+
 create or replace function public.admin_mutate_registration(
   p_operation text,
   p_target_id uuid,
