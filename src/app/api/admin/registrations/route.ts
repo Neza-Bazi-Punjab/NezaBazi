@@ -28,6 +28,12 @@ type EditableRegistration = {
   horse_breed: string;
 };
 
+type EditableSoloRegistration = EditableRegistration & {
+  horse_name: string;
+  emergency_contact_name: string;
+  emergency_contact_phone: string;
+};
+
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -66,13 +72,29 @@ const isEditableRegistration = (
   );
 };
 
+const isEditableSoloRegistration = (
+  value: unknown
+): value is EditableSoloRegistration => {
+  if (!isEditableRegistration(value, false) || !isRecord(value)) {
+    return false;
+  }
+
+  const soloValue = value as Record<string, unknown>;
+
+  return (
+    isBoundedString(soloValue.horse_name, 200) &&
+    isBoundedString(soloValue.emergency_contact_name, 200) &&
+    isBoundedString(soloValue.emergency_contact_phone, 30)
+  );
+};
+
 const isValidPayload = (operation: RegistrationOperation, payload: unknown) => {
   if (operation === "delete_solo" || operation === "delete_team") {
     return payload === undefined || payload === null;
   }
 
   if (operation === "edit_solo") {
-    return isEditableRegistration(payload, false);
+    return isEditableSoloRegistration(payload);
   }
 
   if (!isRecord(payload)) {
