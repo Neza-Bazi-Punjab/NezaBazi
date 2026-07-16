@@ -8,7 +8,7 @@ import { site } from "@/lib/site";
 export const metadata: Metadata = {
   title: "Rulebook",
   description:
-    "The official rulebook of the Neza Bazi Punjab Championship 2026: watch the rules explained on video and download the full PDF.",
+    "The official rulebook of the Neza Bazi Punjab Championship 2026: watch the rules explained on video and download the full rulebook PDF in English and Punjabi.",
 };
 
 const PDF_PATH = "/documents/rules.pdf";
@@ -32,13 +32,70 @@ export default function RulesPage() {
     <>
       <PageHeader
         title="Rulebook"
-        intro="The championship follows internationally recognised tent-pegging rules. Watch the rules explained on video, or download the official rulebook below."
+        intro={`The official rulebook of the ${site.title} — ${site.cupName}. Download the rulebook PDF in English and Punjabi, or watch the rules explained on video.`}
       />
 
       <section className="bg-cream">
         <div className="mx-auto max-w-5xl px-6 py-16">
+          {/* Official rulebook download */}
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-bronze/20 pb-6">
+            <div className="flex items-center gap-4">
+              <DocumentIcon className="h-9 w-9 text-bronze" />
+              <div>
+                <h2 className="font-display text-lg font-bold uppercase tracking-wide text-ink">
+                  Official Rule Book
+                </h2>
+                <p className="text-sm text-brown/60">
+                  {`${site.cupName} — Single & Section (Teams) Tent Pegging, in English and Punjabi`}
+                </p>
+              </div>
+            </div>
+            {hasPdf ? (
+              <a
+                href={PDF_PATH}
+                download
+                className="inline-flex items-center gap-2.5 rounded-lg bg-bronze px-6 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze-dark"
+              >
+                <DownloadIcon className="h-4 w-4" />
+                Download PDF
+              </a>
+            ) : (
+              <p className="font-display text-sm font-semibold uppercase tracking-[0.2em] text-brown/60">
+                Coming soon
+              </p>
+            )}
+          </div>
+
+          {/* Inline preview of the rulebook (browsers without an inline PDF
+              viewer — most mobile ones — get a link instead) */}
+          {hasPdf && (
+            <div className="mt-8">
+              <object
+                data={PDF_PATH}
+                type="application/pdf"
+                className="h-[80vh] w-full rounded-2xl border border-bronze/25"
+              >
+                <div className="dust-glow flex h-full flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+                  <DocumentIcon className="h-12 w-12 text-bronze/50" />
+                  <p className="text-sm text-brown/70">
+                    {`Your browser can’t preview PDFs inline. `}
+                    <a
+                      href={PDF_PATH}
+                      className="text-bronze underline"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Open the rulebook PDF directly
+                    </a>
+                    .
+                  </p>
+                </div>
+              </object>
+            </div>
+          )}
+
           {/* Rules video */}
-          <div className="flex items-center gap-4 border-b border-bronze/20 pb-6">
+          <div className="mt-14 flex items-center gap-4 border-b border-bronze/20 pb-6">
             <PlayIcon className="h-9 w-9 text-bronze" />
             <div>
               <h2 className="font-display text-lg font-bold uppercase tracking-wide text-ink">
@@ -69,64 +126,6 @@ export default function RulesPage() {
                 </p>
                 <p className="text-xs text-brown/45">
                   Set rulesVideoUrl in src/lib/site.ts
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Rules PDF */}
-          <div className="mt-14 flex flex-wrap items-center justify-between gap-4 border-b border-bronze/20 pb-6">
-            <div className="flex items-center gap-4">
-              <DocumentIcon className="h-9 w-9 text-bronze" />
-              <div>
-                <h2 className="font-display text-lg font-bold uppercase tracking-wide text-ink">
-                  Official Rulebook
-                </h2>
-                <p className="text-sm text-brown/60">
-                  Neza Bazi Punjab Championship 2026
-                </p>
-              </div>
-            </div>
-            {hasPdf && (
-              <a
-                href={PDF_PATH}
-                download
-                className="inline-flex items-center gap-2.5 rounded-lg bg-bronze px-6 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze-dark"
-              >
-                <DownloadIcon className="h-4 w-4" />
-                Download PDF
-              </a>
-            )}
-          </div>
-
-          <div className="mt-10">
-            {hasPdf ? (
-              <object
-                data={PDF_PATH}
-                type="application/pdf"
-                className="h-[80vh] w-full rounded-2xl border border-bronze/25"
-              >
-                <p className="p-6 text-center text-brown/70">
-                  Your browser can&apos;t preview PDFs inline.{" "}
-                  <a
-                    href={PDF_PATH}
-                    className="text-bronze underline"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Open the rulebook PDF directly
-                  </a>
-                  .
-                </p>
-              </object>
-            ) : (
-              <div className="dust-glow flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-bronze/35 px-6 py-16 text-center">
-                <DocumentIcon className="h-12 w-12 text-bronze/50" />
-                <p className="font-display text-sm font-semibold uppercase tracking-[0.2em] text-brown/60">
-                  Rulebook document coming soon
-                </p>
-                <p className="text-xs text-brown/45">
-                  Add file: public/documents/rules.pdf
                 </p>
               </div>
             )}

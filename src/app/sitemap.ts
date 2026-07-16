@@ -3,7 +3,7 @@ import { site } from "@/lib/site";
 
 const routes = [
   "",
-  "/about",
+  "/event",
   "/rules",
   "/register",
   "/login",
