@@ -59,15 +59,10 @@ export default function Home() {
                   </span>
                 </span>
               </p>
-              <p className="flex items-start gap-2.5 font-display text-base font-semibold uppercase tracking-[0.12em] text-ink">
-                <UsersIcon className="mt-0.5 h-6 w-6 shrink-0 text-bronze" />
-                <span>
-                  <span className="text-bronze-dark">{site.riders}</span>
-                  {` Riders`}
-                  <span className="mt-0.5 block text-xs font-semibold tracking-[0.2em] text-brown/80">
-                    {`${site.totalRewards} in total rewards`}
-                  </span>
-                </span>
+              <p className="flex items-center gap-2.5 font-display text-base font-semibold uppercase tracking-[0.12em] text-ink">
+                <UsersIcon className="h-6 w-6 shrink-0 text-bronze" />
+                <span className="text-bronze-dark">{site.riders}</span>
+                {` Riders`}
               </p>
               <p className="flex items-center gap-2.5 font-display text-base font-semibold uppercase tracking-[0.12em] text-ink">
                 <PlayIcon className="h-6 w-6 shrink-0 text-bronze" />
