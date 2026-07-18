@@ -93,7 +93,7 @@ export default function Home() {
               fill
               priority
               sizes="(max-width: 1024px) 100vw, 52vw"
-              className="object-cover object-[50%_55%] sm:object-center lg:object-[50%_92%]"
+              className="object-cover object-[50%_55%] sm:object-center lg:-translate-y-8 lg:scale-110 lg:object-[25%_92%]"
             />
           </div>
         </div>
