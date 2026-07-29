@@ -21,6 +21,7 @@ type RegistrationMetadata = {
   location?: string;
   phone?: string;
   years_experience?: number | string;
+  horse_name?: string;
   horse_age?: number | string;
   horse_breed?: string;
 };
@@ -172,6 +173,7 @@ export default async function RegisterTeamPage() {
                           years_experience: getMetadataNumber(
                             authMetadata?.years_experience
                           ),
+                          horse_name: authMetadata?.horse_name,
                           horse_age: getMetadataNumber(authMetadata?.horse_age),
                           horse_breed: authMetadata?.horse_breed,
                         }

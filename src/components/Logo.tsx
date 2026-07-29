@@ -4,14 +4,14 @@ import Link from "next/link";
 /* Site logo: the rider-and-lance mark, a mark+wordmark lockup, and the default
    home-linked logo used in the navbar and footer. */
 
-/* Rider-and-lance mark, cropped from public/brand/logo.svg (see public/brand/README.md) */
+/* NBP hexagon mark, cropped from public/brand/logo.svg (see public/brand/README.md) */
 export function LogoMark({ className = "h-10 w-auto" }: { className?: string }) {
   return (
     <Image
       src="/brand/logo-mark.svg"
       alt=""
-      width={886}
-      height={722}
+      width={502}
+      height={528}
       unoptimized
       className={className}
     />

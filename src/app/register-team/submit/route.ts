@@ -13,6 +13,7 @@ type RiderInput = {
   phone: string;
   email: string;
   yearsExperience: string;
+  horseName: string;
   horseAge: string;
   horseBreed: string;
 };
@@ -50,6 +51,7 @@ const validateRider = (rider: RiderInput, label: string) => {
     ["location", "location"],
     ["phone", "phone number"],
     ["email", "email"],
+    ["horseName", "horse name"],
     ["horseBreed", "horse breed"],
   ];
 
@@ -124,6 +126,7 @@ export async function POST(request: Request) {
     phone: rider.phone.trim(),
     email: rider.email.trim().toLowerCase(),
     yearsExperience: rider.yearsExperience.trim(),
+    horseName: rider.horseName.trim(),
     horseAge: rider.horseAge.trim(),
     horseBreed: rider.horseBreed.trim(),
   }));
@@ -286,6 +289,7 @@ export async function POST(request: Request) {
         phone: rider.phone,
         email: rider.email,
         years_experience: Number(rider.yearsExperience),
+        horse_name: rider.horseName,
         horse_age: Number(rider.horseAge),
         horse_breed: rider.horseBreed,
         is_leader: index === 0,

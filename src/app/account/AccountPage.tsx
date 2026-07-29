@@ -51,6 +51,7 @@ export type AccountTeamMember = {
   phone: string;
   email: string;
   years_experience: number;
+  horse_name: string | null;
   horse_age: number;
   horse_breed: string;
   is_leader: boolean;
@@ -545,6 +546,10 @@ export default function AccountPageClient({
                           <Detail label="Phone" value={member.phone} />
                           <Detail label="Email" value={member.email} />
                           <Detail label="Experience" value={member.years_experience} />
+                          <Detail
+                            label="Horse Name"
+                            value={member.horse_name ?? "—"}
+                          />
                           <Detail label="Horse Age" value={member.horse_age} />
                           <Detail label="Horse Breed" value={member.horse_breed} />
                         </div>

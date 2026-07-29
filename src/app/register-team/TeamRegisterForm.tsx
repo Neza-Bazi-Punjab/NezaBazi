@@ -21,6 +21,7 @@ type RiderInput = {
   phone: string;
   email: string;
   yearsExperience: string;
+  horseName: string;
   horseAge: string;
   horseBreed: string;
 };
@@ -34,6 +35,7 @@ type LeaderProfile = {
   phone?: string | null;
   email?: string | null;
   years_experience?: number | null;
+  horse_name?: string | null;
   horse_age?: number | null;
   horse_breed?: string | null;
 };
@@ -45,6 +47,7 @@ const emptyRider: RiderInput = {
   phone: "",
   email: "",
   yearsExperience: "",
+  horseName: "",
   horseAge: "",
   horseBreed: "",
 };
@@ -60,6 +63,7 @@ const leaderProfileToRider = (leaderProfile?: LeaderProfile): RiderInput => ({
   phone: leaderProfile?.phone ?? "",
   email: leaderProfile?.email ?? "",
   yearsExperience: numberToInputValue(leaderProfile?.years_experience),
+  horseName: leaderProfile?.horse_name ?? "",
   horseAge: numberToInputValue(leaderProfile?.horse_age),
   horseBreed: leaderProfile?.horse_breed ?? "",
 });
@@ -71,6 +75,7 @@ const draftToRider = (draft?: TeamRiderDraft): RiderInput => ({
   phone: draft?.phone ?? "",
   email: draft?.email ?? "",
   yearsExperience: draft?.yearsExperience ?? "",
+  horseName: draft?.horseName ?? "",
   horseAge: draft?.horseAge ?? "",
   horseBreed: draft?.horseBreed ?? "",
 });
@@ -102,6 +107,7 @@ const getRiderError = (rider: RiderInput) => {
     ["location", "Location"],
     ["phone", "Phone number"],
     ["email", "Email"],
+    ["horseName", "Horse name"],
     ["horseBreed", "Horse breed"],
   ];
 
@@ -358,6 +364,16 @@ export default function TeamRegisterForm({
         </div>
 
         <div>
+          <label className={labelClassName}>Horse Name</label>
+          <input
+            type="text"
+            value={rider.horseName}
+            onChange={(e) => updateRider(index, "horseName", e.target.value)}
+            className={inputClassName}
+          />
+        </div>
+
+        <div>
           <label className={labelClassName}>Horse Age</label>
           <input
             type="number"
@@ -546,6 +562,7 @@ export default function TeamRegisterForm({
                   {reviewRow("Phone", rider.phone)}
                   {reviewRow("Email", rider.email)}
                   {reviewRow("Experience", rider.yearsExperience)}
+                  {reviewRow("Horse Name", rider.horseName)}
                   {reviewRow("Horse Age", rider.horseAge)}
                   {reviewRow("Horse Breed", rider.horseBreed)}
                 </div>

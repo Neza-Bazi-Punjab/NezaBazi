@@ -30,6 +30,7 @@ export type TeamRiderDraft = {
   phone?: string;
   email?: string;
   yearsExperience?: string;
+  horseName?: string;
   horseAge?: string;
   horseBreed?: string;
 };
