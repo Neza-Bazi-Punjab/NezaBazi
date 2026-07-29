@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { Metadata } from "next";
+import Image from "next/image";
 import PageHeader from "@/components/PageHeader";
 import { DocumentIcon, DownloadIcon, PlayIcon } from "@/components/icons";
 import { site } from "@/lib/site";
@@ -13,33 +14,45 @@ export const metadata: Metadata = {
 
 const PDF_PATH = "/documents/rules.pdf";
 
-/* Dimension diagrams, published as their own PDFs alongside the rulebook
-   rather than folded into it. Each is listed only when its file is present,
-   the same way the rulebook itself is. */
+/* Dimension diagrams. Each one is two files: a compressed image for reading
+   on the page (thumbnail plus a full-size modal) and the print-quality PDF
+   for download, which is the format the diagrams were specified as. A diagram
+   is listed only when both files are present, the same way the rulebook is. */
+const SPEC_GRID_ID = "dimension-diagrams";
+
 const diagrams = [
   {
     title: "Ground Dimensions",
-    file: "ground-dimensions.pdf",
-    description: "Track length, peg and crossing lines, and arena width",
+    tagline: "Track length, peg and crossing lines, arena width",
+    slug: "ground-dimensions",
+    alt: "Ground specifications diagram: track length, start, peg and crossing lines, and arena width",
+    width: 1066,
+    height: 1600,
   },
   {
     title: "Barshi Dimensions",
-    file: "barshi-dimensions.pdf",
-    description: "Lance length, weight and tip specification",
+    tagline: "Lance length, straightness, tip, grips and material",
+    slug: "barshi-dimensions",
+    alt: "Barshi specifications diagram: permitted lance length, metal point, grips and material",
+    width: 1200,
+    height: 1600,
   },
   {
     title: "Peg Dimensions",
-    file: "peg-dimensions.pdf",
-    description: "Peg size, shape and how it is set in the ground",
+    tagline: "Fatti and Aarhi peg sizes and ground placement",
+    slug: "peg-dimensions",
+    alt: "Peg specifications diagram: Fatti and Aarhi peg measurements and how each is set in the ground",
+    width: 1066,
+    height: 1600,
   },
 ];
 
-function documentExists(file: string) {
-  return existsSync(join(process.cwd(), "public", "documents", file));
+function publicFileExists(...segments: string[]) {
+  return existsSync(join(process.cwd(), "public", ...segments));
 }
 
 function rulesPdfExists() {
-  return documentExists("rules.pdf");
+  return publicFileExists("documents", "rules.pdf");
 }
 
 /* Accepts any YouTube URL shape (watch?v=, youtu.be, shorts, embed) and
@@ -52,9 +65,18 @@ function youtubeEmbedUrl(url: string) {
 export default function RulesPage() {
   const hasPdf = rulesPdfExists();
   const videoUrl = site.rulesVideoUrl;
-  const availableDiagrams = diagrams.filter((diagram) =>
-    documentExists(diagram.file)
-  );
+  const availableDiagrams = diagrams
+    .filter(
+      (diagram) =>
+        publicFileExists("images", "diagrams", `${diagram.slug}.jpg`) &&
+        publicFileExists("documents", `${diagram.slug}.pdf`)
+    )
+    .map((diagram) => ({
+      ...diagram,
+      image: `/images/diagrams/${diagram.slug}.jpg`,
+      pdf: `/documents/${diagram.slug}.pdf`,
+      modalId: `${diagram.slug}-full`,
+    }));
 
   return (
     <>
@@ -122,68 +144,130 @@ export default function RulesPage() {
             </div>
           )}
 
-          {/* Dimension diagrams, one row per PDF. Deliberately not embedded
-              inline: three more 80vh viewers would bury the video below a
-              wall of scrolling, and these are reference sheets people open
-              or print rather than read on the page. */}
+          {/* Dimension diagrams. Read on the page as compressed images, with a
+              full-size modal built on the CSS :target pseudo-class so the
+              enlarge behaviour needs no JavaScript and no dependency. Each
+              card also links the print-quality PDF, which is the format the
+              diagrams were specified as. */}
           {availableDiagrams.length > 0 && (
-            <>
-              <div className="mt-14 flex items-center gap-4 border-b border-bronze/20 pb-6">
-                <DocumentIcon className="h-9 w-9 text-bronze" />
-                <div>
-                  <h2 className="font-display text-lg font-bold uppercase tracking-wide text-ink">
-                    Dimensions
-                  </h2>
-                  <p className="text-sm text-brown/60">
-                    Official measurements for the ground, the barshi and the peg
-                  </p>
-                </div>
+            <div
+              id={SPEC_GRID_ID}
+              className="mt-14 overflow-hidden rounded-2xl border border-bronze/25 bg-ink text-cream"
+            >
+              <div className="border-b border-bronze/35 px-5 py-7 sm:px-8 sm:py-8">
+                <p className="font-display text-xs font-semibold uppercase tracking-[0.3em] text-bronze">
+                  Official Measurements
+                </p>
+                <h2 className="mt-2 font-display text-4xl font-bold uppercase leading-none text-cream sm:text-5xl">
+                  Ground &amp; Equipment
+                  <span className="block italic text-bronze">Dimensions</span>
+                </h2>
+                <p className="mt-4 max-w-2xl text-sm leading-6 text-cream/75">
+                  Reference diagrams for the competition ground, the barshi and
+                  the peg. Tap any diagram to inspect it full size, or download
+                  the print-quality sheet.
+                </p>
               </div>
 
-              <ul className="mt-8 space-y-4">
-                {availableDiagrams.map((diagram) => {
-                  const href = `/documents/${diagram.file}`;
+              <div className="grid gap-5 p-5 sm:grid-cols-2 sm:p-6 lg:grid-cols-3">
+                {availableDiagrams.map((diagram) => (
+                  <article
+                    key={diagram.slug}
+                    className="group flex flex-col rounded-2xl border border-bronze/35 bg-cream p-4 text-ink shadow-lg shadow-black/10 transition-[border-color,transform,box-shadow] duration-[var(--dur-base)] ease-[var(--ease-soft)] hover:border-bronze motion-safe:hover:-translate-y-1 motion-safe:hover:shadow-2xl"
+                  >
+                    <div className="border-b border-bronze/20 pb-3">
+                      <p className="font-display text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-bronze">
+                        Tap to Inspect
+                      </p>
+                      <h3 className="mt-1 font-display text-xl font-bold uppercase leading-tight text-ink">
+                        {diagram.title}
+                      </h3>
+                      <p className="mt-1 text-sm leading-5 text-brown/70">
+                        {diagram.tagline}
+                      </p>
+                    </div>
 
-                  return (
-                    <li
-                      key={diagram.file}
-                      className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-bronze/25 bg-sand px-5 py-4"
+                    <a
+                      href={`#${diagram.modalId}`}
+                      className="mt-4 block overflow-hidden rounded-2xl border border-bronze/25 bg-sand transition-transform duration-[var(--dur-base)] ease-[var(--ease-soft)] motion-safe:group-hover:scale-[1.02]"
                     >
-                      <div className="flex items-center gap-4">
-                        <DocumentIcon className="h-7 w-7 shrink-0 text-bronze" />
-                        <div>
-                          <h3 className="font-display text-base font-bold uppercase tracking-wide text-ink">
-                            {diagram.title}
-                          </h3>
-                          <p className="text-sm text-brown/60">
-                            {diagram.description}
-                          </p>
-                        </div>
-                      </div>
+                      <Image
+                        src={diagram.image}
+                        alt={diagram.alt}
+                        width={diagram.width}
+                        height={diagram.height}
+                        sizes="(max-width: 640px) calc(100vw - 4rem), (max-width: 1024px) calc(50vw - 3rem), 288px"
+                        className="h-72 w-full object-contain p-2 sm:h-80 lg:h-72"
+                      />
+                    </a>
 
-                      <div className="flex flex-wrap items-center gap-3">
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                      <a
+                        href={`#${diagram.modalId}`}
+                        className="inline-flex rounded-lg bg-bronze px-4 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-cream transition-colors hover:bg-bronze-dark"
+                      >
+                        View Full Size
+                      </a>
+                      <a
+                        href={diagram.pdf}
+                        download
+                        className="inline-flex items-center gap-2 rounded-lg border border-bronze/40 px-4 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-brown transition-colors hover:border-bronze hover:text-bronze"
+                      >
+                        <DownloadIcon className="h-3.5 w-3.5" />
+                        PDF
+                      </a>
+                    </div>
+                  </article>
+                ))}
+              </div>
+
+              {availableDiagrams.map((diagram) => (
+                <div
+                  key={`${diagram.slug}-modal`}
+                  id={diagram.modalId}
+                  className="fixed inset-0 z-50 hidden items-center justify-center px-4 py-6 target:flex"
+                >
+                  <a
+                    href={`#${SPEC_GRID_ID}`}
+                    className="absolute inset-0 bg-ink/75"
+                    aria-label={`Close ${diagram.title}`}
+                  />
+                  <div className="relative z-10 flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-bronze/25 bg-cream shadow-2xl">
+                    <div className="flex items-center justify-between gap-4 border-b border-bronze/20 bg-sand px-4 py-3">
+                      <h3 className="font-display text-sm font-bold uppercase tracking-[0.15em] text-bronze-dark">
+                        {diagram.title}
+                      </h3>
+                      <div className="flex items-center gap-2">
                         <a
-                          href={href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 rounded-lg border border-bronze/40 px-5 py-2.5 font-display text-xs font-semibold uppercase tracking-[0.15em] text-brown transition-colors hover:border-bronze hover:text-bronze"
-                        >
-                          View
-                        </a>
-                        <a
-                          href={href}
+                          href={diagram.pdf}
                           download
-                          className="inline-flex items-center gap-2 rounded-lg bg-bronze px-5 py-2.5 font-display text-xs font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze-dark"
+                          className="inline-flex items-center gap-2 rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40"
                         >
                           <DownloadIcon className="h-3.5 w-3.5" />
-                          Download
+                          PDF
+                        </a>
+                        <a
+                          href={`#${SPEC_GRID_ID}`}
+                          className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40"
+                        >
+                          Close
                         </a>
                       </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </>
+                    </div>
+                    <div className="overflow-auto p-3 sm:p-5">
+                      <Image
+                        src={diagram.image}
+                        alt={diagram.alt}
+                        width={diagram.width}
+                        height={diagram.height}
+                        sizes="(max-width: 1024px) calc(100vw - 2rem), 1024px"
+                        className="mx-auto h-auto max-h-[82vh] w-auto max-w-full"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
 
           {/* Rules video */}

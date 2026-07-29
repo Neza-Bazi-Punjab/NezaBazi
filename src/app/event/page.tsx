@@ -3,10 +3,15 @@ import Image from "next/image";
 import Link from "next/link";
 import BrushDivider from "@/components/BrushDivider";
 import ButtonLink from "@/components/Button";
-import CtaBand from "@/components/CtaBand";
-import DissolvePhoto from "@/components/DissolvePhoto";
 import Reveal from "@/components/Reveal";
-import SectionHeading from "@/components/SectionHeading";
+import {
+  ArenaLightIcon,
+  CalendarIcon,
+  HorseIcon,
+  MapPinIcon,
+  TrophyIcon,
+  UsersIcon,
+} from "@/components/icons";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -15,362 +20,322 @@ export const metadata: Metadata = {
     "How the Neza Bazi Punjab Championship 2026 runs: Single Tent Pegging with Aarhi knockout rounds, the Section team event, the Championship Cavalcade, day schedule and venue details.",
 };
 
-/* The page is built as a poster: the numbers that decide the day carry the
-   information, and prose only fills the gaps between them. Every figure here
-   comes from the official rulebook (see /rules). */
-
-const headlineStats = [
-  { value: site.riders, label: "Riders" },
-  { value: "2", label: "Championships" },
-  { value: site.prize, label: "Cash Prize" },
-  { value: "1", label: "Day" },
-];
-
+/* The two competitions and the cavalcade, summarised from the official
+   rulebook (see /rules for the full simplified rule book). */
 const competitions = [
   {
-    kicker: "Individual",
+    icon: HorseIcon,
     title: "Single Tent Pegging",
-    blurb:
-      "Three attempts to qualify. One run per round after that. Miss, and your championship is over.",
-    stats: [
-      { value: "3", label: "Attempts to qualify" },
-      { value: "1", label: "Run per Aarhi round" },
-      { value: "4", label: "Points to advance" },
+    tag: "Individual Championship",
+    facts: ["3 qualification attempts", "4-point carry advances", "Aarhi knockout rounds"],
+    paragraphs: [
+      "Every rider opens with a qualification round: three attempts to strike the peg at full gallop and carry it past the crossing line. One successful run is enough to advance — miss all three and the championship is over.",
+      "Qualified riders then enter the Aarhi elimination rounds: a single run each, where only a clean 4-point carry across the line advances. The knockout continues round after round until just a few riders remain, and the final round decides 1st, 2nd and 3rd.",
     ],
-    closing:
-      "Aarhi knockout rounds repeat until only a handful of riders remain. The final round decides 1st, 2nd and 3rd.",
-    photo: "/images/holla.webp",
-    photoAlt:
-      "A rider at full gallop lowers the lance toward the peg during a run",
-    // 800×480 — the lance runs corner to corner, so any other box clips it.
-    photoAspect: "aspect-[5/3]",
   },
   {
-    kicker: "Teams of Four",
-    title: "Section Tent Pegging",
-    blurb:
-      "Four riders, one run each, all four scores combined. The bar rises every round until nothing but perfection survives.",
-    stats: [
-      { value: "8", label: "To survive Round 1" },
-      { value: "12", label: "To survive Round 2" },
-      { value: "16", label: "Full House, Round 3+" },
+    icon: UsersIcon,
+    title: "Section (Teams) Tent Pegging",
+    tag: "Four-Rider Sections",
+    facts: ["4 riders per team", "2 points struck", "4 points carried"],
+    paragraphs: [
+      "Teams — “sections” — of four riders take the track together, one run per rider per round, with all four scores combined. A struck peg earns 2 points; carrying it across the line earns 4.",
+      "The bar rises every round: 8 points to survive Round 1, 12 in Round 2, and from Round 3 onward a perfect 16-point Full House. Full House rounds repeat until only a few teams are left, and the last round settles the podium.",
     ],
-    closing:
-      "Full House rounds repeat until only a few sections are left standing, and the last round settles the podium.",
-    photo: "/images/aboutsport.webp",
-    photoAlt: "Riders line up together before a team run at the championship",
-    // 980×671 — the lance reaches down to the peg in the bottom-left corner.
-    photoAspect: "aspect-[980/671]",
+  },
+  {
+    icon: ArenaLightIcon,
+    title: "Championship Cavalcade",
+    tag: "Mounted Procession",
+    facts: ["All competitors", "Traditional dress", "Saang-tipped lances"],
+    paragraphs: [
+      "After the Single Tent Pegging event, every team rides in the Championship Cavalcade — a mounted procession of all competitors. Expect traditional dress and decorated horses: every rider competes wearing a Dastaar or religious head covering, lance tipped with a Saang.",
+    ],
   },
 ];
 
-const scoring = [
-  { value: "2", label: "Points", detail: "Strike the peg" },
-  { value: "4", label: "Points", detail: "Carry it past the line" },
+const eventStats = [
+  {
+    icon: CalendarIcon,
+    label: "Date",
+    value: site.eventDate,
+  },
+  {
+    icon: MapPinIcon,
+    label: "Venue",
+    value: site.venue,
+  },
+  {
+    icon: UsersIcon,
+    label: "Field",
+    value: `${site.riders} riders`,
+  },
+  {
+    icon: TrophyIcon,
+    label: "Prize",
+    value: site.prize,
+  },
 ];
 
 const schedule = [
   {
     time: "Morning",
-    title: "Opening & Qualification",
+    title: "Opening Ceremony & Qualification",
     detail:
-      "Riders parade, horses are inspected, then every rider takes three attempts on the main track.",
+      "Riders parade and horse inspection, then Single Tent Pegging qualification: every rider gets three attempts on the main track.",
   },
   {
     time: "Afternoon",
-    title: "Aarhi Rounds & Sections",
+    title: "Aarhi Rounds, Cavalcade & Team Events",
     detail:
-      "Knockout rounds cut the singles field, the Cavalcade rides, and the four-rider sections chase 8, 12 and Full House.",
+      "Knockout Aarhi rounds narrow the singles field, the Championship Cavalcade follows, and the four-rider sections chase 8-, 12- and Full-House 16-point rounds.",
   },
   {
     time: "Evening",
     title: "Finals Under Lights",
     detail:
-      "The last Aarhi and Full House rounds decide the podiums in the fully lit arena, followed by the prize ceremony.",
+      "The last Aarhi and Full House rounds in the fully lit arena decide the podiums, followed by the prize ceremony.",
   },
 ];
 
 export default function EventPage() {
   return (
     <>
-      {/* Poster hero: the stakes first, in the largest type on the site. */}
-      <section className="relative isolate overflow-hidden bg-ink">
-        {/* Full-bleed backdrop, so it has to crop to fill the band. The focal
-            point is biased onto the lance — which runs from the rider's hand
-            down to the peg at lower left — instead of the centre, so the crop
-            keeps it in frame at both tall mobile and wide desktop ratios. */}
+      <section className="relative overflow-hidden bg-ink text-cream">
         <Image
-          src="/images/lancesunset.webp"
-          alt=""
+          src="/images/fullgallop.webp"
+          alt="A Neza Bazi rider at full gallop during competition"
           fill
           priority
           sizes="100vw"
-          className="object-cover object-[42%_58%] opacity-40"
+          className="object-cover opacity-35"
         />
-        <div
-          className="absolute inset-0 bg-gradient-to-b from-ink/90 via-ink/65 to-ink/95"
-          aria-hidden
-        />
-
-        <div className="hero-stagger relative mx-auto max-w-6xl px-6 py-20 text-center sm:py-28">
-          {/* Stacks deliberately on narrow screens rather than breaking the
-              venue mid-phrase. */}
-          <p className="font-display text-xs font-semibold uppercase leading-6 tracking-[0.3em] text-bronze sm:text-sm sm:tracking-[0.35em]">
-            <span className="block sm:inline">{site.eventDate}</span>
-            <span className="hidden sm:inline">{` · `}</span>
-            <span className="block sm:inline">{site.venue}</span>
-          </p>
-
-          <h1 className="mt-6 font-display font-bold uppercase leading-[0.88] text-cream">
-            <span className="block text-6xl tracking-tight sm:text-8xl lg:text-9xl">
-              One Day
-            </span>
-            <span className="text-shadow-warm block text-6xl italic tracking-tight text-bronze sm:text-8xl lg:text-9xl">
-              One Cup
-            </span>
-          </h1>
-
-          <p className="mx-auto mt-8 max-w-2xl font-display text-base font-medium uppercase tracking-[0.2em] text-cream/85 sm:text-xl">
-            {`${site.riders} riders. Two championships. One ${site.cupName}.`}
-          </p>
-
-          <div className="mt-10 flex flex-wrap justify-center gap-4">
-            <ButtonLink href="/register">Register Now</ButtonLink>
-            <ButtonLink href="/rules" variant="light">
-              Read the Rulebook
-            </ButtonLink>
-          </div>
-        </div>
-
-        <BrushDivider className="relative text-sand" />
-      </section>
-
-      {/* The numbers that define the day, oversized. */}
-      <section className="bg-sand">
-        <div className="mx-auto max-w-6xl px-6 py-10 sm:py-12">
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-10 text-center lg:grid-cols-4">
-            {headlineStats.map((stat, index) => (
-              /* Counted in one after another, so the numbers land like a
-                 scoreboard rather than appearing all at once. */
-              <Reveal key={stat.label} delayMs={index * 90}>
-                <dt className="sr-only">{stat.label}</dt>
-                <dd>
-                  <span className="block font-display text-5xl font-bold tracking-tight text-bronze sm:text-6xl lg:text-7xl">
-                    {stat.value}
-                  </span>
-                  <span className="mt-2 block font-display text-xs font-semibold uppercase tracking-[0.25em] text-brown/80 sm:text-sm">
-                    {stat.label}
-                  </span>
-                </dd>
-              </Reveal>
-            ))}
-          </dl>
-        </div>
-      </section>
-
-      {/* The two competitions, led by their scoring thresholds. */}
-      <section className="bg-cream">
-        <div className="mx-auto max-w-6xl px-6 py-12 sm:py-16">
-          <Reveal>
-            <SectionHeading>Two Ways to Win</SectionHeading>
-          </Reveal>
-
-          <div className="mt-10 space-y-12">
-            {competitions.map((competition, index) => (
-              <div
-                key={competition.title}
-                className="grid items-center gap-8 lg:grid-cols-2 lg:gap-14"
+        <div className="absolute inset-0 bg-gradient-to-r from-ink via-ink/85 to-ink/35" />
+        <Reveal className="relative mx-auto grid max-w-6xl gap-10 px-6 py-16 sm:py-20 lg:min-h-[620px] lg:grid-cols-[1fr_0.85fr] lg:items-center">
+          <div>
+            <p className="font-display text-xs font-semibold uppercase tracking-[0.35em] text-bronze">
+              1st Open Tent-Pegging Championship
+            </p>
+            <h1 className="mt-4 font-display text-5xl font-bold uppercase leading-[0.9] text-cream sm:text-7xl lg:text-8xl">
+              The Event
+              <span className="mt-2 block italic text-bronze">
+                {site.cupName}
+              </span>
+            </h1>
+            <p className="mt-6 max-w-2xl text-base leading-7 text-cream/85 sm:text-lg">
+              {`One day, two championships and a cavalcade: the ${site.title} brings ${site.riders} riders to ${site.venue} on ${site.eventDate} to fight for the ${site.cupName} — individually in Single Tent Pegging and together in four-rider team sections.`}
+            </p>
+            <div className="mt-8 flex flex-wrap gap-4">
+              <ButtonLink href="/register" variant="light">
+                Register Now
+              </ButtonLink>
+              <ButtonLink
+                href="/rules"
+                variant="outline"
+                className="border-cream/50 text-cream hover:border-bronze hover:text-bronze"
               >
-                {/* Photo lands first, the text follows a beat later, so the
-                    block assembles itself instead of appearing as one slab. */}
-                <Reveal
-                  className={index % 2 === 1 ? "lg:order-last" : undefined}
-                >
-                  <DissolvePhoto
-                    src={competition.photo}
-                    alt={competition.photoAlt}
-                    fade="wide"
-                    className={`${competition.photoAspect} mx-auto w-full max-w-xl lg:max-w-none`}
-                    sizes="(max-width: 1024px) 100vw, 32rem"
-                  />
-                </Reveal>
+                View Rules
+              </ButtonLink>
+            </div>
+          </div>
 
-                <Reveal delayMs={140}>
-                  <p className="font-display text-xs font-semibold uppercase tracking-[0.3em] text-bronze">
-                    {competition.kicker}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+            {eventStats.map((stat) => (
+              <div
+                key={stat.label}
+                className="border border-bronze/35 bg-ink/65 p-4 backdrop-blur-sm"
+              >
+                <div className="flex items-center gap-3">
+                  <stat.icon className="h-6 w-6 shrink-0 text-bronze" />
+                  <p className="font-display text-xs font-semibold uppercase tracking-[0.25em] text-cream/65">
+                    {stat.label}
                   </p>
-                  <h3 className="mt-3 font-display text-4xl font-bold uppercase leading-[0.95] tracking-tight text-bronze-dark sm:text-5xl">
-                    {competition.title}
-                  </h3>
-                  <p className="mt-5 text-lg leading-8 text-brown">
-                    {competition.blurb}
-                  </p>
-
-                  <div className="mt-8 grid grid-cols-3 gap-4 border-y border-bronze/25 py-6">
-                    {competition.stats.map((stat) => (
-                      <div key={stat.label}>
-                        <p className="font-display text-4xl font-bold tracking-tight text-bronze sm:text-5xl">
-                          {stat.value}
-                        </p>
-                        <p className="mt-1.5 font-display text-[0.65rem] font-semibold uppercase leading-4 tracking-[0.15em] text-brown/75">
-                          {stat.label}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <p className="mt-6 leading-7 text-brown/85">
-                    {competition.closing}
-                  </p>
-                </Reveal>
+                </div>
+                <p className="mt-2 font-display text-2xl font-bold uppercase tracking-wide text-cream">
+                  {stat.value}
+                </p>
               </div>
             ))}
           </div>
-        </div>
+        </Reveal>
+        <BrushDivider className="relative text-bronze/80" />
       </section>
 
-      {/* Scoring, reduced to the only two numbers that matter on the track. */}
-      <section className="dust-glow bg-parchment">
-        <Reveal className="mx-auto max-w-6xl px-6 py-12 sm:py-14">
-          <div className="text-center">
-            <p className="font-display text-xs font-semibold uppercase tracking-[0.35em] text-bronze-dark sm:text-sm">
-              Every Run Is Scored
-            </p>
-            <div className="mt-10 grid gap-10 sm:grid-cols-2">
-              {scoring.map((entry, index) => (
-                <Reveal key={entry.detail} delayMs={index * 130}>
-                  <p className="text-shadow-warm font-display text-7xl font-bold leading-none tracking-tight text-bronze sm:text-8xl">
-                    {entry.value}
-                  </p>
-                  <p className="mt-2 font-display text-sm font-semibold uppercase tracking-[0.3em] text-brown">
-                    {entry.label}
-                  </p>
-                  <p className="mt-3 font-display text-lg font-medium uppercase tracking-[0.12em] text-ink">
-                    {entry.detail}
-                  </p>
-                </Reveal>
-              ))}
+      {/* The competitions, from the official rulebook */}
+      <section className="bg-cream">
+        <Reveal className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
+          <div className="flex flex-col gap-4 border-b border-bronze/25 pb-6 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="font-display text-xs font-semibold uppercase tracking-[0.3em] text-bronze">
+                Championship Format
+              </p>
+              <h2 className="mt-2 font-display text-4xl font-bold uppercase leading-none text-ink sm:text-5xl">
+                The Competitions
+              </h2>
             </div>
-            <p className="mx-auto mt-8 max-w-2xl leading-7 text-brown/85">
-              {`Nothing else counts. Full scoring, appeals and horse-welfare rules are in the `}
-              <Link href="/rules" className="font-semibold text-bronze underline">
+            <p className="max-w-md text-sm leading-6 text-brown/75">
+              Individual skill, four-rider team pressure and a mounted
+              procession all packed into one championship day.
+            </p>
+          </div>
+
+          <div className="mt-10 grid gap-5 lg:grid-cols-3">
+            {competitions.map((comp) => (
+              <article
+                key={comp.title}
+                className="rounded-2xl border border-bronze/20 bg-sand p-5"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-bronze text-cream">
+                    <comp.icon className="h-7 w-7" />
+                  </div>
+                  <div>
+                    <p className="font-display text-xs font-semibold uppercase tracking-[0.2em] text-bronze">
+                      {comp.tag}
+                    </p>
+                    <h3 className="mt-1 font-display text-xl font-bold uppercase leading-tight text-ink">
+                      {comp.title}
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {comp.facts.map((fact) => (
+                    <span
+                      key={fact}
+                      className="rounded-full border border-bronze/25 bg-cream px-3 py-1 font-display text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-bronze-dark"
+                    >
+                      {fact}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  {comp.paragraphs.map((text) => (
+                    <p
+                      key={text.slice(0, 32)}
+                      className="text-sm leading-6 text-brown/85"
+                    >
+                      {text}
+                    </p>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="mt-10 rounded-2xl border border-bronze/25 bg-ink px-5 py-5 text-cream sm:px-6">
+            <p className="font-display text-sm font-semibold uppercase tracking-[0.18em] text-bronze">
+              Official Rules
+            </p>
+            <p className="mt-2 text-sm leading-6 text-cream/85">
+              {`Scoring, appeals and horse-welfare rules are covered in the `}
+              <Link href="/rules" className="text-bronze underline">
                 official rulebook
               </Link>
-              {`.`}
+              {` — available to download as a PDF in English and Punjabi.`}
             </p>
           </div>
         </Reveal>
       </section>
 
-      {/* The Cavalcade — the one part of the day that is not a contest. */}
-      <section className="bg-cream">
-        <div className="mx-auto grid max-w-6xl items-center gap-10 px-6 py-12 sm:py-14 lg:grid-cols-[0.9fr_1.1fr] lg:gap-14">
-          {/* 547×1024, and the top third is empty sky. The box is shorter than
-              the file and anchored to the bottom, so the crop takes the sky
-              and keeps the rider and the lance running down to the ground.
-              Width-capped so the tall ratio does not tower over the text. */}
-          <Reveal>
-            <DissolvePhoto
-              src="/images/heritage.webp"
-              alt="Riders in traditional dress ride together in procession"
-              fade="wide"
-              className="mx-auto aspect-[547/760] w-full max-w-[21rem]"
-              imageClassName="object-bottom"
-              sizes="(max-width: 1024px) 100vw, 21rem"
-            />
-          </Reveal>
-          <Reveal delayMs={140}>
-            <p className="font-display text-xs font-semibold uppercase tracking-[0.3em] text-bronze">
-              Not a Contest
-            </p>
-            <h2 className="mt-3 font-display text-4xl font-bold uppercase leading-[0.95] tracking-tight text-bronze-dark sm:text-5xl">
-              Championship Cavalcade
-            </h2>
-            <p className="mt-5 text-lg leading-8 text-brown">
-              {`Every team rides together after the singles event — a mounted procession of the whole field in traditional dress, on decorated horses.`}
-            </p>
-            <p className="mt-4 leading-7 text-brown/85">
-              {`Every rider competes wearing a Dastaar or religious head covering, lance tipped with a Saang.`}
-            </p>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* Day schedule as three bold blocks rather than a list. */}
-      <section className="bg-sand">
-        <div className="mx-auto max-w-6xl px-6 py-12 sm:py-16">
-          <Reveal>
-            <SectionHeading>How the Day Runs</SectionHeading>
-          </Reveal>
-
-          <div className="mt-10 grid gap-8 lg:grid-cols-3">
-            {schedule.map((slot, index) => (
-              <Reveal
-                key={slot.time}
-                delayMs={index * 90}
-                className="border-t-2 border-bronze pt-6"
-              >
-                <p className="font-display text-3xl font-bold uppercase tracking-tight text-bronze sm:text-4xl">
-                  {slot.time}
-                </p>
-                <h3 className="mt-3 font-display text-lg font-bold uppercase tracking-[0.1em] text-ink">
-                  {slot.title}
-                </h3>
-                <p className="mt-3 leading-7 text-brown/85">{slot.detail}</p>
-              </Reveal>
-            ))}
+      {/* Day schedule */}
+      <section className="bg-ink text-cream">
+        <Reveal className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
+          <div className="flex flex-col gap-4 border-b border-bronze/35 pb-6 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="font-display text-xs font-semibold uppercase tracking-[0.3em] text-bronze">
+                {site.eventDate}
+              </p>
+              <h2 className="mt-2 font-display text-4xl font-bold uppercase leading-none text-cream sm:text-5xl">
+                Day Schedule
+              </h2>
+            </div>
+            <ButtonLink href="/register" variant="light">
+              Register Now
+            </ButtonLink>
           </div>
 
-          <p className="mt-8 text-sm italic text-brown/60">
+          <ol className="mt-10 grid gap-5 lg:grid-cols-3">
+            {schedule.map((slot, index) => (
+              <li
+                key={slot.time}
+                className="relative overflow-hidden rounded-2xl border border-bronze/35 bg-cream p-5 text-ink"
+              >
+                <p className="font-display text-6xl font-bold leading-none text-bronze/20">
+                  {String(index + 1).padStart(2, "0")}
+                </p>
+                <p className="mt-5 font-display text-xs font-semibold uppercase tracking-[0.3em] text-bronze">
+                  {slot.time}
+                </p>
+                <h3 className="mt-2 font-display text-2xl font-bold uppercase leading-tight text-ink">
+                  {slot.title}
+                </h3>
+                <p className="mt-3 text-sm leading-6 text-brown/85">
+                  {slot.detail}
+                </p>
+              </li>
+            ))}
+          </ol>
+
+          <p className="mt-8 border-l-4 border-bronze pl-4 text-sm italic text-cream/70">
             Detailed run order will be published closer to the event.
           </p>
-        </div>
+        </Reveal>
+        <BrushDivider className="text-bronze/80" flip />
       </section>
-
-      <CtaBand />
 
       {/* Contact: the site's channels, spelled out once in full */}
       <section className="bg-cream">
-        <Reveal className="mx-auto max-w-6xl px-6 py-12">
-          <SectionHeading>Get in Touch</SectionHeading>
-          <p className="mt-6 max-w-xl leading-7 text-brown/85">
-            Questions about riding, registration or the event? Reach the team
-            directly:
-          </p>
-          <ul className="mt-6 space-y-3 text-brown/85">
-            <li>
-              <span className="font-display text-sm font-bold uppercase tracking-[0.15em] text-ink">
-                {`Email: `}
-              </span>
-              <a
-                href={`mailto:${site.email}`}
-                className="text-bronze underline"
-              >
-                {site.email}
-              </a>
-            </li>
-            <li>
-              <span className="font-display text-sm font-bold uppercase tracking-[0.15em] text-ink">
-                {`Instagram: `}
-              </span>
-              <a
-                href={site.instagram}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-bronze underline"
-              >
-                {site.socialHandle}
-              </a>
-            </li>
-            <li>
-              <span className="font-display text-sm font-bold uppercase tracking-[0.15em] text-ink">
-                {`YouTube: `}
-              </span>
-              <a href={site.youtube} className="text-bronze underline">
-                {site.name}
-              </a>
-            </li>
-          </ul>
+        <Reveal className="mx-auto max-w-6xl px-6 py-16">
+          <div className="grid gap-8 rounded-2xl border border-bronze/20 bg-sand p-6 sm:p-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
+            <div>
+              <p className="font-display text-xs font-semibold uppercase tracking-[0.3em] text-bronze">
+                Get in Touch
+              </p>
+              <h2 className="mt-2 font-display text-4xl font-bold uppercase leading-none text-ink sm:text-5xl">
+                Ride, Register, Ask
+              </h2>
+              <p className="mt-5 max-w-xl leading-7 text-brown/85">
+                Questions about riding, registration or the event? Reach the team
+                directly:
+              </p>
+            </div>
+            <ul className="space-y-4 text-brown/85">
+              <li className="rounded-lg border border-bronze/20 bg-cream px-4 py-3">
+                <span className="font-display text-sm font-bold uppercase tracking-[0.15em] text-ink">
+                  {`Email: `}
+                </span>
+                <a
+                  href={`mailto:${site.email}`}
+                  className="text-bronze underline"
+                >
+                  {site.email}
+                </a>
+              </li>
+              <li className="rounded-lg border border-bronze/20 bg-cream px-4 py-3">
+                <span className="font-display text-sm font-bold uppercase tracking-[0.15em] text-ink">
+                  {`Instagram: `}
+                </span>
+                <a
+                  href={site.instagram}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-bronze underline"
+                >
+                  {site.socialHandle}
+                </a>
+              </li>
+              <li className="rounded-lg border border-bronze/20 bg-cream px-4 py-3">
+                <span className="font-display text-sm font-bold uppercase tracking-[0.15em] text-ink">
+                  {`YouTube: `}
+                </span>
+                <a href={site.youtube} className="text-bronze underline">
+                  {site.name}
+                </a>
+              </li>
+            </ul>
+          </div>
         </Reveal>
       </section>
     </>

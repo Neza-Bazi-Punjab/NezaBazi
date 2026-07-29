@@ -28,3 +28,9 @@ purpose: spaces become `%20` in URLs and get mangled by some clients.
 
 To add another diagram, drop the PDF here and add an entry to the `diagrams`
 array in [the rules page](../../src/app/rules/page.tsx).
+
+Each diagram is paired with a compressed image under
+`public/images/diagrams/<slug>.jpg`, which is what the Rulebook page shows in
+the card grid and the full-size modal. The PDF is the download. A diagram
+appears only when **both** files exist, so a half-added diagram drops out
+rather than rendering a broken card.
