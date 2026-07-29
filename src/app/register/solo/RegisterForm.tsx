@@ -409,7 +409,7 @@ export default function RegisterForm({
       <div className="rounded-lg border border-bronze/25 bg-sand p-5">
         <HeadshotUpload
           initialPath={initialHeadshotPath}
-          hint="Optional. Helps officials confirm it's you at check-in. Take a photo or choose one from your gallery."
+          label="Headshot (optional)"
         />
       </div>
 

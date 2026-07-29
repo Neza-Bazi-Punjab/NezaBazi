@@ -318,11 +318,7 @@ export default function AccountPageClient({
               uploaded the moment it is chosen, so tying it to the form's edit
               mode would leave a stored file that the account has not recorded
               if the rider cancelled. */}
-          <HeadshotUpload
-            initialPath={profile.headshot_path}
-            label="Headshot"
-            hint="Optional. Helps officials confirm it's you at check-in. Take a photo or choose one from your gallery."
-          />
+          <HeadshotUpload initialPath={profile.headshot_path} hint={null} />
 
           <div>
             <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">

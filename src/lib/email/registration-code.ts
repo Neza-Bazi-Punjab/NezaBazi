@@ -56,7 +56,7 @@ export const buildRegistrationCodeEmail = ({
   const accountLines = isTeamEntry
     ? [
         "Need to check or change your details?",
-        `Sign in at ${site.url}/login with this email address, or create an account with it if you do not have one yet. Either way your entry links up automatically and you can update your own information.`,
+        `Sign in at ${site.url}/login with this email address, or create an account with it if you do not have one yet. Either way your entry links up automatically and you can update your own information — including adding a headshot photo, which is optional.`,
         "",
         `Not expecting this email? Someone may have entered your address by mistake — let us know at ${site.email}.`,
         "",
@@ -115,7 +115,8 @@ export const buildRegistrationCodeEmail = ({
               <p style="margin:0 0 16px; color:#5a3517; font-size:16px; line-height:1.65;">
                 <strong>Need to check or change your details?</strong> Sign in with
                 this email address, or create an account with it if you do not have
-                one yet. Either way your entry links up automatically.
+                one yet. Either way your entry links up automatically, and you can
+                add a headshot photo if you would like &mdash; that part is optional.
               </p>
 
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 30px;">

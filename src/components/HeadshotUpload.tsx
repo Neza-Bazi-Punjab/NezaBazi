@@ -28,14 +28,15 @@ type HeadshotUploadProps = {
      the registration, the account page just reflects it back. */
   onPathChange?: (path: string | null) => void;
   label?: string;
-  hint?: string;
+  /* Pass null for no supporting line at all. */
+  hint?: string | null;
 };
 
 export default function HeadshotUpload({
   initialPath = null,
   onPathChange,
-  label = "Headshot (optional)",
-  hint,
+  label = "Headshot",
+  hint = describeHeadshotLimits(),
 }: HeadshotUploadProps) {
   const [path, setPath] = useState<string | null>(initialPath);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -214,9 +215,7 @@ export default function HeadshotUpload({
       <p className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
         {label}
       </p>
-      <p className="mt-1 text-sm text-brown/70">
-        {hint ?? `Used to confirm it's you at check-in. ${describeHeadshotLimits()}`}
-      </p>
+      {hint && <p className="mt-1 text-sm text-brown/70">{hint}</p>}
 
       <div className="mt-3 flex flex-wrap items-center gap-4">
         <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-bronze/40 bg-sand">
