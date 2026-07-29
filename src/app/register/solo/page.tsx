@@ -24,6 +24,7 @@ type RegistrationMetadata = {
   horse_breed?: string;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
+  headshot_path?: string;
 };
 
 const getMetadataNumber = (value: number | string | undefined) => {
@@ -107,6 +108,11 @@ export default async function SoloRegisterPage() {
                 <RegisterForm
                   lockProfileFields={!isAdmin}
                   initialDraft={(draftRow?.data ?? null) as SoloDraftData | null}
+                  initialHeadshotPath={
+                    typeof authMetadata?.headshot_path === "string"
+                      ? authMetadata.headshot_path
+                      : null
+                  }
                   initialValues={
                     isAdmin
                       ? undefined

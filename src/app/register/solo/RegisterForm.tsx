@@ -5,6 +5,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import HeadshotUpload from "@/components/HeadshotUpload";
 import LocationPicker from "@/components/LocationPicker";
 import {
   deleteRegistrationDraft,
@@ -79,10 +80,15 @@ export default function RegisterForm({
   initialValues,
   lockProfileFields = false,
   initialDraft,
+  initialHeadshotPath = null,
 }: {
   initialValues?: InitialValues;
   lockProfileFields?: boolean;
   initialDraft?: SoloDraftData | null;
+  /* The headshot lives on the account rather than the registration, so it is
+     not part of the autosaved draft — it is already uploaded and recorded in
+     Auth metadata by the time the form is submitted. */
+  initialHeadshotPath?: string | null;
 }) {
   const router = useRouter();
   const [step, setStep] = useState(() => clampStep(initialDraft?.step));
@@ -397,6 +403,13 @@ export default function RegisterForm({
           onChange={(e) => setEmail(e.target.value)}
           readOnly={lockProfileFields}
           className={lockProfileFields ? lockedInputClassName : inputClassName}
+        />
+      </div>
+
+      <div className="rounded-lg border border-bronze/25 bg-sand p-5">
+        <HeadshotUpload
+          initialPath={initialHeadshotPath}
+          hint="Optional. Helps officials confirm it's you at check-in. Take a photo or choose one from your gallery."
         />
       </div>
 

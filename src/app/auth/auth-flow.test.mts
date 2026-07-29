@@ -84,3 +84,43 @@ test("a pending email address never travels in the URL", () => {
   assert.match(resend, /sessionStorage\.getItem\(PENDING_EMAIL_KEY\)/);
   assert.doesNotMatch(signupPage, /success\?[^`"']*email=/);
 });
+
+test("a phone photo is normalised in the browser before upload", () => {
+  // Riders register from phones: an iPhone shoots HEIC and a camera file is
+  // routinely 8-12 MB. Both are decoded, rotated, downscaled and re-encoded
+  // to JPEG client-side, so the bucket only ever receives modest JPEGs and a
+  // rider never sees "unsupported format" for their own phone's photo.
+  const headshots = readSource("../../lib/headshots.ts");
+
+  assert.match(headshots, /createImageBitmap/);
+  assert.match(headshots, /imageOrientation: "from-image"/);
+  assert.match(headshots, /canvas\.toBlob/);
+  assert.match(headshots, /HEADSHOT_UPLOAD_TYPE = "image\/jpeg"/);
+
+  // `image/*` keeps the camera option on Android and does not refuse HEIC on
+  // iOS; `capture` would force the camera and remove the gallery.
+  assert.match(headshots, /HEADSHOT_ACCEPT = "image\/\*"/);
+  const upload = readSource("../../components/HeadshotUpload.tsx");
+  assert.doesNotMatch(upload, /capture=/);
+});
+
+test("headshots are private and owner-scoped in storage", () => {
+  const migration = readSource(
+    "../../../supabase/migrations/20260729020000_rider_headshots.sql"
+  );
+
+  // A rider uploading a photo to enter a competition has not agreed to it
+  // being served from a permanent public URL.
+  assert.match(migration, /'rider-headshots',\s*\n\s*false,/);
+
+  // Every policy pins the first path segment to the caller, so the browser
+  // cannot write outside its own folder whatever path it constructs.
+  const ownerChecks = migration.match(
+    /\(storage\.foldername\(name\)\)\[1\] = auth\.uid\(\)::text/g
+  );
+  assert.ok((ownerChecks ?? []).length >= 5);
+
+  // Admins read every headshot for check-in, but cannot alter one.
+  assert.match(migration, /for select\s*\n\s*to authenticated\s*\n\s*using \(bucket_id = 'rider-headshots' and public\.is_admin\(\)\)/);
+  assert.doesNotMatch(migration, /is_admin\(\)[\s\S]*for (insert|update|delete)/);
+});

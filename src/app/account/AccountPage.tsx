@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import HeadshotUpload from "@/components/HeadshotUpload";
 import LocationPicker from "@/components/LocationPicker";
 import SectionHeading from "@/components/SectionHeading";
 import { site } from "@/lib/site";
@@ -14,6 +15,10 @@ export type AccountProfile = {
   location: string;
   phone: string;
   email: string;
+  /* Storage path in the private rider-headshots bucket, or null. Managed by
+     HeadshotUpload directly against Auth metadata rather than through the
+     profile save, so a photo change takes effect on its own. */
+  headshot_path: string | null;
 };
 
 export type AccountSoloRegistration = {
@@ -309,6 +314,16 @@ export default function AccountPageClient({
         </div>
 
         <div className="mt-10 space-y-6 rounded-lg border border-bronze/20 bg-sand p-6">
+          {/* Managed on its own rather than through Save/Cancel: the photo is
+              uploaded the moment it is chosen, so tying it to the form's edit
+              mode would leave a stored file that the account has not recorded
+              if the rider cancelled. */}
+          <HeadshotUpload
+            initialPath={profile.headshot_path}
+            label="Headshot"
+            hint="Optional. Helps officials confirm it's you at check-in. Take a photo or choose one from your gallery."
+          />
+
           <div>
             <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
               Full Name

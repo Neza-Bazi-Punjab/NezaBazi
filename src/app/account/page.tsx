@@ -25,6 +25,7 @@ type AccountMetadata = {
   age?: number | string;
   location?: string;
   phone?: string;
+  headshot_path?: string;
 };
 
 const getMetadataNumber = (value: number | string | undefined) => {
@@ -177,6 +178,10 @@ export default async function AccountPage() {
                 location: authMetadata.location ?? "",
                 phone: authMetadata.phone ?? "",
                 email: user.email ?? "",
+                headshot_path:
+                  typeof authMetadata.headshot_path === "string"
+                    ? authMetadata.headshot_path
+                    : null,
               } as AccountProfile
             }
             soloRegistration={
