@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import LocationPicker from "@/components/LocationPicker";
 import SectionHeading from "@/components/SectionHeading";
+import { site } from "@/lib/site";
 
 export type AccountProfile = {
   id: string;
@@ -26,6 +27,8 @@ export type AccountSoloRegistration = {
   horse_age: number;
   horse_breed: string;
   created_at: string;
+  confirmation_code: string;
+  checked_in_at: string | null;
 };
 
 export type AccountTeam = {
@@ -47,6 +50,8 @@ export type AccountTeamMember = {
   horse_breed: string;
   is_leader: boolean;
   created_at: string;
+  confirmation_code: string;
+  checked_in_at: string | null;
 };
 
 export type AccountTeamMembership = {
@@ -93,6 +98,39 @@ const Detail = ({ label, value }: { label: string; value: string | number }) => 
       {label}
     </p>
     <p className="mt-1 text-brown/85">{value}</p>
+  </div>
+);
+
+/* The rider's check-in code, plus whether they have already been checked in.
+   Shown on every registration a rider can see so the code survives a lost
+   email. */
+const CheckInStatus = ({
+  code,
+  checkedInAt,
+}: {
+  code: string;
+  checkedInAt: string | null;
+}) => (
+  <div className="rounded-lg border border-bronze/30 bg-cream p-4">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
+          Check-in Code
+        </p>
+        <p className="mt-1 font-mono text-xl font-bold tracking-[0.15em] text-bronze-deep">
+          {code}
+        </p>
+      </div>
+      {checkedInAt ? (
+        <p className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark">
+          Checked in {formatDate(checkedInAt)}
+        </p>
+      ) : (
+        <p className="max-w-xs text-sm leading-6 text-brown/80">
+          {`Bring this to check-in on ${site.checkInDate}. Riders who do not check in are not entered into the brackets.`}
+        </p>
+      )}
+    </div>
   </div>
 );
 
@@ -398,6 +436,11 @@ export default function AccountPageClient({
                     <Detail label="Horse Age" value={soloRegistration.horse_age} />
                     <Detail label="Horse Breed" value={soloRegistration.horse_breed} />
                   </div>
+
+                  <CheckInStatus
+                    code={soloRegistration.confirmation_code}
+                    checkedInAt={soloRegistration.checked_in_at}
+                  />
                 </article>
               )}
 
@@ -423,6 +466,11 @@ export default function AccountPageClient({
                   <p className="leading-7 text-brown/85">
                     You are registered as a rider on this team by its team leader.
                   </p>
+
+                  <CheckInStatus
+                    code={member.confirmation_code}
+                    checkedInAt={member.checked_in_at}
+                  />
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <Detail label="Full Name" value={member.full_name} />
@@ -489,6 +537,11 @@ export default function AccountPageClient({
                           <Detail label="Horse Age" value={member.horse_age} />
                           <Detail label="Horse Breed" value={member.horse_breed} />
                         </div>
+
+                        <CheckInStatus
+                          code={member.confirmation_code}
+                          checkedInAt={member.checked_in_at}
+                        />
                       </div>
                     ))}
                   </div>

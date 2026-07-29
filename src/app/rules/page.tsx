@@ -8,13 +8,38 @@ import { site } from "@/lib/site";
 export const metadata: Metadata = {
   title: "Rulebook",
   description:
-    "The official rulebook of the Neza Bazi Punjab Championship 2026: watch the rules explained on video and download the full rulebook PDF in English and Punjabi.",
+    "The official rulebook of the Neza Bazi Punjab Championship 2026: download the full rulebook PDF in English and Punjabi, the ground, barshi and peg dimension sheets, and watch the rules explained on video.",
 };
 
 const PDF_PATH = "/documents/rules.pdf";
 
+/* Dimension diagrams, published as their own PDFs alongside the rulebook
+   rather than folded into it. Each is listed only when its file is present,
+   the same way the rulebook itself is. */
+const diagrams = [
+  {
+    title: "Ground Dimensions",
+    file: "ground-dimensions.pdf",
+    description: "Track length, peg and crossing lines, and arena width",
+  },
+  {
+    title: "Barshi Dimensions",
+    file: "barshi-dimensions.pdf",
+    description: "Lance length, weight and tip specification",
+  },
+  {
+    title: "Peg Dimensions",
+    file: "peg-dimensions.pdf",
+    description: "Peg size, shape and how it is set in the ground",
+  },
+];
+
+function documentExists(file: string) {
+  return existsSync(join(process.cwd(), "public", "documents", file));
+}
+
 function rulesPdfExists() {
-  return existsSync(join(process.cwd(), "public", "documents", "rules.pdf"));
+  return documentExists("rules.pdf");
 }
 
 /* Accepts any YouTube URL shape (watch?v=, youtu.be, shorts, embed) and
@@ -27,6 +52,9 @@ function youtubeEmbedUrl(url: string) {
 export default function RulesPage() {
   const hasPdf = rulesPdfExists();
   const videoUrl = site.rulesVideoUrl;
+  const availableDiagrams = diagrams.filter((diagram) =>
+    documentExists(diagram.file)
+  );
 
   return (
     <>
@@ -92,6 +120,70 @@ export default function RulesPage() {
                 </div>
               </object>
             </div>
+          )}
+
+          {/* Dimension diagrams, one row per PDF. Deliberately not embedded
+              inline: three more 80vh viewers would bury the video below a
+              wall of scrolling, and these are reference sheets people open
+              or print rather than read on the page. */}
+          {availableDiagrams.length > 0 && (
+            <>
+              <div className="mt-14 flex items-center gap-4 border-b border-bronze/20 pb-6">
+                <DocumentIcon className="h-9 w-9 text-bronze" />
+                <div>
+                  <h2 className="font-display text-lg font-bold uppercase tracking-wide text-ink">
+                    Dimensions
+                  </h2>
+                  <p className="text-sm text-brown/60">
+                    Official measurements for the ground, the barshi and the peg
+                  </p>
+                </div>
+              </div>
+
+              <ul className="mt-8 space-y-4">
+                {availableDiagrams.map((diagram) => {
+                  const href = `/documents/${diagram.file}`;
+
+                  return (
+                    <li
+                      key={diagram.file}
+                      className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-bronze/25 bg-sand px-5 py-4"
+                    >
+                      <div className="flex items-center gap-4">
+                        <DocumentIcon className="h-7 w-7 shrink-0 text-bronze" />
+                        <div>
+                          <h3 className="font-display text-base font-bold uppercase tracking-wide text-ink">
+                            {diagram.title}
+                          </h3>
+                          <p className="text-sm text-brown/60">
+                            {diagram.description}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-3">
+                        <a
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 rounded-lg border border-bronze/40 px-5 py-2.5 font-display text-xs font-semibold uppercase tracking-[0.15em] text-brown transition-colors hover:border-bronze hover:text-bronze"
+                        >
+                          View
+                        </a>
+                        <a
+                          href={href}
+                          download
+                          className="inline-flex items-center gap-2 rounded-lg bg-bronze px-5 py-2.5 font-display text-xs font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze-dark"
+                        >
+                          <DownloadIcon className="h-3.5 w-3.5" />
+                          Download
+                        </a>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
           )}
 
           {/* Rules video */}

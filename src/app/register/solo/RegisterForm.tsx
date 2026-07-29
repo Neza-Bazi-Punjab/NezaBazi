@@ -315,6 +315,15 @@ export default function RegisterForm({
     }
 
     await deleteRegistrationDraft("solo");
+
+    // Best-effort: the success page and /account both show the code, so a
+    // failed email must not block the rider from reaching their confirmation.
+    try {
+      await fetch("/api/registration/confirmation-code", { method: "POST" });
+    } catch {
+      // Ignored on purpose — the registration itself already succeeded.
+    }
+
     setLoading(false);
     router.push("/register/solo/success");
   };

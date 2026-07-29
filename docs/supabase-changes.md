@@ -25,6 +25,38 @@ These migration names are present in the current Supabase migration history:
 8. `registration_drafts_autosave` adds the `registration_drafts` table (one autosaved draft per user per registration type, owner-only RLS, size-capped jsonb payload, `updated_at` refresh trigger). This is the first migration whose SQL is also committed in the repo, under `supabase/migrations/`.
 9. `harden_admin_audit_log` makes audit actors server-trusted, stores actor name/email snapshots, preserves audit rows when an administrator is deleted, removes browser write access to the audit table, and adds service-role-only transactional functions for registration edits and role changes.
 10. `lock_admin_registration_write_paths` removes the old broad admin UPDATE/DELETE RLS policies from registration tables. Admin dashboard writes must now use the protected server route, while players and team leaders keep their existing owner-scoped permissions.
+11. `registration_confirmation_codes` adds `confirmation_code`, `checked_in_at` and `checked_in_by` to `solo_registrations` and `team_members`, generates a code on every insert through a trigger, backfills the rows that registered before codes existed, and replaces the table-wide `authenticated` UPDATE grant with an explicit column list that excludes all three new columns.
+12. `admin_rider_check_in` adds the service-role-only `admin_set_check_in()` and `admin_find_rider_by_code()` functions used by the check-in desk.
+13. `one_confirmation_code_per_rider` makes the code belong to the rider rather than the registration. A rider may enter solo *and* ride on a team; the insert trigger now reuses their existing code (matched on normalized email) instead of issuing a second one, and `admin_set_check_in` is re-keyed from a single row id to the code, updating every entry that code covers in one transaction. Without this, checking in the solo entry left the same rider showing as absent on their team roster — skewing the "all four must check in" rule and potentially holding a present section out of the brackets. Also collapses any rider already holding two codes, though none existed when it was written.
+
+Migrations 11 and 12 were applied to the live project on 28 July 2026 and verified there: all 13 solo registrations and 8 team riders received a valid, distinct code, with no collisions across the two tables; both insert triggers and all four functions are present; `authenticated` retains UPDATE on exactly the intended data columns (11 on `solo_registrations`, 8 on `team_members`) and on none of `confirmation_code`, `checked_in_at` or `checked_in_by`.
+
+## Confirmation codes and check-in
+
+Every rider receives a unique `NBP-XXXXXX` code when they register — solo entrants and all four riders on a team, one code each.
+
+- **Generated in the database.** Solo registrations are inserted straight from the browser under RLS, so a code chosen by app code could be forged. A `before insert` trigger overwrites whatever arrived and clears the check-in columns, making a self-checked-in registration impossible at insert time.
+- **Random, not sequential.** A sequential number would leak the total registration count to anyone holding a code and let a stranger guess a valid one. It would also collide with the separate bracket numbering that gets assigned once registration closes — those are two different identifiers.
+- **Unique across both tables.** The desk types one code and the lookup searches solo entrants and team riders together, so a shared code would be ambiguous.
+- **Readable aloud.** The alphabet omits `O/0`, `I/1` and `U`.
+- **Not writable from a browser.** Postgres cannot revoke a single column from a table-wide UPDATE grant, so the grant was replaced with an explicit column list. `confirmation_code`, `checked_in_at` and `checked_in_by` are simply absent from it, leaving the audited admin route as the only write path.
+
+Check-in runs the day before the event. An administrator enters the code, sees the rider's record and — for a team rider — how many of the four have arrived, then confirms. Checking in an already-checked-in rider raises rather than silently overwriting the original arrival time and the administrator who recorded it. Undo is available and audited the same way.
+
+## Registration emails
+
+The confirmation-code email goes through the **Resend API directly**, using a server-only `RESEND_API_KEY`. This is separate from the Resend SMTP settings in the Supabase dashboard: those only cover Auth emails (confirm signup, recovery, email change) rendered from Supabase's own templates, and cannot send application email.
+
+Sending is best-effort on purpose. It happens in `after()`, so it never blocks a registration that already committed, and a missing key is a logged skip rather than an error. The code is always shown on-screen and on `/account`, and the team success page lists all four riders' codes so the leader can pass them on — riders 2-4 have no account here, so email is otherwise their only channel.
+
+## Live schema not represented in this repo
+
+The live project also contains two tables with no migration in `supabase/migrations/`, no entry in this document's history above, and no application code referencing them:
+
+- `score_attempts` — `round_number`, `result` (`miss`/`touch`/`hit`), a generated `points` column (`hit` = 4, `touch` = 2, else 0), `recorded_by`, and foreign keys to both `solo_registrations` and `team_members`. This matches the agreed scoring rules. Currently empty.
+- `solo_scoresheet` — `rounds` (jsonb), `total_override`, `sort_order`, `updated_by`. Currently holds 7 rows.
+
+These appear to have been created directly in the Supabase dashboard. They are harmless where they stand, but they are undocumented drift: nothing in the repo would recreate them in a fresh project, and nothing reads or writes them. Before the scoring phase starts, either capture them as a migration or drop and redesign them alongside the bracket work.
 
 The live database was checked after these changes: existing rows satisfy the constraints, teams have four riders, and teams have one leader. The Supabase security advisor still has intentional or deferred warnings for public trigger-function execution, leaked-password protection, and some RLS performance policies.
 
@@ -48,7 +80,11 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 GEONAMES_USERNAME=
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=
 ```
+
+Never put real values in `.env.example` — it is the one `.env*` file `.gitignore` does not ignore, so anything pasted there is published on the next commit.
 
 `GEONAMES_USERNAME` is optional and server-only: it enables the village autocomplete in the location picker (register free at geonames.org and enable "free web services" on the account page). Without it, the picker falls back to manual village/city entry.
 
@@ -71,10 +107,18 @@ Dashboard settings to apply/confirm in Supabase (Authentication → URL Configur
 3. **Site URL**: `https://www.nezabazipunjab.com`
 4. **Redirect URLs** (allowlist): `https://www.nezabazipunjab.com/**` and `http://localhost:3000/**` for local dev. Add only the specific Vercel preview pattern you use if preview auth testing is needed.
 5. **Email templates** — for reliable cross-device links, point each action link at the confirm route with the token hash. Examples:
-   - Confirm signup: `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup&next=/account`
-   - Reset password: `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/reset-password`
-   - Change email address: `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email_change&next=/account`
-   - Magic link (if used): `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=magiclink&next=/account`
+   - Confirm signup: `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=signup`
+     — no `next` here. On the signup path the route signs the user out and sends
+     them to `/login?redirect=…` using the destination captured at signup time
+     (defaulting to `/register`), so a `next` parameter is ignored. Escape the
+     ampersands as `&amp;` in the template HTML: a bare `&` in an attribute is
+     invalid and some clients drop everything after it, which would break `type`.
+   - Reset password: `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=recovery&amp;next=/reset-password`
+   - Change email address: `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=email_change&amp;next=/account`
+   - Magic link (if used): `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=magiclink&amp;next=/account`
+
+   These three take the normal path, so `next` is honoured — it is sanitized to an
+   internal path by `getSafeRedirect`, so an external URL cannot be smuggled in.
 
    If a template is left on the default `{{ .ConfirmationURL }}`, the `code` fallback in `/auth/confirm` still works as long as the link is opened in the same browser that started the request.
 6. **Password policy**: set the minimum to at least 8 characters and enable leaked-password protection under Authentication → Policies if the project plan supports it.

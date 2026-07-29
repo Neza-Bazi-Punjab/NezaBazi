@@ -2,6 +2,8 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { site } from "@/lib/site";
+import CheckInPanel from "./CheckInPanel";
 
 export type SoloRegistration = {
   id: string;
@@ -71,7 +73,7 @@ type AdminDashboardProps = {
   auditActors: AuditActor[];
 };
 
-type ActiveTab = "profiles" | "solo" | "team" | "audit";
+type ActiveTab = "profiles" | "solo" | "team" | "checkin" | "audit";
 
 type AdminProfileUser = {
   id: string;
@@ -1307,6 +1309,17 @@ export default function AdminDashboard({
           </button>
           <button
             type="button"
+            onClick={() => setActiveTab("checkin")}
+            className={`rounded-lg px-5 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] transition-colors ${
+              activeTab === "checkin"
+                ? "bg-bronze-deep text-cream hover:bg-bronze"
+                : "border border-bronze/20 text-bronze-dark hover:border-bronze/40"
+            }`}
+          >
+            Check-in
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab("audit")}
             className={`rounded-lg px-5 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] transition-colors ${
               activeTab === "audit"
@@ -1324,24 +1337,40 @@ export default function AdminDashboard({
         </div>
       </div>
 
-      <div>
-        <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
-          Search
-        </label>
-        <input
-          type="search"
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder={
-            activeTab === "audit"
-              ? "Search by action, admin, target, or details..."
-              : "Search by name, email, or phone..."
-          }
-          className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
-        />
-      </div>
+      {/* Check-in has its own code field and searches every rider server-side,
+          so the table filter would only be confusing there. */}
+      {activeTab !== "checkin" && (
+        <div>
+          <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
+            Search
+          </label>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder={
+              activeTab === "audit"
+                ? "Search by action, admin, target, or details..."
+                : "Search by name, email, or phone..."
+            }
+            className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+          />
+        </div>
+      )}
 
-      {activeTab === "profiles" ? (
+      {activeTab === "checkin" ? (
+        <section className="space-y-4">
+          <div>
+            <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-bronze-dark">
+              Rider Check-in
+            </h2>
+            <p className="mt-2 max-w-2xl leading-7 text-brown/85">
+              {`Check-in runs on ${site.checkInDate}, the day before the event. Enter the code the rider presents, confirm their details, and mark them as arrived. Only riders who are checked in are entered into the brackets.`}
+            </p>
+          </div>
+          <CheckInPanel />
+        </section>
+      ) : activeTab === "profiles" ? (
         <section className="space-y-4">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-bronze-dark">

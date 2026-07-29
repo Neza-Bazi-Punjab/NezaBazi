@@ -1,0 +1,248 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+const repoFile = (path: string) =>
+  readFileSync(new URL(`../../../${path}`, import.meta.url), "utf8");
+
+const codesMigration = repoFile(
+  "supabase/migrations/20260728143000_registration_confirmation_codes.sql"
+);
+const checkInMigration = repoFile(
+  "supabase/migrations/20260728143500_admin_rider_check_in.sql"
+);
+const oneCodeMigration = repoFile(
+  "supabase/migrations/20260728163000_one_confirmation_code_per_rider.sql"
+);
+const checkInRoute = repoFile("src/app/api/admin/check-in/route.ts");
+const soloCodeRoute = repoFile(
+  "src/app/api/registration/confirmation-code/route.ts"
+);
+const teamSubmitRoute = repoFile("src/app/register-team/submit/route.ts");
+const resendClient = repoFile("src/lib/email/resend.ts");
+const codeEmail = repoFile("src/lib/email/registration-code.ts");
+
+test("confirmation codes are assigned by the database, never by the client", () => {
+  // Solo registrations are inserted straight from the browser, so the trigger
+  // has to overwrite whatever the client sent rather than trust it.
+  assert.match(
+    codesMigration,
+    /before insert on public\.solo_registrations[\s\S]*?assign_confirmation_code/
+  );
+  assert.match(
+    codesMigration,
+    /before insert on public\.team_members[\s\S]*?assign_confirmation_code/
+  );
+  assert.match(codesMigration, /new\.confirmation_code := candidate;/);
+  assert.match(codesMigration, /new\.checked_in_at := null;/);
+  assert.match(codesMigration, /new\.checked_in_by := null;/);
+});
+
+test("a first-time registration cannot arrive already checked in", () => {
+  // Asserted against the current definition: one_confirmation_code_per_rider
+  // replaced the function in registration_confirmation_codes, so checking the
+  // older file would be testing SQL that no longer runs.
+  const assignment = oneCodeMigration.slice(
+    oneCodeMigration.indexOf("function public.assign_confirmation_code")
+  );
+
+  // A rider with no existing entry gets a fresh code and no arrival state, so
+  // a forged insert cannot smuggle in a checked-in registration. A rider who
+  // already registered inherits their own real state instead — that branch is
+  // covered separately.
+  const freshBranch = assignment.slice(assignment.indexOf("loop"));
+  assert.match(freshBranch, /new\.checked_in_at := null;/);
+  assert.match(freshBranch, /new\.checked_in_by := null;/);
+});
+
+test("browsers cannot write confirmation codes or check-in state", () => {
+  assert.match(
+    codesMigration,
+    /revoke update on public\.solo_registrations from authenticated;/
+  );
+  assert.match(
+    codesMigration,
+    /revoke update on public\.team_members from authenticated;/
+  );
+
+  // Postgres cannot revoke one column from a table-wide grant, so the grant is
+  // replaced by an explicit list. These three must never appear in it.
+  const grantedColumns = codesMigration.match(/grant update \(([\s\S]*?)\)/g) ?? [];
+  assert.equal(grantedColumns.length, 2);
+
+  for (const grant of grantedColumns) {
+    assert.doesNotMatch(grant, /confirmation_code/);
+    assert.doesNotMatch(grant, /checked_in_at/);
+    assert.doesNotMatch(grant, /checked_in_by/);
+  }
+});
+
+test("codes avoid characters that are misread at a check-in desk", () => {
+  const alphabet = codesMigration.match(/alphabet constant text := '([^']+)'/)?.[1];
+
+  assert.ok(alphabet, "the generator must define its alphabet");
+
+  for (const ambiguous of ["O", "0", "I", "1", "U"]) {
+    assert.ok(
+      !alphabet.includes(ambiguous),
+      `${ambiguous} is ambiguous when a code is read aloud`
+    );
+  }
+});
+
+test("a rider registered twice holds one code, not two", () => {
+  // A rider can enter solo and also ride on a team. Two codes would mean two
+  // things to present at the desk, so the second entry reuses the first code.
+  const assignment = oneCodeMigration.slice(
+    oneCodeMigration.indexOf("function public.assign_confirmation_code")
+  );
+
+  assert.match(assignment, /lower\(btrim\(entry\.email\)\) = lower\(btrim\(new\.email\)\)/);
+  assert.match(assignment, /new\.confirmation_code := existing\.confirmation_code;/);
+
+  // The arrival state comes with it, so the two entries cannot disagree about
+  // whether the rider is present.
+  assert.match(assignment, /new\.checked_in_at := existing\.checked_in_at;/);
+  assert.match(assignment, /new\.checked_in_by := existing\.checked_in_by;/);
+});
+
+test("one check-in marks every entry the rider holds", () => {
+  // Checking in only one row would leave a rider standing at the desk showing
+  // as absent on their team roster, holding the whole section out of the
+  // brackets.
+  const checkIn = oneCodeMigration.slice(
+    oneCodeMigration.indexOf("function public.admin_set_check_in")
+  );
+
+  assert.match(checkIn, /update public\.solo_registrations/);
+  assert.match(checkIn, /update public\.team_members/);
+
+  // Keyed on the code rather than a single row id.
+  assert.match(checkIn, /p_code text/);
+  assert.doesNotMatch(checkIn, /p_target_id/);
+  assert.match(checkInRoute, /p_code: code\.trim\(\)/);
+});
+
+test("the desk sees a dual-entry rider once, with both entries", () => {
+  const searchBody = checkInRoute.slice(
+    checkInRoute.indexOf("const searchRiders")
+  );
+
+  // Deduplicated on the shared code, not on the row id.
+  assert.match(searchBody, /const byCode = new Map/);
+  assert.doesNotMatch(searchBody, /byId\.set/);
+  assert.match(checkInRoute, /entries\.find\(/);
+});
+
+test("codes are unique across solo riders and team riders together", () => {
+  assert.match(
+    codesMigration,
+    /create unique index if not exists solo_registrations_confirmation_code_key/
+  );
+  assert.match(
+    codesMigration,
+    /create unique index if not exists team_members_confirmation_code_key/
+  );
+
+  // One code is typed at the desk and both tables are searched, so the
+  // generator has to check both before handing a code out.
+  const assignmentBody = codesMigration.slice(
+    codesMigration.indexOf("function public.assign_confirmation_code")
+  );
+  assert.match(assignmentBody, /from public\.solo_registrations/);
+  assert.match(assignmentBody, /from public\.team_members/);
+});
+
+test("check-in is audited with the server-verified actor", () => {
+  assert.match(checkInMigration, /insert into public\.admin_audit_log/);
+  assert.match(checkInMigration, /'check_in_rider'/);
+  assert.match(checkInMigration, /'undo_check_in_rider'/);
+
+  // The route must pass the actor derived from the session, not from the body.
+  assert.match(checkInRoute, /p_actor_id: adminCheck\.actor\.id/);
+  assert.match(checkInRoute, /p_actor_name: adminCheck\.actor\.name/);
+  assert.match(checkInRoute, /p_actor_email: adminCheck\.actor\.email/);
+});
+
+test("only administrators can look up or check in a rider", () => {
+  const handlers = checkInRoute.match(/export async function (POST|PATCH)/g) ?? [];
+  assert.equal(handlers.length, 2);
+
+  const verifications = checkInRoute.match(/await verifyAdminRequest\(\)/g) ?? [];
+  assert.equal(verifications.length, 2);
+});
+
+test("check-in functions are reachable only by the service role", () => {
+  assert.match(
+    checkInMigration,
+    /revoke execute on function public\.admin_set_check_in[\s\S]*?from public, anon, authenticated;/
+  );
+  assert.match(
+    checkInMigration,
+    /revoke execute on function public\.admin_find_rider_by_code[\s\S]*?from public, anon, authenticated;/
+  );
+  assert.match(
+    checkInMigration,
+    /grant execute on function public\.admin_set_check_in[\s\S]*?to service_role;/
+  );
+});
+
+test("re-scanning a checked-in rider fails instead of overwriting the record", () => {
+  assert.match(checkInMigration, /already checked in/);
+  assert.match(checkInMigration, /is not checked in/);
+});
+
+test("a rider can only ever be emailed their own code", () => {
+  // The solo route resolves the registration from the session, never from
+  // anything the caller sends.
+  assert.match(soloCodeRoute, /\.eq\("profile_id", user\.id\)/);
+  assert.doesNotMatch(soloCodeRoute, /request\.json\(\)/);
+});
+
+test("a failed email never fails a registration that already committed", () => {
+  // Sending happens after the response, and a missing key is a skip, not a
+  // throw.
+  assert.match(teamSubmitRoute, /after\(async \(\) => \{/);
+  assert.match(soloCodeRoute, /after\(async \(\) => \{/);
+  assert.match(resendClient, /status: "skipped"/);
+  assert.doesNotMatch(resendClient, /throw new Error/);
+});
+
+test("every team rider is emailed, not just the leader", () => {
+  assert.match(teamSubmitRoute, /for \(const member of insertedMembers \?\? \[\]\)/);
+  assert.match(teamSubmitRoute, /\.select\("full_name, email, confirmation_code"\)/);
+});
+
+test("team emails share rider names but never their contact details", () => {
+  // The leader entered their teammates' phone numbers and email addresses;
+  // those riders never agreed to have them forwarded to the rest of the team.
+  assert.match(teamSubmitRoute, /normalizedRiders\.map\(\(rider\) => rider\.fullName\)/);
+  assert.match(codeEmail, /teammateNames/);
+
+  const roster = codeEmail.slice(codeEmail.indexOf("teammateNames.map"));
+  assert.doesNotMatch(roster.slice(0, 400), /phone|\bemail\b/i);
+});
+
+test("a team rider is told how to reach their own entry", () => {
+  assert.match(codeEmail, /\/login/);
+  assert.match(codeEmail, /create an account with it if you do not have/);
+
+  // Only team riders get the prompt; a solo rider already has an account.
+  assert.match(codeEmail, /const accountLines = isTeamEntry/);
+});
+
+test("riders without their code can still be found by name, email or phone", () => {
+  assert.match(checkInRoute, /typeof body\.query === "string"/);
+
+  const searchBody = checkInRoute.slice(
+    checkInRoute.indexOf("const searchRiders")
+  );
+  assert.match(searchBody, /"full_name", "email", "phone"/);
+  assert.match(searchBody, /from\("solo_registrations"\)/);
+  assert.match(searchBody, /from\("team_members"\)/);
+
+  // A name containing a comma or bracket would break a combined PostgREST
+  // `or` filter, and LIKE wildcards in the query must stay literal.
+  assert.match(searchBody, /escapeIlikePattern\(query\)/);
+  assert.doesNotMatch(searchBody, /\.or\(/);
+});

@@ -1,5 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
+import { buildRegistrationCodeEmail } from "@/lib/email/registration-code";
+import { sendEmail } from "@/lib/email/resend";
 import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
 import { escapeIlikePattern } from "@/lib/supabase/query";
 import { createClient } from "@/lib/supabase/server";
@@ -273,20 +275,23 @@ export async function POST(request: Request) {
     createdTeam = true;
   }
 
-  const { error: membersError } = await supabase.from("team_members").insert(
-    normalizedRiders.map((rider, index) => ({
-      team_id: teamId,
-      full_name: rider.fullName,
-      age: Number(rider.age),
-      location: rider.location,
-      phone: rider.phone,
-      email: rider.email,
-      years_experience: Number(rider.yearsExperience),
-      horse_age: Number(rider.horseAge),
-      horse_breed: rider.horseBreed,
-      is_leader: index === 0,
-    }))
-  );
+  const { data: insertedMembers, error: membersError } = await supabase
+    .from("team_members")
+    .insert(
+      normalizedRiders.map((rider, index) => ({
+        team_id: teamId,
+        full_name: rider.fullName,
+        age: Number(rider.age),
+        location: rider.location,
+        phone: rider.phone,
+        email: rider.email,
+        years_experience: Number(rider.yearsExperience),
+        horse_age: Number(rider.horseAge),
+        horse_breed: rider.horseBreed,
+        is_leader: index === 0,
+      }))
+    )
+    .select("full_name, email, confirmation_code");
 
   if (membersError) {
     if (createdTeam && teamId) {
@@ -304,6 +309,32 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ error: message }, { status: 400 });
   }
+
+  // Every rider gets their own code, including the three who have no account
+  // and can only receive it by email. Sent after the response so a slow or
+  // failing Resend call never holds up a registration that already committed;
+  // the leader also sees all four codes on the success page as a fallback.
+  after(async () => {
+    // Names only. Riders 2-4 never agreed to have their phone number or email
+    // forwarded to the rest of the roster.
+    const teammateNames = normalizedRiders.map((rider) => rider.fullName);
+
+    for (const member of insertedMembers ?? []) {
+      if (!member.confirmation_code) {
+        continue;
+      }
+
+      const { subject, html, text } = buildRegistrationCodeEmail({
+        fullName: member.full_name,
+        confirmationCode: member.confirmation_code,
+        registrationType: "team",
+        teamName: teamName.trim(),
+        teammateNames,
+      });
+
+      await sendEmail({ to: member.email, subject, html, text });
+    }
+  });
 
   return NextResponse.json({ ok: true });
 }

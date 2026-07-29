@@ -59,6 +59,20 @@ body {
   mask-composite: intersect;
 }
 
+/* Longer dissolve for photos shown large. The 15% feather above is short
+   enough at that size to still read as a rectangle edge; this runs the fade
+   over 28% so the photo melts into the section with no visible boundary. */
+.photo-dissolve-wide {
+  -webkit-mask-image:
+    linear-gradient(to right, transparent, #000 28%, #000 72%, transparent),
+    linear-gradient(to bottom, transparent, #000 28%, #000 72%, transparent);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to right, transparent, #000 28%, #000 72%, transparent),
+    linear-gradient(to bottom, transparent, #000 28%, #000 72%, transparent);
+  mask-composite: intersect;
+}
+
 /* Mobile hero photo dissolve: keeps the rider (top-centre) fully opaque and
    feathers every edge into the parchment — no card edge. The bottom fades
    over a longer run so the dust melts into the page like the poster. */
