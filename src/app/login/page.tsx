@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
+import ResendConfirmation from "@/components/ResendConfirmation";
 import SectionHeading from "@/components/SectionHeading";
 import { getSafeRedirect } from "@/lib/safe-redirect";
 import { createClient } from "@/lib/supabase/client";
@@ -25,6 +26,7 @@ function LoginPageContent() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [needsConfirmation, setNeedsConfirmation] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -38,9 +40,13 @@ function LoginPageContent() {
     if (error) {
       setLoading(false);
       // Supabase blocks sign-in until the email is confirmed; point the user
-      // back to their inbox instead of showing the raw error.
+      // back to their inbox instead of showing the raw error, and offer a
+      // resend — the original may have gone to spam or never been sent at all
+      // if they signed up twice.
+      const unconfirmed = error.message.toLowerCase().includes("not confirmed");
+      setNeedsConfirmation(unconfirmed);
       setError(
-        error.message.toLowerCase().includes("not confirmed")
+        unconfirmed
           ? "Please confirm your email first — check your inbox for the confirmation link."
           : error.message
       );
@@ -50,6 +56,7 @@ function LoginPageContent() {
     if (!hasConfirmedEmail(data.user)) {
       await supabase.auth.signOut();
       setLoading(false);
+      setNeedsConfirmation(true);
       setError("Please confirm your email first - check your inbox for the confirmation link.");
       return;
     }
@@ -109,6 +116,12 @@ function LoginPageContent() {
             </div>
 
             {error && <p className="text-sm text-red-700">{error}</p>}
+
+            {needsConfirmation && (
+              <div className="rounded-lg border border-bronze/25 bg-sand p-5">
+                <ResendConfirmation />
+              </div>
+            )}
 
             <button
               type="submit"

@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import LocationPicker from "@/components/LocationPicker";
 import PageHeader from "@/components/PageHeader";
+import { PENDING_EMAIL_KEY } from "@/components/ResendConfirmation";
 import SectionHeading from "@/components/SectionHeading";
 import { createClient } from "@/lib/supabase/client";
 import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
@@ -82,6 +83,16 @@ function SignupPageContent() {
     }
 
     setLoading(false);
+
+    // Hand the address to the success page's resend box without putting it in
+    // the URL. Signing up again with an existing email is treated by Supabase
+    // as a success that sends nothing, so the resend path is the only way for
+    // that person to get a link.
+    try {
+      sessionStorage.setItem(PENDING_EMAIL_KEY, email.trim());
+    } catch {
+      // Private browsing can block sessionStorage; resend still works by hand.
+    }
 
     router.push(`/signup/success?redirect=${encodeURIComponent(redirectTo)}`);
   };

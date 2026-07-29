@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
+import ResendConfirmation from "@/components/ResendConfirmation";
 import SectionHeading from "@/components/SectionHeading";
 import { getPostSignupRedirect } from "@/lib/safe-redirect";
 
@@ -40,6 +41,13 @@ export default async function SignupSuccessPage({ searchParams }: SignupSuccessP
               Can&apos;t find it? Check your spam folder — the email comes from the
               Neza Bazi Punjab Championship.
             </p>
+            <p className="leading-7 text-brown/70">
+              {`If you have signed up with this address before, no new email is sent — use the resend button below, or log in if your account is already confirmed.`}
+            </p>
+
+            <div className="rounded-lg border border-bronze/25 bg-sand p-5">
+              <ResendConfirmation />
+            </div>
 
             <div className="space-y-3">
               <Link
