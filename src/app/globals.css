@@ -4,6 +4,11 @@
   --background: #f7efe4;
   --foreground: #2e1d0e;
 
+  /* Height of the sticky navbar: its h-16 inner row plus the 1px bottom
+     border. Sections that fill the screen subtract this so they end exactly
+     at the fold instead of running under the footer. */
+  --nav-height: calc(4rem + 1px);
+
   /* Motion tokens — one source of truth for animation timing site-wide */
   --ease-soft: cubic-bezier(0.22, 0.61, 0.36, 1);
   --dur-fast: 180ms;

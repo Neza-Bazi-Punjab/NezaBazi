@@ -15,8 +15,13 @@ export const metadata: Metadata = {
    event fact panels (the Event page carries them) and the solo/team detail
    cards (the forms themselves explain their own format). */
 export default function RegisterPage() {
+  /* The section fills one screen exactly: the viewport less the sticky
+     navbar. svh rather than vh so a phone's collapsing address bar cannot
+     push the buttons below the fold. The brush divider sits inside that
+     height, so the section ends at the fold rather than overshooting by its
+     own height. */
   return (
-    <section className="relative overflow-hidden bg-ink text-cream">
+    <section className="relative flex min-h-[calc(100svh-var(--nav-height))] flex-col overflow-hidden bg-ink text-cream">
       <Image
         src="/images/lancesunset.webp"
         alt=""
@@ -27,7 +32,7 @@ export default function RegisterPage() {
       />
       <div className="absolute inset-0 bg-gradient-to-r from-ink via-ink/85 to-ink/35" />
 
-      <Reveal className="relative mx-auto flex min-h-[68vh] max-w-4xl flex-col items-center justify-center px-6 py-20 text-center sm:py-24">
+      <Reveal className="relative mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center px-6 py-16 text-center sm:py-20">
         <p className="font-display text-xs font-semibold uppercase tracking-[0.35em] text-bronze">
           1st Open Tent-Pegging Championship
         </p>
