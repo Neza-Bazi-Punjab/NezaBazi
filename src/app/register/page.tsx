@@ -4,14 +4,7 @@ import Link from "next/link";
 import BrushDivider from "@/components/BrushDivider";
 import ButtonLink from "@/components/Button";
 import Reveal from "@/components/Reveal";
-import {
-  CalendarIcon,
-  DocumentIcon,
-  HorseIcon,
-  MapPinIcon,
-  TrophyIcon,
-  UsersIcon,
-} from "@/components/icons";
+import { DocumentIcon, HorseIcon, UsersIcon } from "@/components/icons";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -19,15 +12,10 @@ export const metadata: Metadata = {
   description: `Choose solo or team registration for the ${site.title}.`,
 };
 
-/* Matches the Event page: dark hero with the facts as stat panels, then the
-   two entries as cards in the same language as the competition cards. */
-const entryStats = [
-  { icon: CalendarIcon, label: "Event Day", value: site.eventDate },
-  { icon: MapPinIcon, label: "Venue", value: site.venue },
-  { icon: UsersIcon, label: "Field", value: `${site.riders} riders` },
-  { icon: TrophyIcon, label: "Prize", value: site.prize },
-];
-
+/* Matches the Event page's language — dark hero, then the two entries as
+   cards shaped like the competition cards. The event facts (date, venue,
+   field, prize) are deliberately not repeated here: this page exists to get
+   a rider into a form, and the Event page already carries them. */
 const registrationOptions = [
   {
     icon: HorseIcon,
@@ -63,8 +51,8 @@ export default function RegisterPage() {
         />
         <div className="absolute inset-0 bg-gradient-to-r from-ink via-ink/85 to-ink/35" />
 
-        <Reveal className="relative mx-auto grid max-w-6xl gap-10 px-6 py-16 sm:py-20 lg:min-h-[520px] lg:grid-cols-[1fr_0.85fr] lg:items-center">
-          <div>
+        <Reveal className="relative mx-auto max-w-6xl px-6 py-16 sm:py-20">
+          <div className="max-w-3xl">
             <p className="font-display text-xs font-semibold uppercase tracking-[0.35em] text-bronze">
               1st Open Tent-Pegging Championship
             </p>
@@ -89,25 +77,6 @@ export default function RegisterPage() {
                 Register a Team
               </ButtonLink>
             </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-            {entryStats.map((stat) => (
-              <div
-                key={stat.label}
-                className="border border-bronze/35 bg-ink/65 p-4 backdrop-blur-sm"
-              >
-                <div className="flex items-center gap-3">
-                  <stat.icon className="h-6 w-6 shrink-0 text-bronze" />
-                  <p className="font-display text-xs font-semibold uppercase tracking-[0.25em] text-cream/65">
-                    {stat.label}
-                  </p>
-                </div>
-                <p className="mt-2 font-display text-2xl font-bold uppercase tracking-wide text-cream">
-                  {stat.value}
-                </p>
-              </div>
-            ))}
           </div>
         </Reveal>
 
