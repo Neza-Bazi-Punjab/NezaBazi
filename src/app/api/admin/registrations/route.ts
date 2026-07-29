@@ -16,6 +16,9 @@ type MutationRequest = {
   payload?: unknown;
 };
 
+/* Shared rider fields. horse_name is optional here because team_members
+   allows null; the solo type below tightens it to required, matching the
+   check constraint on that table. */
 type EditableRegistration = {
   id?: string;
   full_name: string;
@@ -24,6 +27,7 @@ type EditableRegistration = {
   phone: string;
   email: string;
   years_experience: number;
+  horse_name?: string | null;
   horse_age: number;
   horse_breed: string;
 };
@@ -43,6 +47,13 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isBoundedString = (value: unknown, maxLength: number) =>
   typeof value === "string" && value.trim().length > 0 && value.length <= maxLength;
+
+/* Present-but-empty is allowed. team_members.horse_name is nullable — the rows
+   registered before the field existed have none — and blocking an edit until
+   the administrator invents a horse name would make an old row uneditable. */
+const isOptionalBoundedString = (value: unknown, maxLength: number) =>
+  value == null ||
+  (typeof value === "string" && value.length <= maxLength);
 
 const isIntegerInRange = (value: unknown, minimum: number, maximum: number) =>
   typeof value === "number" &&
@@ -67,6 +78,7 @@ const isEditableRegistration = (
     isBoundedString(value.email, 254) &&
     emailPattern.test(value.email as string) &&
     isIntegerInRange(value.years_experience, 0, 100) &&
+    isOptionalBoundedString(value.horse_name, 200) &&
     isIntegerInRange(value.horse_age, 0, 60) &&
     isBoundedString(value.horse_breed, 200)
   );

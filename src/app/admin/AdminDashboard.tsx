@@ -38,6 +38,7 @@ export type TeamMember = {
   phone: string;
   email: string;
   years_experience: number;
+  horse_name: string | null;
   horse_age: number;
   horse_breed: string;
   is_leader: boolean;
@@ -163,17 +164,19 @@ const editableRegistrationFields: Array<{
   { field: "phone", label: "Phone number" },
   { field: "email", label: "Email" },
   { field: "years_experience", label: "Years of experience" },
+  { field: "horse_name", label: "Horse name" },
   { field: "horse_age", label: "Horse age" },
   { field: "horse_breed", label: "Horse breed" },
 ];
 
+/* Solo entries carry the same rider fields plus an emergency contact. Both
+   lists include the horse name — a team rider's horse is as nameable as a
+   solo rider's, and an admin who can see the field should be able to fix it. */
 const soloEditableRegistrationFields: Array<{
   field: EditableRegistrationField;
   label: string;
 }> = [
-  ...editableRegistrationFields.slice(0, 6),
-  { field: "horse_name", label: "Horse name" },
-  ...editableRegistrationFields.slice(6),
+  ...editableRegistrationFields,
   { field: "emergency_contact_name", label: "Emergency contact name" },
   { field: "emergency_contact_phone", label: "Emergency contact phone" },
 ];

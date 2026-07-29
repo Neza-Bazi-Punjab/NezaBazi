@@ -246,3 +246,29 @@ test("riders without their code can still be found by name, email or phone", () 
   assert.match(searchBody, /escapeIlikePattern\(query\)/);
   assert.doesNotMatch(searchBody, /\.or\(/);
 });
+
+test("admins can edit a team rider's horse name", () => {
+  const dashboard = repoFile("src/app/admin/AdminDashboard.tsx");
+  const route = repoFile("src/app/api/admin/registrations/route.ts");
+  const migration = repoFile(
+    "supabase/migrations/20260729043000_admin_edit_team_horse_name.sql"
+  );
+
+  // The team field list drives both the edit form and the audit diff, so the
+  // column has to be in it or a change would save silently unrecorded.
+  const teamFields = dashboard.slice(
+    dashboard.indexOf("const editableRegistrationFields"),
+    dashboard.indexOf("const soloEditableRegistrationFields")
+  );
+  assert.match(teamFields, /field: "horse_name"/);
+
+  // The migration patches the deployed function rather than retyping it, and
+  // must fail loudly if the body is not the shape it expects.
+  assert.match(migration, /raise exception 'Could not add horse_name to the team editable field list\.'/);
+  assert.match(migration, /raise exception 'Could not add horse_name to the team member UPDATE\.'/);
+
+  // Optional for team riders, required for solo — matching each table's own
+  // constraint. Rows registered before the field existed must stay editable.
+  assert.match(route, /isOptionalBoundedString\(value\.horse_name, 200\)/);
+  assert.match(route, /isBoundedString\(soloValue\.horse_name, 200\)/);
+});
