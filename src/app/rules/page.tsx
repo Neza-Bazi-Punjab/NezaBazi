@@ -87,62 +87,84 @@ export default function RulesPage() {
 
       <section className="bg-cream">
         <div className="mx-auto max-w-5xl px-6 py-16">
-          {/* Official rulebook download */}
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-bronze/20 pb-6">
-            <div className="flex items-center gap-4">
-              <DocumentIcon className="h-9 w-9 text-bronze" />
-              <div>
-                <h2 className="font-display text-lg font-bold uppercase tracking-wide text-ink">
-                  Official Rule Book
-                </h2>
-                <p className="text-sm text-brown/60">
-                  {`${site.cupName} — Single & Section (Teams) Tent Pegging, in English and Punjabi`}
-                </p>
-              </div>
-            </div>
-            {hasPdf ? (
-              <a
-                href={PDF_PATH}
-                download
-                className="inline-flex items-center gap-2.5 rounded-lg bg-bronze px-6 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze-dark"
-              >
-                <DownloadIcon className="h-4 w-4" />
-                Download PDF
-              </a>
-            ) : (
-              <p className="font-display text-sm font-semibold uppercase tracking-[0.2em] text-brown/60">
-                Coming soon
-              </p>
-            )}
-          </div>
-
-          {/* Inline preview of the rulebook (browsers without an inline PDF
-              viewer — most mobile ones — get a link instead) */}
-          {hasPdf && (
-            <div className="mt-8">
-              <object
-                data={PDF_PATH}
-                type="application/pdf"
-                className="h-[80vh] w-full rounded-2xl border border-bronze/25"
-              >
-                <div className="dust-glow flex h-full flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-                  <DocumentIcon className="h-12 w-12 text-bronze/50" />
-                  <p className="text-sm text-brown/70">
-                    {`Your browser can’t preview PDFs inline. `}
-                    <a
-                      href={PDF_PATH}
-                      className="text-bronze underline"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Open the rulebook PDF directly
-                    </a>
-                    .
+          {/* The rulebook, framed to match the dimension panel below.
+              The pages themselves are drawn by the browser's own PDF viewer,
+              which no stylesheet can reach — so the grey chrome is removed
+              instead: #toolbar=0&navpanes=0 hides the viewer's bar and
+              sidebar in Chromium and Firefox, leaving just the page on our
+              own background. Safari ignores those parameters and keeps its
+              toolbar; the download and open-in-tab actions live in our header
+              strip either way, so nothing depends on the viewer's controls. */}
+          <div className="overflow-hidden rounded-2xl border border-bronze/25 bg-ink text-cream">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-bronze/35 px-5 py-5 sm:px-6">
+              <div className="flex items-center gap-4">
+                <DocumentIcon className="h-9 w-9 shrink-0 text-bronze" />
+                <div>
+                  <p className="font-display text-xs font-semibold uppercase tracking-[0.3em] text-bronze">
+                    Official
+                  </p>
+                  <h2 className="mt-1 font-display text-2xl font-bold uppercase leading-none text-cream sm:text-3xl">
+                    Rule Book
+                  </h2>
+                  <p className="mt-2 text-sm leading-5 text-cream/70">
+                    {`${site.cupName} — Single & Section (Teams) Tent Pegging, in English and Punjabi`}
                   </p>
                 </div>
-              </object>
+              </div>
+
+              {hasPdf ? (
+                <div className="flex flex-wrap items-center gap-3">
+                  <a
+                    href={PDF_PATH}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-lg border border-cream/35 px-4 py-2.5 font-display text-xs font-semibold uppercase tracking-[0.12em] text-cream transition-colors hover:border-bronze hover:text-bronze"
+                  >
+                    Open in New Tab
+                  </a>
+                  <a
+                    href={PDF_PATH}
+                    download
+                    className="inline-flex items-center gap-2 rounded-lg bg-bronze px-5 py-2.5 font-display text-xs font-semibold uppercase tracking-[0.12em] text-cream transition-colors hover:bg-bronze-dark"
+                  >
+                    <DownloadIcon className="h-3.5 w-3.5" />
+                    Download
+                  </a>
+                </div>
+              ) : (
+                <p className="font-display text-sm font-semibold uppercase tracking-[0.2em] text-cream/60">
+                  Coming soon
+                </p>
+              )}
             </div>
-          )}
+
+            {hasPdf && (
+              <div className="bg-sand p-3 sm:p-5">
+                <object
+                  data={`${PDF_PATH}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                  type="application/pdf"
+                  className="h-[78vh] w-full rounded-xl border border-bronze/25 bg-cream"
+                >
+                  {/* Most mobile browsers cannot render a PDF inline at all. */}
+                  <div className="dust-glow flex h-full flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+                    <DocumentIcon className="h-12 w-12 text-bronze/50" />
+                    <p className="text-sm text-brown/70">
+                      {`Your browser can’t preview PDFs inline. `}
+                      <a
+                        href={PDF_PATH}
+                        className="text-bronze underline"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Open the rulebook PDF directly
+                      </a>
+                      .
+                    </p>
+                  </div>
+                </object>
+              </div>
+            )}
+          </div>
 
           {/* Dimension diagrams. Read on the page as compressed images, with a
               full-size modal built on the CSS :target pseudo-class so the
