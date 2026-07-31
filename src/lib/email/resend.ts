@@ -24,9 +24,14 @@ export type SendEmailInput = {
   text: string;
 };
 
+// The verified sending domain in Resend is the `mail.` subdomain, not the apex
+// — the apex carries the site itself and has no sending DNS. Resend rejects any
+// send from an unverified domain with a 403, so this must stay on `mail.`.
+// Matches the sender the Supabase Auth templates already send from, so every
+// email in the sequence arrives from one address.
 const getFromAddress = () =>
   process.env.RESEND_FROM_EMAIL?.trim() ||
-  "Neza Bazi Punjab <noreply@nezabazipunjab.com>";
+  "NezaBazi Punjab <no-reply@mail.nezabazipunjab.com>";
 
 export const sendEmail = async ({
   to,

@@ -87,6 +87,8 @@ RESEND_API_KEY=
 RESEND_FROM_EMAIL=
 ```
 
+`RESEND_FROM_EMAIL` is optional and normally left unset. The verified sending domain in Resend is `mail.nezabazipunjab.com`, not the apex `nezabazipunjab.com`, so the default sender is `NezaBazi Punjab <no-reply@mail.nezabazipunjab.com>` — the same address the Supabase Auth templates send from. Setting this to an apex address makes Resend reject every application email with a 403 and no email goes out, while registration still succeeds.
+
 Never put real values in `.env.example` — it is the one `.env*` file `.gitignore` does not ignore, so anything pasted there is published on the next commit.
 
 `GEONAMES_USERNAME` is optional and server-only: it enables the village autocomplete in the location picker (register free at geonames.org and enable "free web services" on the account page). Without it, the picker falls back to manual village/city entry.
