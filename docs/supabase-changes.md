@@ -130,6 +130,25 @@ Dashboard settings to apply/confirm in Supabase (Authentication → URL Configur
 7. **Resend tracking and limits**: disable click/open tracking for authentication email, then set Supabase's email rate limit to a deliberate value within the Resend plan rather than leaving it unreviewed.
 8. **End-to-end verification**: with a brand-new email, test signup → confirmation → account/team details, unconfirmed login, an expired link, forgot password → reset → login, and an email change. Open at least one confirmation and one recovery link on a different device or private browser session.
 
+## Google sign-in
+
+Offered on both `/login` and `/signup` beside the password form. The code is in place; it stays inert until the provider is configured in the two dashboards below.
+
+- `/auth/callback` (route handler) is where Google returns the rider. It exchanges the PKCE `code` for a session and sends failures — including a refused consent screen, which arrives as `?error=` rather than a missing code — to `/auth/auth-code-error`. It is deliberately **not** `/auth/confirm`: that route signs the user out mid-flow on a first email confirmation, which would end the session an OAuth sign-in just opened.
+- **Account collision is handled by Supabase, not by us.** Supabase links an identity to the existing user whenever the email matches, so signing in with Google at an address that already has a password account resolves to that same user id — the solo row keeps its `profile_id` and the team row keeps its email match. When it links, Supabase also drops any unconfirmed identity on that user, which is what prevents a pre-account-takeover: someone who signs up with an address they do not own cannot keep a foothold once the real owner arrives through Google.
+- **Google supplies no age, location, or phone** — only email, name, and avatar. All three are required to register, and `syncRegistrationProfileFromUser` refuses to run without them. So a new Google account is redirected to `/complete-profile` before anything else, which collects them through the same `PATCH /api/account/profile` the account page uses. Returning Google users and all password accounts pass straight through.
+- `/register/solo` and `/register-team` re-check the same condition and bounce an incomplete account back to `/complete-profile`. Both render the rider fields locked and filled from the account, so without that guard a bookmark or back button would land someone on blank boxes they cannot type into.
+- The email is read-only on `/complete-profile`. It arrives verified from Google and is what every entry is matched on; changing it belongs on the account page, where the confirmation flow that protects it runs.
+
+Dashboard settings to apply (nothing works until both are done):
+
+1. **Google Cloud Console** → APIs & Services → Credentials → Create OAuth client ID → Web application. Set the authorized redirect URI to `https://<project-ref>.supabase.co/auth/v1/callback` (Supabase's callback, not this site's). Configure the OAuth consent screen; while it is in "Testing" only listed test users can sign in, so publish it before riders are pointed at it.
+2. **Supabase** → Authentication → Providers → Google: enable it and paste that client ID and secret.
+3. **Redirect URLs**: the existing allowlist entries cover this — the button builds its callback from the live origin, so `https://www.nezabazipunjab.com/**` covers production and `http://localhost:3000/**` covers local dev. Add a preview pattern only if Google sign-in is tested from a preview deployment.
+4. **End-to-end verification**, in this order: a brand-new Google address (expect `/complete-profile`, then the destination), the same address a second time (expect straight through), and — the collision case — a Google sign-in at an address that already has a confirmed password account, checking afterwards on `/account` that the existing registration is still attached rather than a second account having appeared.
+
+One case this does not solve: Gmail treats `first.last@gmail.com` and `firstlast@gmail.com` as one inbox, but they are different strings and Supabase treats them as two users. A team leader who types the dotted form while the rider's Google account is undotted will produce an entry that does not link. Normalizing it is not safe to do blindly — the dot rule is Gmail's alone and does not hold for Workspace domains — so it is left alone and noted here.
+
 ## Email is the rider's identity
 
 A rider is connected to their entries by their normalized email address. This is a deliberate design decision, not an interim measure — do not plan work to replace it with verified `profile_id` linking.

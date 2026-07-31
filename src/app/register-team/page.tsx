@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import PageHeader from "@/components/PageHeader";
 import SectionHeading from "@/components/SectionHeading";
+import { isAccountProfileComplete } from "@/lib/account-profile";
 import type { TeamDraftData } from "@/lib/registration-drafts";
 import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
 import { escapeIlikePattern } from "@/lib/supabase/query";
@@ -52,6 +54,13 @@ export default async function RegisterTeamPage() {
   const isAdmin = profile?.role === "admin";
   const isEmailConfirmed = hasConfirmedEmail(user);
   const authMetadata = user?.user_metadata as RegistrationMetadata | undefined;
+
+  /* The leader's own row renders locked, filled from the account. An account
+     that reached here without those details came in through Google and skipped
+     the completion step, and would be unable to fill in Rider 1 at all. */
+  if (user && isEmailConfirmed && !isAdmin && !isAccountProfileComplete(authMetadata)) {
+    redirect(`/complete-profile?next=${encodeURIComponent("/register-team")}`);
+  }
 
   const { data: existingTeam } = user && !isAdmin
     ? await supabase

@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import GoogleSignInButton from "@/components/GoogleSignInButton";
 import LocationPicker from "@/components/LocationPicker";
 import PasswordField from "@/components/PasswordField";
 import PageHeader from "@/components/PageHeader";
@@ -139,7 +140,22 @@ function SignupPageContent() {
         <div className="mx-auto max-w-xl px-6 py-16">
           <SectionHeading>Sign Up</SectionHeading>
 
-          <form onSubmit={handleSubmit} className="mt-10 space-y-6">
+          {/* Google skips the form and the confirmation email entirely: the
+              address arrives already verified. It cannot supply age, location
+              or phone, so the registration form asks for those instead. */}
+          <div className="mt-10">
+            <GoogleSignInButton redirectTo={redirectTo} label="Sign up with Google" />
+          </div>
+
+          <div className="mt-8 flex items-center gap-4">
+            <span className="h-px flex-1 bg-bronze/25" />
+            <span className="font-display text-xs font-semibold uppercase tracking-[0.18em] text-brown/70">
+              or
+            </span>
+            <span className="h-px flex-1 bg-bronze/25" />
+          </div>
+
+          <form onSubmit={handleSubmit} className="mt-8 space-y-6">
             <div>
               <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
                 Full Name

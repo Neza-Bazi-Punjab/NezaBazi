@@ -85,6 +85,73 @@ test("a pending email address never travels in the URL", () => {
   assert.doesNotMatch(signupPage, /success\?[^`"']*email=/);
 });
 
+test("Google sign-in has its own callback and never borrows the confirmation route", () => {
+  const button = readSource("../../components/GoogleSignInButton.tsx");
+  const callback = readSource("./callback/route.ts");
+  const confirmRoute = readSource("./confirm/route.ts");
+
+  assert.match(button, /signInWithOAuth/);
+  assert.match(button, /provider: "google"/);
+  assert.match(button, /"\/auth\/callback"/);
+  assert.match(callback, /exchangeCodeForSession/);
+
+  // /auth/confirm signs the user straight back out when a code arrives on a
+  // first confirmation. Routing OAuth through it would end the session that
+  // sign-in just opened, so the two flows stay apart.
+  assert.match(confirmRoute, /supabase\.auth\.signOut\(\)/);
+  assert.doesNotMatch(callback, /signOut/);
+});
+
+test("both entry pages offer Google alongside the password form", () => {
+  const loginPage = readSource("../login/page.tsx");
+  const signupPage = readSource("../signup/page.tsx");
+
+  assert.match(loginPage, /<GoogleSignInButton/);
+  assert.match(signupPage, /<GoogleSignInButton/);
+});
+
+test("a Google account completes its profile before it can register", () => {
+  // Google returns an email, a name and an avatar — no age, location or phone.
+  const callback = readSource("./callback/route.ts");
+  const soloPage = readSource("../register/solo/page.tsx");
+  const teamPage = readSource("../register-team/page.tsx");
+
+  assert.match(callback, /isAccountProfileComplete/);
+  assert.match(callback, /"\/complete-profile"/);
+
+  // Both registration entry points render the rider fields locked and filled
+  // from the account, so an incomplete account reaching one would face blank
+  // boxes it cannot type into.
+  for (const page of [soloPage, teamPage]) {
+    assert.match(page, /isAccountProfileComplete\(authMetadata\)/);
+    assert.match(page, /redirect\(`\/complete-profile\?next=/);
+  }
+});
+
+test("the completion step cannot change the address entries are matched on", () => {
+  const form = readSource("../complete-profile/CompleteProfileForm.tsx");
+
+  // The email is the identity: solo rows follow the account id, but a team
+  // rider is linked to their entry by address alone. It arrives verified from
+  // Google and is shown here, never edited.
+  assert.match(form, /value=\{email\}\s*readOnly/);
+  assert.doesNotMatch(form, /setEmail/);
+
+  // One writer for profile data, shared with the account page.
+  assert.match(form, /"\/api\/account\/profile"/);
+  assert.match(form, /method: "PATCH"/);
+});
+
+test("a complete profile means the same thing to the form and to the sync", () => {
+  const accountProfile = readSource("../../lib/account-profile.ts");
+  const syncModule = readSource("../../lib/supabase/sync-registration-profile.ts");
+
+  // If these two drifted, an account could read as complete, skip the step, and
+  // still be refused by the sync — with no field left to fix it in.
+  assert.match(accountProfile, /parsed >= 1 && parsed <= 120/);
+  assert.match(syncModule, /min: 1, max: 120/);
+});
+
 test("a phone photo is normalised in the browser before upload", () => {
   // Riders register from phones: an iPhone shoots HEIC and a camera file is
   // routinely 8-12 MB. Both are decoded, rotated, downscaled and re-encoded

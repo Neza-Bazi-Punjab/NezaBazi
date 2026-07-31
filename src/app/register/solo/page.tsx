@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import SectionHeading from "@/components/SectionHeading";
+import { isAccountProfileComplete } from "@/lib/account-profile";
 import type { SoloDraftData } from "@/lib/registration-drafts";
 import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
 import { createClient } from "@/lib/supabase/server";
@@ -53,6 +55,14 @@ export default async function SoloRegisterPage() {
   const isAdmin = profile?.role === "admin";
   const isEmailConfirmed = hasConfirmedEmail(user);
   const authMetadata = user?.user_metadata as RegistrationMetadata | undefined;
+
+  /* The rider fields below render locked, filled from the account. An account
+     that reached here without them came in through Google and skipped the
+     completion step — a bookmark, or the back button — and would be staring at
+     four blank boxes it cannot type into. Send it back to fill them in. */
+  if (user && isEmailConfirmed && !isAdmin && !isAccountProfileComplete(authMetadata)) {
+    redirect(`/complete-profile?next=${encodeURIComponent("/register/solo")}`);
+  }
 
   const { data: existingRegistration } = !isAdmin && user
     ? await supabase
