@@ -11,7 +11,7 @@ test("registration tables contain long values and usable edit fields", () => {
   assert.match(source, /const adminTableInputClass =[\s\S]*?min-w-0/);
   assert.match(source, /function AdminTableText[\s\S]*?truncate/);
   assert.match(source, /min-w-\[2040px\]/);
-  assert.match(source, /min-w-\[1390px\]/);
+  assert.match(source, /min-w-\[1540px\]/);
   assert.match(source, /<colgroup>/);
 
   for (const label of ["Horse Name", "Emergency Contact", "Emergency Phone"]) {

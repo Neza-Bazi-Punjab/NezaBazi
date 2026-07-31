@@ -1,4 +1,4 @@
-// Team registration wizard: Team Name → Rider 1 (leader) → Riders 2–4 →
+// Team registration wizard: Team details → Rider 1 (leader) → Riders 2–4 →
 // Review & Submit, with a progress bar and draft autosave after every change
 // so a leader can fill the roster across multiple visits. Final submission
 // still goes through /register-team/submit, which owns all real validation.
@@ -137,7 +137,7 @@ const getRiderError = (rider: RiderInput) => {
 };
 
 const riderLabels = ["Rider 1 (Team Leader)", "Rider 2", "Rider 3", "Rider 4"];
-const stepLabels = ["Team Name", "Rider 1", "Rider 2", "Rider 3", "Rider 4", "Review"];
+const stepLabels = ["Team", "Rider 1", "Rider 2", "Rider 3", "Rider 4", "Review"];
 const REVIEW_STEP = 5;
 
 const inputClassName =
@@ -165,6 +165,8 @@ const clampStep = (value: number | undefined) => {
 export default function TeamRegisterForm({
   existingTeamId,
   initialTeamName = "",
+  initialEmergencyContactName,
+  initialEmergencyContactPhone,
   leaderProfile,
   lockTeamName = false,
   lockLeaderProfileFields = false,
@@ -172,6 +174,8 @@ export default function TeamRegisterForm({
 }: {
   existingTeamId?: string;
   initialTeamName?: string;
+  initialEmergencyContactName?: string;
+  initialEmergencyContactPhone?: string;
   leaderProfile?: LeaderProfile;
   lockTeamName?: boolean;
   lockLeaderProfileFields?: boolean;
@@ -199,13 +203,31 @@ export default function TeamRegisterForm({
       return index === 0 ? leaderProfileToRider(leaderProfile) : { ...emptyRider };
     })
   );
+  /* One contact for the section. A leader entering four separate next-of-kin
+     for teammates whose numbers they may not have would produce three fields
+     of guesswork; the riders travel and compete together, so one reachable
+     person is the useful thing to hold. */
+  const [emergencyContactName, setEmergencyContactName] = useState(
+    () =>
+      initialDraft?.emergencyContactName ?? initialEmergencyContactName ?? ""
+  );
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState(
+    () =>
+      initialDraft?.emergencyContactPhone ?? initialEmergencyContactPhone ?? ""
+  );
   const [stepError, setStepError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const draftData = useMemo<TeamDraftData>(
-    () => ({ step, teamName, riders }),
-    [step, teamName, riders]
+    () => ({
+      step,
+      teamName,
+      emergencyContactName,
+      emergencyContactPhone,
+      riders,
+    }),
+    [step, teamName, emergencyContactName, emergencyContactPhone, riders]
   );
   const { status: draftStatus, flush: saveDraftNow } = useRegistrationDraft(
     "team",
@@ -228,10 +250,17 @@ export default function TeamRegisterForm({
 
   const riderErrors = riders.map((rider) => getRiderError(rider));
   const teamNameError = teamName.trim() === "" ? "Please enter a team name." : null;
+  const emergencyContactError =
+    emergencyContactName.trim() === ""
+      ? "Please enter an emergency contact name."
+      : emergencyContactPhone.trim() === ""
+        ? "Please enter an emergency contact phone number."
+        : null;
+  const teamStepError = teamNameError ?? emergencyContactError;
 
   const validateStep = (target: number): string | null => {
     if (target === 0) {
-      return teamNameError;
+      return teamStepError;
     }
 
     if (target >= 1 && target <= 4) {
@@ -267,7 +296,13 @@ export default function TeamRegisterForm({
     const response = await fetch("/register-team/submit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ teamName, existingTeamId, riders }),
+      body: JSON.stringify({
+        teamName,
+        existingTeamId,
+        emergencyContactName,
+        emergencyContactPhone,
+        riders,
+      }),
     });
     const result = (await response.json()) as { ok?: boolean; error?: string };
 
@@ -282,7 +317,8 @@ export default function TeamRegisterForm({
     router.push("/register-team/success");
   };
 
-  const allStepsValid = teamNameError === null && riderErrors.every((e) => e === null);
+  const allStepsValid =
+    teamStepError === null && riderErrors.every((e) => e === null);
   const progressPercent = (step / REVIEW_STEP) * 100;
 
   const renderRiderFields = (index: number) => {
@@ -459,23 +495,51 @@ export default function TeamRegisterForm({
         {step === 0 && (
           <div>
             <h3 className="font-display text-xl font-bold uppercase tracking-wide text-bronze-dark">
-              Team Name
+              Team Details
             </h3>
-            <div className="mt-6">
-              <label className={labelClassName}>Team Name</label>
-              <input
-                type="text"
-                value={teamName}
-                onChange={(e) => setTeamName(e.target.value)}
-                readOnly={lockTeamName}
-                maxLength={200}
-                className={lockTeamName ? lockedInputClassName : inputClassName}
-              />
-              {lockTeamName && (
+            <div className="mt-6 space-y-6">
+              <div>
+                <label className={labelClassName}>Team Name</label>
+                <input
+                  type="text"
+                  value={teamName}
+                  onChange={(e) => setTeamName(e.target.value)}
+                  readOnly={lockTeamName}
+                  maxLength={200}
+                  className={lockTeamName ? lockedInputClassName : inputClassName}
+                />
+                {lockTeamName && (
+                  <p className="mt-2 text-sm text-brown/70">
+                    Your team name is already saved — continue with the rider details.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className={labelClassName}>Emergency Contact Name</label>
+                <input
+                  type="text"
+                  value={emergencyContactName}
+                  onChange={(e) => setEmergencyContactName(e.target.value)}
+                  maxLength={200}
+                  className={inputClassName}
+                />
+              </div>
+
+              <div>
+                <label className={labelClassName}>Emergency Contact Phone</label>
+                <input
+                  type="tel"
+                  value={emergencyContactPhone}
+                  onChange={(e) => setEmergencyContactPhone(e.target.value)}
+                  maxLength={30}
+                  className={inputClassName}
+                />
                 <p className="mt-2 text-sm text-brown/70">
-                  Your team name is already saved — continue with the rider details.
+                  One contact for the whole team — someone we can reach on the
+                  day if a rider is hurt.
                 </p>
-              )}
+              </div>
             </div>
           </div>
         )}
@@ -514,18 +578,25 @@ export default function TeamRegisterForm({
                     {teamName || "—"}
                   </p>
                 </div>
-                {!lockTeamName && (
-                  <button
-                    type="button"
-                    onClick={() => goToStep(0)}
-                    className="rounded-lg border border-bronze/20 px-3 py-1.5 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40"
-                  >
-                    Edit
-                  </button>
-                )}
+                {/* Always offered: the emergency contact below lives on this
+                    step too, and stays editable even when the team name is
+                    locked to an already-saved team. */}
+                <button
+                  type="button"
+                  onClick={() => goToStep(0)}
+                  className="rounded-lg border border-bronze/20 px-3 py-1.5 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40"
+                >
+                  Edit
+                </button>
               </div>
-              {teamNameError && (
-                <p className="mt-2 text-sm text-red-700">{teamNameError}</p>
+
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                {reviewRow("Emergency Contact", emergencyContactName)}
+                {reviewRow("Emergency Phone", emergencyContactPhone)}
+              </div>
+
+              {teamStepError && (
+                <p className="mt-2 text-sm text-red-700">{teamStepError}</p>
               )}
             </div>
 

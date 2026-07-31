@@ -27,6 +27,11 @@ export type Team = {
   team_name: string;
   leader_profile_id: string;
   created_at: string;
+  /* One contact for the whole section — a team rides together, so this sits
+     on the team rather than being repeated on all four rider rows. Nullable:
+     two teams registered before the field existed. */
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
 };
 
 export type TeamMember = {
@@ -154,10 +159,12 @@ type AuditLogItem =
       entries: AuditLogEntry[];
     };
 
-const editableRegistrationFields: Array<{
+type EditableFieldSpec = {
   field: EditableRegistrationField;
   label: string;
-}> = [
+};
+
+const editableRegistrationFields: EditableFieldSpec[] = [
   { field: "full_name", label: "Full name" },
   { field: "age", label: "Age" },
   { field: "location", label: "Location" },
@@ -169,13 +176,14 @@ const editableRegistrationFields: Array<{
   { field: "horse_breed", label: "Horse breed" },
 ];
 
-/* Solo entries carry the same rider fields plus an emergency contact. Both
-   lists include the horse name — a team rider's horse is as nameable as a
-   solo rider's, and an admin who can see the field should be able to fix it. */
-const soloEditableRegistrationFields: Array<{
-  field: EditableRegistrationField;
-  label: string;
-}> = [
+/* Solo entries carry the same rider fields plus their own emergency contact.
+   A team's emergency contact is one per team rather than one per rider, so it
+   lives on the team panel, not in this per-rider list.
+
+   Every field here is required. Both horse_name columns are nullable and
+   neither has a required-check, so nothing but this list enforces it — and no
+   row is currently blank, so requiring it locks nobody out of an edit. */
+const soloEditableRegistrationFields: EditableFieldSpec[] = [
   ...editableRegistrationFields,
   { field: "emergency_contact_name", label: "Emergency contact name" },
   { field: "emergency_contact_phone", label: "Emergency contact phone" },
@@ -498,6 +506,8 @@ export default function AdminDashboard({
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
   const [teamNameDraft, setTeamNameDraft] = useState("");
+  const [teamEmergencyNameDraft, setTeamEmergencyNameDraft] = useState("");
+  const [teamEmergencyPhoneDraft, setTeamEmergencyPhoneDraft] = useState("");
   const [memberDrafts, setMemberDrafts] = useState<Record<string, TeamMemberDraft>>({});
   const [confirmingDeleteTeamId, setConfirmingDeleteTeamId] = useState<string | null>(null);
   const [savingTeamId, setSavingTeamId] = useState<string | null>(null);
@@ -954,6 +964,8 @@ export default function AdminDashboard({
     setConfirmingDeleteTeamId(null);
     setTeamEditError(null);
     setTeamNameDraft(team.team_name);
+    setTeamEmergencyNameDraft(team.emergency_contact_name ?? "");
+    setTeamEmergencyPhoneDraft(team.emergency_contact_phone ?? "");
     setMemberDrafts(
       members.reduce<Record<string, TeamMemberDraft>>((drafts, member) => {
         drafts[member.id] = {
@@ -963,6 +975,7 @@ export default function AdminDashboard({
           phone: member.phone,
           email: member.email,
           years_experience: String(member.years_experience),
+          horse_name: member.horse_name ?? "",
           horse_age: String(member.horse_age),
           horse_breed: member.horse_breed,
         };
@@ -974,6 +987,8 @@ export default function AdminDashboard({
   const cancelEditingTeam = () => {
     setEditingTeamId(null);
     setTeamNameDraft("");
+    setTeamEmergencyNameDraft("");
+    setTeamEmergencyPhoneDraft("");
     setMemberDrafts({});
     setTeamEditError(null);
   };
@@ -997,6 +1012,22 @@ export default function AdminDashboard({
 
     if (teamNameDraft.trim() === "") {
       setTeamEditError({ id: team.id, message: "Team name is required." });
+      return;
+    }
+
+    if (teamEmergencyNameDraft.trim() === "") {
+      setTeamEditError({
+        id: team.id,
+        message: "Emergency contact name is required.",
+      });
+      return;
+    }
+
+    if (teamEmergencyPhoneDraft.trim() === "") {
+      setTeamEditError({
+        id: team.id,
+        message: "Emergency contact phone is required.",
+      });
       return;
     }
 
@@ -1042,6 +1073,7 @@ export default function AdminDashboard({
         phone: String(draft.phone ?? ""),
         email: String(draft.email ?? ""),
         years_experience: Number(draft.years_experience),
+        horse_name: String(draft.horse_name ?? "").trim(),
         horse_age: Number(draft.horse_age),
         horse_breed: String(draft.horse_breed ?? ""),
       };
@@ -1053,6 +1085,8 @@ export default function AdminDashboard({
         targetId: team.id,
         payload: {
           team_name: trimmedTeamName,
+          emergency_contact_name: teamEmergencyNameDraft.trim(),
+          emergency_contact_phone: teamEmergencyPhoneDraft.trim(),
           members: updatedMembers,
         },
       });
@@ -1068,6 +1102,8 @@ export default function AdminDashboard({
     setSavingTeamId(null);
     setEditingTeamId(null);
     setTeamNameDraft("");
+    setTeamEmergencyNameDraft("");
+    setTeamEmergencyPhoneDraft("");
     setMemberDrafts({});
     router.refresh();
   };
@@ -1076,6 +1112,8 @@ export default function AdminDashboard({
     setConfirmingDeleteTeamId(teamId);
     setEditingTeamId(null);
     setTeamNameDraft("");
+    setTeamEmergencyNameDraft("");
+    setTeamEmergencyPhoneDraft("");
     setMemberDrafts({});
     setTeamEditError(null);
   };
@@ -2366,6 +2404,55 @@ export default function AdminDashboard({
                         <p className="mt-1 text-sm text-brown/80">
                           {members.length} members
                         </p>
+
+                        {/* One emergency contact for the section. Shown on the
+                            team, not repeated on each rider row. */}
+                        {isEditingTeam ? (
+                          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                            <div>
+                              <label className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
+                                Emergency Contact
+                              </label>
+                              <input
+                                type="text"
+                                value={teamEmergencyNameDraft}
+                                onChange={(event) =>
+                                  setTeamEmergencyNameDraft(event.target.value)
+                                }
+                                maxLength={200}
+                                className={`mt-1 ${adminTableInputClass}`}
+                              />
+                            </div>
+                            <div>
+                              <label className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
+                                Emergency Phone
+                              </label>
+                              <input
+                                type="tel"
+                                value={teamEmergencyPhoneDraft}
+                                onChange={(event) =>
+                                  setTeamEmergencyPhoneDraft(event.target.value)
+                                }
+                                maxLength={30}
+                                className={`mt-1 ${adminTableInputClass}`}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="mt-2 text-sm text-brown/80">
+                            <span className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
+                              Emergency
+                            </span>{" "}
+                            {team.emergency_contact_name?.trim() ? (
+                              <>
+                                {team.emergency_contact_name} ·{" "}
+                                {team.emergency_contact_phone || "—"}
+                              </>
+                            ) : (
+                              <span className="text-red-700">Not recorded</span>
+                            )}
+                          </p>
+                        )}
                       </div>
                       <div className="flex flex-col gap-3 lg:items-end">
                         <p className="text-sm text-brown/80">
@@ -2450,7 +2537,7 @@ export default function AdminDashboard({
 
                     {members.length > 0 ? (
                       <div className="mt-4 max-w-full overflow-x-auto overscroll-x-contain">
-                        <table className="w-full min-w-[1390px] table-fixed border-collapse text-left text-sm text-brown">
+                        <table className="w-full min-w-[1540px] table-fixed border-collapse text-left text-sm text-brown">
                           <colgroup>
                             <col className="w-[230px]" />
                             <col className="w-[90px]" />
@@ -2458,6 +2545,7 @@ export default function AdminDashboard({
                             <col className="w-[160px]" />
                             <col className="w-[250px]" />
                             <col className="w-[120px]" />
+                            <col className="w-[150px]" />
                             <col className="w-[110px]" />
                             <col className="w-[150px]" />
                           </colgroup>
@@ -2469,6 +2557,7 @@ export default function AdminDashboard({
                               <th className="whitespace-nowrap px-3 py-2">Phone</th>
                               <th className="whitespace-nowrap px-3 py-2">Email</th>
                               <th className="whitespace-nowrap px-3 py-2">Experience</th>
+                              <th className="whitespace-nowrap px-3 py-2">Horse Name</th>
                               <th className="whitespace-nowrap px-3 py-2">Horse Age</th>
                               <th className="whitespace-nowrap px-3 py-2">Horse Breed</th>
                             </tr>
@@ -2590,6 +2679,24 @@ export default function AdminDashboard({
                                     />
                                   ) : (
                                     member.years_experience
+                                  )}
+                                </td>
+                                <td className="overflow-hidden whitespace-nowrap px-3 py-2">
+                                  {isEditingTeam ? (
+                                    <input
+                                      type="text"
+                                      value={memberDrafts[member.id]?.horse_name ?? ""}
+                                      onChange={(event) =>
+                                        updateMemberDraft(
+                                          member.id,
+                                          "horse_name",
+                                          event.target.value
+                                        )
+                                      }
+                                      className={adminTableInputClass}
+                                    />
+                                  ) : (
+                                    <AdminTableText value={member.horse_name ?? "—"} />
                                   )}
                                 </td>
                                 <td className="overflow-hidden whitespace-nowrap px-3 py-2">

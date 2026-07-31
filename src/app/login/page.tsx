@@ -6,6 +6,7 @@ import PageHeader from "@/components/PageHeader";
 import ResendConfirmation from "@/components/ResendConfirmation";
 import SectionHeading from "@/components/SectionHeading";
 import { getSafeRedirect } from "@/lib/safe-redirect";
+import PasswordField from "@/components/PasswordField";
 import { createClient } from "@/lib/supabase/client";
 import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
 import { syncAccountRegistrations } from "@/lib/sync-account-registrations";
@@ -93,18 +94,12 @@ function LoginPageContent() {
               />
             </div>
 
-            <div>
-              <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
-                Password
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
-              />
-            </div>
+            <PasswordField
+              label="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
 
             <div className="text-right">
               <a

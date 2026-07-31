@@ -56,7 +56,7 @@ export default async function RegisterTeamPage() {
   const { data: existingTeam } = user && !isAdmin
     ? await supabase
         .from("teams")
-        .select("id, team_name")
+        .select("id, team_name, emergency_contact_name, emergency_contact_phone")
         .eq("leader_profile_id", user.id)
         .maybeSingle()
     : { data: null };
@@ -160,6 +160,12 @@ export default async function RegisterTeamPage() {
                 <TeamRegisterForm
                   existingTeamId={existingTeam?.id}
                   initialTeamName={existingTeam?.team_name}
+                  initialEmergencyContactName={
+                    existingTeam?.emergency_contact_name ?? undefined
+                  }
+                  initialEmergencyContactPhone={
+                    existingTeam?.emergency_contact_phone ?? undefined
+                  }
                   initialDraft={(draftRow?.data ?? null) as TeamDraftData | null}
                   leaderProfile={
                     isAdmin

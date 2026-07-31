@@ -21,6 +21,9 @@ type RiderInput = {
 type RegisterTeamRequest = {
   teamName: string;
   existingTeamId?: string;
+  // One contact for the whole section, held on `teams`.
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
   riders: RiderInput[];
 };
 
@@ -102,10 +105,26 @@ export async function POST(request: Request) {
 
   const body = (await request.json()) as RegisterTeamRequest;
   const { teamName, existingTeamId, riders } = body;
+  const emergencyContactName = (body.emergencyContactName ?? "").trim();
+  const emergencyContactPhone = (body.emergencyContactPhone ?? "").trim();
 
   if (!teamName || teamName.trim() === "" || !Array.isArray(riders) || riders.length !== 4) {
     return NextResponse.json(
       { error: "Please submit a team name and exactly 4 riders." },
+      { status: 400 }
+    );
+  }
+
+  if (emergencyContactName === "" || emergencyContactName.length > 200) {
+    return NextResponse.json(
+      { error: "Please enter an emergency contact name for the team." },
+      { status: 400 }
+    );
+  }
+
+  if (emergencyContactPhone === "" || emergencyContactPhone.length > 30) {
+    return NextResponse.json(
+      { error: "Please enter an emergency contact phone number for the team." },
       { status: 400 }
     );
   }
@@ -260,10 +279,29 @@ export async function POST(request: Request) {
         { status: 409 }
       );
     }
+
+    // The saved team predates this field, or the leader has just changed it —
+    // either way the roster is being submitted now, so store what they typed.
+    const { error: contactError } = await supabase
+      .from("teams")
+      .update({
+        emergency_contact_name: emergencyContactName,
+        emergency_contact_phone: emergencyContactPhone,
+      })
+      .eq("id", teamId);
+
+    if (contactError) {
+      return NextResponse.json({ error: contactError.message }, { status: 400 });
+    }
   } else {
     const { data: teamData, error: teamError } = await supabase
       .from("teams")
-      .insert({ team_name: teamName, leader_profile_id: user.id })
+      .insert({
+        team_name: teamName,
+        leader_profile_id: user.id,
+        emergency_contact_name: emergencyContactName,
+        emergency_contact_phone: emergencyContactPhone,
+      })
       .select("id")
       .single();
 

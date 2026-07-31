@@ -35,6 +35,11 @@ type Teammate = {
   checked_in_at: string | null;
 };
 
+type TeamEmergencyContact = {
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+};
+
 type RiderMatch = {
   id: string;
   source: "solo" | "team";
@@ -54,6 +59,9 @@ type LookupResponse = {
      code, so one lookup returns both and one check-in covers both. */
   entries?: Rider[];
   teammates?: Teammate[];
+  /* One contact for the whole team, read from `teams` — a team rider's row
+     carries no emergency contact of its own. */
+  teamEmergency?: TeamEmergencyContact | null;
   matches?: RiderMatch[];
   error?: string;
 };
@@ -81,6 +89,8 @@ export default function CheckInPanel() {
   const [rider, setRider] = useState<Rider | null>(null);
   const [entries, setEntries] = useState<Rider[]>([]);
   const [teammates, setTeammates] = useState<Teammate[]>([]);
+  const [teamEmergency, setTeamEmergency] =
+    useState<TeamEmergencyContact | null>(null);
   const [matches, setMatches] = useState<RiderMatch[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -118,6 +128,7 @@ export default function CheckInPanel() {
       setRider(result.rider);
       setEntries(result.entries ?? [result.rider]);
       setTeammates(result.teammates ?? []);
+      setTeamEmergency(result.teamEmergency ?? null);
     } catch {
       setError("Could not reach the server. Check the connection and retry.");
     } finally {
@@ -381,9 +392,9 @@ export default function CheckInPanel() {
             <Detail label="Experience" value={rider.years_experience} />
             <Detail label="Horse Age" value={rider.horse_age} />
             <Detail label="Horse Breed" value={rider.horse_breed} />
+            <Detail label="Horse Name" value={rider.horse_name} />
             {soloEntry && (
               <>
-                <Detail label="Horse Name" value={soloEntry.horse_name} />
                 <Detail
                   label="Emergency Contact"
                   value={soloEntry.emergency_contact_name}
@@ -391,6 +402,20 @@ export default function CheckInPanel() {
                 <Detail
                   label="Emergency Phone"
                   value={soloEntry.emergency_contact_phone}
+                />
+              </>
+            )}
+            {/* A team rider's emergency contact belongs to their team. Shown
+                only when there is no solo entry carrying their own. */}
+            {!soloEntry && hasTeamEntry && (
+              <>
+                <Detail
+                  label="Team Emergency Contact"
+                  value={teamEmergency?.emergency_contact_name ?? null}
+                />
+                <Detail
+                  label="Team Emergency Phone"
+                  value={teamEmergency?.emergency_contact_phone ?? null}
                 />
               </>
             )}

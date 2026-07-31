@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import PasswordField from "@/components/PasswordField";
 import PageHeader from "@/components/PageHeader";
 import SectionHeading from "@/components/SectionHeading";
 import { createClient } from "@/lib/supabase/client";
@@ -95,35 +96,23 @@ export default function ResetPasswordPage() {
             <>
               <SectionHeading>New Password</SectionHeading>
               <form onSubmit={handleSubmit} className="mt-10 space-y-6">
-                <div>
-                  <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
-                    New Password
-                  </label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    minLength={8}
-                    disabled={sessionState === "checking"}
-                    className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
-                  />
-                </div>
+                <PasswordField
+                  label="New Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={8}
+                  disabled={sessionState === "checking"}
+                />
 
-                <div>
-                  <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
-                    Confirm New Password
-                  </label>
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                    minLength={8}
-                    disabled={sessionState === "checking"}
-                    className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
-                  />
-                </div>
+                <PasswordField
+                  label="Confirm New Password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  minLength={8}
+                  disabled={sessionState === "checking"}
+                />
 
                 {error && <p className="text-sm text-red-700">{error}</p>}
 

@@ -267,8 +267,41 @@ test("admins can edit a team rider's horse name", () => {
   assert.match(migration, /raise exception 'Could not add horse_name to the team editable field list\.'/);
   assert.match(migration, /raise exception 'Could not add horse_name to the team member UPDATE\.'/);
 
-  // Optional for team riders, required for solo — matching each table's own
-  // constraint. Rows registered before the field existed must stay editable.
-  assert.match(route, /isOptionalBoundedString\(value\.horse_name, 200\)/);
-  assert.match(route, /isBoundedString\(soloValue\.horse_name, 200\)/);
+  // Required on both paths. Neither horse_name column carries a required
+  // check, so this route and the dashboard are the only thing enforcing it —
+  // and the rider table it drives has a Horse Name column to fill in.
+  assert.match(route, /isBoundedString\(value\.horse_name, 200\)/);
+  assert.doesNotMatch(route, /isOptionalBoundedString/);
+  assert.match(dashboard, />\s*Horse Name\s*</);
+});
+
+test("a team carries one emergency contact, not one per rider", () => {
+  const wizard = repoFile("src/app/register-team/TeamRegisterForm.tsx");
+  const submit = repoFile("src/app/register-team/submit/route.ts");
+  const route = repoFile("src/app/api/admin/registrations/route.ts");
+  const checkIn = repoFile("src/app/api/admin/check-in/route.ts");
+  const migration = repoFile(
+    "supabase/migrations/20260731210000_team_emergency_contact.sql"
+  );
+
+  // It lives on `teams`. Putting it on team_members would ask a leader for
+  // four next-of-kin they may not have.
+  assert.match(migration, /alter table public\.teams/);
+  assert.doesNotMatch(migration, /alter table public\.team_members/);
+
+  // `teams` uses column-level grants, so new columns need their own or the
+  // leader's INSERT at registration silently drops them.
+  assert.match(migration, /grant insert \(emergency_contact_name, emergency_contact_phone\)/);
+
+  // Patched in place, and loud if the deployed body is not what it expects.
+  assert.match(migration, /raise exception 'Could not add the emergency contact to the team UPDATE\.'/);
+  assert.match(migration, /raise exception 'Could not add the emergency contact to the team audit diff\.'/);
+
+  // Required at every write path.
+  assert.match(wizard, /emergencyContactName/);
+  assert.match(submit, /Please enter an emergency contact name for the team\./);
+  assert.match(route, /isBoundedString\(payload\.emergency_contact_name, 200\)/);
+
+  // The reason it is collected: the desk needs a number to call.
+  assert.match(checkIn, /teamEmergency/);
 });

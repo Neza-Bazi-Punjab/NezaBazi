@@ -3,8 +3,11 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import LocationPicker from "@/components/LocationPicker";
+import PasswordField from "@/components/PasswordField";
 import PageHeader from "@/components/PageHeader";
-import { PENDING_EMAIL_KEY } from "@/components/ResendConfirmation";
+import ResendConfirmation, {
+  PENDING_EMAIL_KEY,
+} from "@/components/ResendConfirmation";
 import SectionHeading from "@/components/SectionHeading";
 import { createClient } from "@/lib/supabase/client";
 import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
@@ -31,11 +34,13 @@ function SignupPageContent() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [existingAccount, setExistingAccount] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setExistingAccount(false);
 
     // The picker only emits a value once a suggestion is chosen (or manual
     // entry is used), so an empty string means the location isn't confirmed.
@@ -74,6 +79,33 @@ function SignupPageContent() {
       return;
     }
 
+    /* Supabase does not report "this email is taken". To stop an attacker
+       harvesting which addresses have accounts, it returns a success carrying
+       a decoy user — one with an empty `identities` array. Riders read that
+       as "my account is made" and then wait for a link, so this site says
+       plainly that the address is taken. The trade is deliberate: someone can
+       now test whether an address is registered here.
+
+       What it still cannot tell us is whether that account was ever
+       confirmed, which is the same obfuscation. So the panel below covers
+       both: log in if confirmed, request a fresh link if not. It must never
+       claim no email was sent — a repeat signup on an *unconfirmed* account
+       can itself re-issue the confirmation. */
+    if (data.user && (data.user.identities?.length ?? 0) === 0) {
+      setLoading(false);
+
+      // Seed the resend box below before it mounts, so it prefills with the
+      // address just typed rather than asking for it a second time.
+      try {
+        sessionStorage.setItem(PENDING_EMAIL_KEY, email.trim());
+      } catch {
+        // Private browsing can block sessionStorage; the field starts empty.
+      }
+
+      setExistingAccount(true);
+      return;
+    }
+
     // With email confirmation enabled there is no session yet — the user must
     // click the emailed link first. Even if a session is returned, sync only
     // when Supabase reports that the email has been confirmed. Normally the
@@ -85,9 +117,8 @@ function SignupPageContent() {
     setLoading(false);
 
     // Hand the address to the success page's resend box without putting it in
-    // the URL. Signing up again with an existing email is treated by Supabase
-    // as a success that sends nothing, so the resend path is the only way for
-    // that person to get a link.
+    // the URL, so someone whose confirmation email does not arrive can ask for
+    // another without retyping it.
     try {
       sessionStorage.setItem(PENDING_EMAIL_KEY, email.trim());
     } catch {
@@ -170,19 +201,50 @@ function SignupPageContent() {
               />
             </div>
 
-            <div>
-              <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
-                Password
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={8}
-                className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
-              />
-            </div>
+            <PasswordField
+              label="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={8}
+            />
+
+            {existingAccount && (
+              <div className="rounded-lg border border-bronze/30 bg-parchment px-4 py-3 text-sm text-brown">
+                <p className="font-semibold text-ink">
+                  An account already exists with this email.
+                </p>
+                <p className="mt-1 leading-6">
+                  Log in with this address instead — or reset your password if
+                  you have forgotten it.
+                </p>
+                <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+                  <a
+                    href={`/login?redirect=${encodeURIComponent(redirectTo)}`}
+                    className="font-semibold text-bronze-deep underline"
+                  >
+                    Log in
+                  </a>
+                  <a
+                    href="/forgot-password"
+                    className="font-semibold text-bronze-deep underline"
+                  >
+                    Reset password
+                  </a>
+                </p>
+
+                {/* The other half of the same ambiguity: if that account was
+                    never confirmed, logging in will be refused and a fresh
+                    link is what they actually need. Offered here so this
+                    panel is not a dead end for them. */}
+                <div className="mt-4 border-t border-bronze/20 pt-4">
+                  <p className="mb-3 leading-6">
+                    Never received the confirmation email for it?
+                  </p>
+                  <ResendConfirmation />
+                </div>
+              </div>
+            )}
 
             {error && <p className="text-sm text-red-700">{error}</p>}
 

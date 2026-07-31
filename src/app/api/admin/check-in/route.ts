@@ -234,21 +234,43 @@ export async function POST(request: Request) {
       entry.source === "team" && entry.team_id
   );
 
+  /* A team's emergency contact is one per team, so it is read from `teams`
+     rather than coming back on the rider row. This is the reason the desk has
+     it at all: if a rider goes down, whoever is at the desk needs a number to
+     call without going hunting for the team leader. */
+  let teamEmergency: {
+    emergency_contact_name: string | null;
+    emergency_contact_phone: string | null;
+  } | null = null;
+
   if (teamEntry) {
-    const { data: teamRows, error: teamError } = await serviceSupabase
-      .from("team_members")
-      .select("id, full_name, is_leader, checked_in_at")
-      .eq("team_id", teamEntry.team_id)
-      .order("is_leader", { ascending: false });
+    const [{ data: teamRows, error: teamError }, { data: teamRow, error: contactError }] =
+      await Promise.all([
+        serviceSupabase
+          .from("team_members")
+          .select("id, full_name, is_leader, checked_in_at")
+          .eq("team_id", teamEntry.team_id)
+          .order("is_leader", { ascending: false }),
+        serviceSupabase
+          .from("teams")
+          .select("emergency_contact_name, emergency_contact_phone")
+          .eq("id", teamEntry.team_id)
+          .maybeSingle(),
+      ]);
 
     if (teamError) {
       return NextResponse.json({ error: teamError.message }, { status: 400 });
     }
 
+    if (contactError) {
+      return NextResponse.json({ error: contactError.message }, { status: 400 });
+    }
+
     teammates = teamRows ?? [];
+    teamEmergency = teamRow ?? null;
   }
 
-  return NextResponse.json({ rider, entries, teammates });
+  return NextResponse.json({ rider, entries, teammates, teamEmergency });
 }
 
 export async function PATCH(request: Request) {

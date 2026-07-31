@@ -38,6 +38,9 @@ export type TeamRiderDraft = {
 export type TeamDraftData = {
   step?: number;
   teamName?: string;
+  // One contact for the whole section, not one per rider.
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
   riders?: TeamRiderDraft[];
 };
 
