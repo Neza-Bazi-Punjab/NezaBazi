@@ -8,7 +8,7 @@ This file explains the database and Auth work that was applied while building th
 - `profiles` stores the permanent user id and the authorization role (`player` or `admin`). A signup trigger creates the profile row.
 - `solo_registrations` stores one solo event entry and links to `profiles.id` through `profile_id`.
 - `teams` stores the team name and its leader profile id.
-- `team_members` stores the four rider rows for a team. Non-leader rider rows currently use the typed email as their temporary link; a verified `profile_id` claim is planned for a later step.
+- `team_members` stores the four rider rows for a team. Non-leader rider rows are linked to the person by their normalized email address. This is the intended design, not a placeholder — see "Email is the rider's identity" below.
 - `registration_drafts` stores one in-progress solo form or team-wizard draft per user so registration progress survives logout and device switches. Drafts are plain form text (jsonb), readable and writable only by their owner, and deleted when the registration is submitted.
 
 ## Live migrations already applied
@@ -71,7 +71,7 @@ The live database was checked after these changes: existing rows satisfy the con
 4. Solo registration writes through the authenticated Supabase client and is protected by RLS plus database checks.
 5. Team registration submits to `/register-team/submit`, where the server validates all four riders, checks duplicate emails and phones, creates the team, and inserts the roster.
 6. Account saves go through `/api/account/profile`. The route authenticates the session, updates Auth, and uses the server-only service role to synchronize matching registration rows.
-7. The account page can show a rider's membership on another person's team by matching the current login email. This is useful during development, but it must be replaced by verified `profile_id` linking before public signup.
+7. The account page shows a rider's membership on another person's team by matching the current login email. That match is the identity link, by design.
 8. Admin registration changes go through `/api/admin/registrations`. The route verifies the administrator, derives the audit actor from that session, and calls a service-role-only PostgreSQL function that commits the data change and audit record together. Admin Auth changes remain in `/api/admin/users`; email changes and deletions create a required audit record before calling Supabase Auth, and role changes use an atomic database function.
 
 ## Environment and deployment
@@ -91,7 +91,7 @@ Never put real values in `.env.example` — it is the one `.env*` file `.gitigno
 
 `GEONAMES_USERNAME` is optional and server-only: it enables the village autocomplete in the location picker (register free at geonames.org and enable "free web services" on the account page). Without it, the picker falls back to manual village/city entry.
 
-The service-role key is server-only. Add it separately to Vercel Preview and Production environment variables. Never put it in a `NEXT_PUBLIC_` variable, browser code, Git, screenshots, or chat. The current local key is a legacy JWT key and should be rotated before public launch because it was previously shared during development.
+The service-role key is server-only. Add it separately to Vercel Preview and Production environment variables. Never put it in a `NEXT_PUBLIC_` variable, browser code, Git, screenshots, or chat. The key was rotated on 31 July 2026; the earlier development key that had been shared is dead. Rotate again on the same terms if a key is ever exposed.
 
 ## Email confirmation, password reset, and auth links
 
@@ -126,10 +126,20 @@ Dashboard settings to apply/confirm in Supabase (Authentication → URL Configur
    If a template is left on the default `{{ .ConfirmationURL }}`, the `code` fallback in `/auth/confirm` still works as long as the link is opened in the same browser that started the request.
 6. **Password policy**: set the minimum to at least 8 characters and enable leaked-password protection under Authentication → Policies if the project plan supports it.
 7. **Resend tracking and limits**: disable click/open tracking for authentication email, then set Supabase's email rate limit to a deliberate value within the Resend plan rather than leaving it unreviewed.
-8. **Rotate the service-role key**: the development key was previously shared. Rotate it in Supabase, replace `SUPABASE_SERVICE_ROLE_KEY` in local and Vercel Preview/Production environments, and redeploy before public signup.
-9. **End-to-end verification**: with a brand-new email, test signup → confirmation → account/team details, unconfirmed login, an expired link, forgot password → reset → login, and an email change. Open at least one confirmation and one recovery link on a different device or private browser session.
+8. **End-to-end verification**: with a brand-new email, test signup → confirmation → account/team details, unconfirmed login, an expired link, forgot password → reset → login, and an email change. Open at least one confirmation and one recovery link on a different device or private browser session.
 
-Known limitation that remains: rider rows on a team led by someone else are linked only by email, so a confirmed email change does not update those rows automatically. An admin can fix them from the dashboard's email-sync dialog, and verified `profile_id` linking is still the planned long-term fix.
+## Email is the rider's identity
+
+A rider is connected to their entries by their normalized email address. This is a deliberate design decision, not an interim measure — do not plan work to replace it with verified `profile_id` linking.
+
+It follows from how team registration works: riders 2–4 are entered by their leader and may have no account here at all, so the address the leader typed is the only thing that can identify them. A rider claims their entry by signing in with that address, and their confirmation email tells them to do exactly that.
+
+What makes it sound is that a **confirmed** email is the boundary. Every registration path checks `hasConfirmedEmail` before it will write anything, so possession of an unverified address grants nothing.
+
+Two consequences to design around rather than fix:
+
+- A rider's email change does not reach their rows on a team someone else leads — those rows are matched on the address they already hold. The admin dashboard's email-sync dialog is the intended remedy for this, not a workaround.
+- Whoever controls an address can claim the entries under it. That is the same trust model as password reset, and it is why the confirmation step is not optional.
 
 ## Important limitation
 
