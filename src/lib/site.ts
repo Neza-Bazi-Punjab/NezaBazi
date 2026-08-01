@@ -35,4 +35,5 @@ export const footerQuickLinks = [
   { href: "/rules", label: "Rulebook" },
   { href: "/register", label: "Registration" },
   { href: "/login", label: "Login" },
+  { href: "/privacy", label: "Privacy Policy" },
 ] as const;
