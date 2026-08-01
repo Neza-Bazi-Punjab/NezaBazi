@@ -15,8 +15,8 @@ export const site = {
   prize: "₹3,45,000",
   riders: "150+",
   email: "nezabaazipunjab@gmail.com",
-  instagram: "https://www.instagram.com/nezabazipunjab",
-  socialHandle: "@nezabazipunjab",
+  instagram: "https://www.instagram.com/nezabazipanjab/",
+  socialHandle: "@nezabazipanjab",
   // TODO: replace with the real channel URL once it exists.
   youtube: "#" as string,
   // TODO: set to the rules explainer video (any YouTube URL). While empty,
