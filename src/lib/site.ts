@@ -12,7 +12,7 @@ export const site = {
   checkInDate: "November 10, 2026",
   venue: "Amritsar, Punjab",
   cupName: "Amritsar Cup",
-  prize: "₹3,45,000",
+  prize: "₹3,50,000",
   riders: "150+",
   email: "nezabaazipunjab@gmail.com",
   instagram: "https://www.instagram.com/nezabazipanjab/",
