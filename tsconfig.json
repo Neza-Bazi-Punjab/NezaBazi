@@ -6,6 +6,10 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    // The .test.mts files run under `node --test`, whose ESM resolver needs the
+    // literal "./foo.ts" specifier. Next 16.3 brought .mts files into the build's
+    // type-check scope, so the extension has to be allowed explicitly.
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
