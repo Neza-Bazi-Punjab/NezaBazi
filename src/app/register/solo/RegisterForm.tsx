@@ -12,6 +12,7 @@ import {
   useRegistrationDraft,
   type SoloDraftData,
 } from "@/lib/registration-drafts";
+import { isValidEmail } from "@/lib/email-address";
 import { createClient } from "@/lib/supabase/client";
 import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
 
@@ -30,7 +31,6 @@ type InitialValues = {
 };
 
 const numberToInputValue = (value?: number | null) => (value == null ? "" : String(value));
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const parseBoundedInt = (
   value: string,
@@ -199,7 +199,7 @@ export default function RegisterForm({
       return "Phone number is required.";
     }
 
-    if (!emailPattern.test(email.trim())) {
+    if (!isValidEmail(email)) {
       return "Please enter a valid email address.";
     }
 

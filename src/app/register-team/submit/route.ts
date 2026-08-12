@@ -1,5 +1,6 @@
 import { NextResponse, after } from "next/server";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
+import { isValidEmail } from "@/lib/email-address";
 import { buildRegistrationCodeEmail } from "@/lib/email/registration-code";
 import { sendEmail } from "@/lib/email/resend";
 import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
@@ -27,7 +28,6 @@ type RegisterTeamRequest = {
   riders: RiderInput[];
 };
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const parseBoundedInt = (
   value: string,
@@ -64,7 +64,7 @@ const validateRider = (rider: RiderInput, label: string) => {
     }
   }
 
-  if (!emailPattern.test(rider.email.trim())) {
+  if (!isValidEmail(rider.email)) {
     return `${label}: please enter a valid email address.`;
   }
 

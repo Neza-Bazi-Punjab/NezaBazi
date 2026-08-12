@@ -5,6 +5,7 @@ import {
   updateRequiredAuditLog,
   verifyAdminRequest,
 } from "@/lib/admin/server";
+import { isValidEmail } from "@/lib/email-address";
 import { escapeIlikePattern } from "@/lib/supabase/query";
 
 type ProfileRow = {
@@ -26,7 +27,6 @@ type DeleteUserRequest = {
   userId?: string;
 };
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const getMetadataString = (metadata: object | null | undefined, key: string) => {
   if (!metadata || !(key in metadata)) {
@@ -310,7 +310,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Please provide a valid role." }, { status: 400 });
   }
 
-  if (email !== undefined && !emailPattern.test(email)) {
+  if (email !== undefined && !isValidEmail(email)) {
     return NextResponse.json(
       { error: "Please enter a valid email address." },
       { status: 400 }

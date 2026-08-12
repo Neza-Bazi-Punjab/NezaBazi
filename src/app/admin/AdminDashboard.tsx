@@ -2,6 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { isValidEmail } from "@/lib/email-address";
 import { site } from "@/lib/site";
 import CheckInPanel from "./CheckInPanel";
 
@@ -189,7 +190,6 @@ const soloEditableRegistrationFields: EditableFieldSpec[] = [
   { field: "emergency_contact_phone", label: "Emergency contact phone" },
 ];
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const dateFormatter = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
@@ -441,7 +441,7 @@ const getEmailFormatError = (
 ) => {
   const email = draftValue(draft, "email");
 
-  if (emailPattern.test(email)) {
+  if (isValidEmail(email)) {
     return null;
   }
 
@@ -696,7 +696,7 @@ export default function AdminDashboard({
     setProfileRowError(null);
     setEmailSyncError(null);
 
-    if (!emailPattern.test(trimmedEmail)) {
+    if (!isValidEmail(trimmedEmail)) {
       setProfileRowError({
         id: profileUser.id,
         message: "Please enter a valid email address.",

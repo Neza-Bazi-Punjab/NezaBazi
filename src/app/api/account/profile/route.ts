@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isValidEmail } from "@/lib/email-address";
 import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import {
@@ -14,7 +15,6 @@ type UpdateProfileRequest = {
   email?: string;
 };
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const parseBoundedInt = (
   value: string,
@@ -132,7 +132,7 @@ export async function PATCH(request: Request) {
     );
   }
 
-  if (!emailPattern.test(email) || email.length > 254) {
+  if (!isValidEmail(email)) {
     return NextResponse.json(
       { error: "Please enter a valid email address." },
       { status: 400 }

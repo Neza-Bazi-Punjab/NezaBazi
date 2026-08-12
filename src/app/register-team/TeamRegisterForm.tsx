@@ -13,6 +13,7 @@ import {
   type TeamDraftData,
   type TeamRiderDraft,
 } from "@/lib/registration-drafts";
+import { isValidEmail } from "@/lib/email-address";
 
 type RiderInput = {
   fullName: string;
@@ -52,7 +53,6 @@ const emptyRider: RiderInput = {
   horseBreed: "",
 };
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const numberToInputValue = (value?: number | null) => (value == null ? "" : String(value));
 
@@ -117,7 +117,7 @@ const getRiderError = (rider: RiderInput) => {
     }
   }
 
-  if (!emailPattern.test(rider.email.trim())) {
+  if (!isValidEmail(rider.email)) {
     return "Please enter a valid email address.";
   }
 

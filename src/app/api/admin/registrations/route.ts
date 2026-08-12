@@ -3,6 +3,7 @@ import {
   createServiceRoleClient,
   verifyAdminRequest,
 } from "@/lib/admin/server";
+import { isValidEmail } from "@/lib/email-address";
 
 type RegistrationOperation =
   | "edit_solo"
@@ -39,7 +40,6 @@ type EditableSoloRegistration = EditableRegistration & {
   emergency_contact_phone: string;
 };
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -70,7 +70,7 @@ const isEditableRegistration = (
     isBoundedString(value.location, 200) &&
     isBoundedString(value.phone, 30) &&
     isBoundedString(value.email, 254) &&
-    emailPattern.test(value.email as string) &&
+    isValidEmail(value.email as string) &&
     isIntegerInRange(value.years_experience, 0, 100) &&
     isBoundedString(value.horse_name, 200) &&
     isIntegerInRange(value.horse_age, 0, 60) &&

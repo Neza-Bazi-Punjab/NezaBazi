@@ -6,6 +6,7 @@ import { useState } from "react";
 import HeadshotUpload from "@/components/HeadshotUpload";
 import LocationPicker from "@/components/LocationPicker";
 import SectionHeading from "@/components/SectionHeading";
+import { isValidEmail } from "@/lib/email-address";
 import { site } from "@/lib/site";
 
 export type AccountProfile = {
@@ -82,7 +83,6 @@ type ProfileDraft = {
   email: string;
 };
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const inputClassName =
   "mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none";
 const displayClassName =
@@ -201,7 +201,7 @@ export default function AccountPageClient({
       return "Email is required.";
     }
 
-    if (!emailPattern.test(draft.email.trim())) {
+    if (!isValidEmail(draft.email)) {
       return "Please enter a valid email address.";
     }
 
