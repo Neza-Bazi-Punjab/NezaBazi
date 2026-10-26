@@ -110,6 +110,14 @@ export type AuditLogEntry = {
   created_at: string;
 };
 
+export type ArchivedAuditEntry = AuditLogEntry & {
+  original_id: string;
+  deleted_at: string;
+  deleted_by_id: string | null;
+  deleted_by_name: string | null;
+  deleted_by_email: string | null;
+};
+
 export type AuditActor = {
   id: string;
   email: string;
@@ -123,6 +131,7 @@ type AdminDashboardProps = {
   teams: Team[];
   teamMembers: TeamMember[];
   auditLog: AuditLogEntry[];
+  auditArchive: ArchivedAuditEntry[];
   auditActors: AuditActor[];
 };
 
@@ -307,7 +316,6 @@ const auditActionLabels: Record<string, string> = {
   restore_run: "Restore Run",
   move_pool: "Change Pool",
   set_live: "Update Live Display",
-  delete_audit_entries: "Delete Audit Entries",
 };
 
 const formatAuditAction = (action: string) =>
@@ -337,7 +345,6 @@ const formatAuditTargetTable = (targetTable: string | null) => {
     scoring_runs: "Scoring Run",
     scoring_live_state: "Live Display",
     scoring_advance_overrides: "Advance Override",
-    admin_audit_log: "Audit Log",
   };
 
   return labels[targetTable] ?? targetTable;
@@ -565,6 +572,7 @@ export default function AdminDashboard({
   teams,
   teamMembers,
   auditLog,
+  auditArchive,
   auditActors,
 }: AdminDashboardProps) {
   const router = useRouter();
@@ -621,6 +629,8 @@ export default function AdminDashboard({
   } | null>(null);
   const [isDeletingAudit, setIsDeletingAudit] = useState(false);
   const [auditDeleteError, setAuditDeleteError] = useState<string | null>(null);
+  const [isAuditArchiveOpen, setIsAuditArchiveOpen] = useState(false);
+  const [expandedArchiveId, setExpandedArchiveId] = useState<string | null>(null);
   const [auditDeletedCount, setAuditDeletedCount] = useState<number | null>(null);
   const normalizedQuery = searchQuery.trim().toLowerCase();
 
@@ -2547,6 +2557,7 @@ export default function AdminDashboard({
             </div>
           </div>
 
+          {auditLog.length > 0 && (
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
@@ -2584,6 +2595,7 @@ export default function AdminDashboard({
               </select>
             </div>
           </div>
+          )}
 
           {filteredAuditLog.length > 0 ? (
             <div className="overflow-x-auto rounded-lg border border-bronze/20 bg-sand">
@@ -2823,10 +2835,122 @@ export default function AdminDashboard({
               </table>
             </div>
           ) : (
-            <p className="rounded-lg border border-bronze/20 bg-sand px-4 py-6 text-brown/80">
-              No audit log entries found.
-            </p>
+            auditLog.length === 0 ? (
+              <div className="flex min-h-[200px] items-center justify-center rounded-lg border border-bronze/20 bg-sand px-4 py-10 text-center">
+                <p className="font-display text-lg font-semibold uppercase tracking-wide text-brown/70">
+                  Nothing logged yet
+                </p>
+              </div>
+            ) : (
+              <p className="rounded-lg border border-bronze/20 bg-sand px-4 py-6 text-brown/80">
+                No audit log entries found.
+              </p>
+            )
           )}
+
+          <div className="rounded-lg border border-bronze/20 bg-sand">
+            <button
+              type="button"
+              aria-expanded={isAuditArchiveOpen}
+              onClick={() => setIsAuditArchiveOpen((open) => !open)}
+              className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left font-display text-sm font-semibold uppercase tracking-[0.12em] text-bronze-dark"
+            >
+              <span>Archive ({auditArchive.length})</span>
+              <span aria-hidden="true">{isAuditArchiveOpen ? "−" : "+"}</span>
+            </button>
+            {isAuditArchiveOpen && (
+              <div className="border-t border-bronze/20 p-3">
+                {auditArchive.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[1200px] table-fixed border-collapse text-left text-sm text-brown">
+                      <thead className="border-b border-bronze/20 bg-parchment">
+                        <tr className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
+                          <th className="w-[180px] px-3 py-2">Deleted</th>
+                          <th className="w-[200px] px-3 py-2">Deleted by</th>
+                          <th className="w-[180px] px-3 py-2">Date/Time</th>
+                          <th className="w-[200px] px-3 py-2">Admin</th>
+                          <th className="w-[190px] px-3 py-2">Action</th>
+                          <th className="w-[240px] px-3 py-2">Target</th>
+                          <th className="w-[160px] px-3 py-2">Details</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {auditArchive.map((entry) => {
+                          const detailRows = getAuditDetailRows(entry.details);
+                          const isExpanded = expandedArchiveId === entry.id;
+
+                          return (
+                            <tr
+                              key={entry.id}
+                              className="border-b border-bronze/10 align-top last:border-0"
+                            >
+                              <td className="px-3 py-2">{formatAuditDate(entry.deleted_at)}</td>
+                              <td className="px-3 py-2 font-semibold text-ink">
+                                {getAuditActorLabel(
+                                  entry.deleted_by_id,
+                                  entry.deleted_by_name,
+                                  entry.deleted_by_email
+                                )}
+                              </td>
+                              <td className="px-3 py-2">{formatAuditDate(entry.created_at)}</td>
+                              <td className="px-3 py-2">
+                                {getAuditActorLabel(
+                                  entry.actor_id,
+                                  entry.actor_name,
+                                  entry.actor_email
+                                )}
+                              </td>
+                              <td className="px-3 py-2">{formatAuditAction(entry.action)}</td>
+                              <td className="px-3 py-2">
+                                {getAuditTargetLabel(
+                                  entry.target_table,
+                                  entry.target_id,
+                                  entry.details
+                                )}
+                              </td>
+                              <td className="px-3 py-2">
+                                {detailRows.length > 0 ? (
+                                  <div className="space-y-2">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setExpandedArchiveId(isExpanded ? null : entry.id)
+                                      }
+                                      className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40"
+                                    >
+                                      {isExpanded ? "Hide" : "View"}
+                                    </button>
+                                    {isExpanded && (
+                                      <div className="max-h-60 space-y-2 overflow-auto rounded-lg border border-bronze/20 bg-cream p-3 text-xs text-brown">
+                                        {detailRows.map((row) => (
+                                          <p key={row.label}>
+                                            <span className="font-semibold text-ink">
+                                              {row.label}:
+                                            </span>{" "}
+                                            {row.value}
+                                          </p>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-brown/70">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="px-1 py-3 text-brown/80">
+                    Nothing archived yet. Deleted audit entries are kept here.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
 
           {auditDeletedCount !== null && (
             <div
@@ -2844,7 +2968,7 @@ export default function AdminDashboard({
                 </h3>
                 <p className="text-sm text-brown">
                   {auditDeletedCount} audit {auditDeletedCount === 1 ? "entry" : "entries"}{" "}
-                  deleted. Filters have been reset.
+                  moved to the archive. Filters have been reset.
                 </p>
                 <div className="flex justify-end">
                   <button
@@ -2880,9 +3004,10 @@ export default function AdminDashboard({
                 </h3>
                 <p className="text-sm text-brown">
                   {pendingAuditDelete.all
-                    ? "This permanently deletes every audit log entry. This can't be undone."
-                    : "This permanently deletes the chosen entries. This can't be undone."}{" "}
-                  The deletion itself will be recorded in the log.
+                    ? "Every audit log entry will be removed from the log."
+                    : "The chosen entries will be removed from the log."}{" "}
+                  They are kept in the archive at the bottom of this tab, with your
+                  name as who deleted them. They can&apos;t be restored.
                 </p>
                 {auditDeleteError && (
                   <p role="alert" className="text-sm font-semibold text-red-800">

@@ -141,7 +141,7 @@ test("audit delete requests accept only a clear-all flag or a list of ids", () =
   }
 });
 
-test("the audit delete route is admin-only and records the deletion", async () => {
+test("the audit delete route is admin-only and archives rather than deletes", async () => {
   const route = await readFile(
     new URL("../../app/api/admin/audit-log/route.ts", import.meta.url),
     "utf8"
@@ -149,5 +149,19 @@ test("the audit delete route is admin-only and records the deletion", async () =
 
   assert.match(route, /await verifyAdminRequest\(\)/);
   assert.match(route, /createServiceRoleClient\(\)/);
-  assert.match(route, /action:\s*"delete_audit_entries"/);
+  assert.match(route, /rpc\("admin_archive_audit_entries"/);
+  assert.doesNotMatch(route, /\.delete\(/);
+});
+
+test("deleted audit entries are archived, never restorable from the browser", async () => {
+  const migration = await readFile(
+    new URL("../../../supabase/migrations/20261026120000_audit_log_archive.sql", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(migration, /delete\s+from\s+public\.admin_audit_log\s+as\s+log/i);
+  assert.match(migration, /insert\s+into\s+public\.admin_audit_log_archive/i);
+  assert.match(migration, /revoke\s+all\s+on\s+table\s+public\.admin_audit_log_archive\s+from\s+anon,\s*authenticated/i);
+  assert.match(migration, /grant\s+select\s+on\s+table\s+public\.admin_audit_log_archive\s+to\s+authenticated/i);
+  assert.match(migration, /grant\s+execute[\s\S]*to\s+service_role/i);
 });
