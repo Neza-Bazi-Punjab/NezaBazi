@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { buildAuditRecord, requireAuditSuccess } from "./audit.ts";
+import {
+  AUDIT_DELETE_MAX_IDS,
+  buildAuditRecord,
+  parseAuditDeleteRequest,
+  requireAuditSuccess,
+} from "./audit.ts";
 
 test("the verified actor overrides forged audit identity fields", () => {
   const record = buildAuditRecord(
@@ -108,4 +113,55 @@ test("solo registration migration tracks required horse and emergency fields", a
   }
 
   assert.match(migration, /security\s+invoker/i);
+});
+
+test("audit delete requests accept only a clear-all flag or a list of ids", () => {
+  const id = "3f2b8c1e-6a4d-4e0b-9c57-1d2e3f4a5b6c";
+
+  assert.deepEqual(parseAuditDeleteRequest({ all: true }), { ok: true, all: true });
+  assert.deepEqual(parseAuditDeleteRequest({ ids: [id, id] }), {
+    ok: true,
+    all: false,
+    ids: [id],
+  });
+
+  for (const body of [
+    null,
+    [],
+    {},
+    { all: false },
+    { all: "true" },
+    { all: true, ids: [id] },
+    { ids: [] },
+    { ids: ["not-a-uuid"] },
+    { ids: [42] },
+    { ids: Array.from({ length: AUDIT_DELETE_MAX_IDS + 1 }, () => id) },
+  ]) {
+    assert.equal(parseAuditDeleteRequest(body).ok, false);
+  }
+});
+
+test("the audit delete route is admin-only and archives rather than deletes", async () => {
+  const route = await readFile(
+    new URL("../../app/api/admin/audit-log/route.ts", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(route, /await verifyAdminRequest\(\)/);
+  assert.match(route, /createServiceRoleClient\(\)/);
+  assert.match(route, /rpc\("admin_archive_audit_entries"/);
+  assert.doesNotMatch(route, /\.delete\(/);
+});
+
+test("deleted audit entries are archived, never restorable from the browser", async () => {
+  const migration = await readFile(
+    new URL("../../../supabase/migrations/20261026120000_audit_log_archive.sql", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(migration, /delete\s+from\s+public\.admin_audit_log\s+as\s+log/i);
+  assert.match(migration, /insert\s+into\s+public\.admin_audit_log_archive/i);
+  assert.match(migration, /revoke\s+all\s+on\s+table\s+public\.admin_audit_log_archive\s+from\s+anon,\s*authenticated/i);
+  assert.match(migration, /grant\s+select\s+on\s+table\s+public\.admin_audit_log_archive\s+to\s+authenticated/i);
+  assert.match(migration, /grant\s+execute[\s\S]*to\s+service_role/i);
 });

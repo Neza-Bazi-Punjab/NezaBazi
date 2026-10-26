@@ -110,6 +110,14 @@ export type AuditLogEntry = {
   created_at: string;
 };
 
+export type ArchivedAuditEntry = AuditLogEntry & {
+  original_id: string;
+  deleted_at: string;
+  deleted_by_id: string | null;
+  deleted_by_name: string | null;
+  deleted_by_email: string | null;
+};
+
 export type AuditActor = {
   id: string;
   email: string;
@@ -123,6 +131,7 @@ type AdminDashboardProps = {
   teams: Team[];
   teamMembers: TeamMember[];
   auditLog: AuditLogEntry[];
+  auditArchive: ArchivedAuditEntry[];
   auditActors: AuditActor[];
 };
 
@@ -563,6 +572,7 @@ export default function AdminDashboard({
   teams,
   teamMembers,
   auditLog,
+  auditArchive,
   auditActors,
 }: AdminDashboardProps) {
   const router = useRouter();
@@ -611,6 +621,17 @@ export default function AdminDashboard({
   const [auditActionFilter, setAuditActionFilter] = useState("all");
   const [auditActorFilter, setAuditActorFilter] = useState("all");
   const [expandedAuditLogId, setExpandedAuditLogId] = useState<string | null>(null);
+  const [selectedAuditIds, setSelectedAuditIds] = useState<Set<string>>(new Set());
+  const [pendingAuditDelete, setPendingAuditDelete] = useState<{
+    all: boolean;
+    ids: string[];
+    count: number;
+  } | null>(null);
+  const [isDeletingAudit, setIsDeletingAudit] = useState(false);
+  const [auditDeleteError, setAuditDeleteError] = useState<string | null>(null);
+  const [isAuditArchiveOpen, setIsAuditArchiveOpen] = useState(false);
+  const [expandedArchiveId, setExpandedArchiveId] = useState<string | null>(null);
+  const [auditDeletedCount, setAuditDeletedCount] = useState<number | null>(null);
   const normalizedQuery = searchQuery.trim().toLowerCase();
 
   const loadProfileUsers = useCallback(async () => {
@@ -1452,6 +1473,97 @@ export default function AdminDashboard({
   const auditLogItems = useMemo(
     () => getAuditLogItems(filteredAuditLog),
     [filteredAuditLog]
+  );
+
+  const filteredAuditIds = useMemo(
+    () => filteredAuditLog.map((entry) => entry.id),
+    [filteredAuditLog]
+  );
+  const hasAuditFilter =
+    auditActionFilter !== "all" ||
+    auditActorFilter !== "all" ||
+    normalizedQuery !== "";
+  const selectedFilteredAuditIds = filteredAuditIds.filter((id) =>
+    selectedAuditIds.has(id)
+  );
+  const allFilteredAuditSelected =
+    filteredAuditIds.length > 0 &&
+    selectedFilteredAuditIds.length === filteredAuditIds.length;
+
+  const toggleAuditIds = (ids: string[]) => {
+    setSelectedAuditIds((current) => {
+      const next = new Set(current);
+      const allSelected = ids.every((id) => next.has(id));
+
+      for (const id of ids) {
+        if (allSelected) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+      }
+
+      return next;
+    });
+  };
+
+  const requestAuditDelete = (ids: string[], all = false) => {
+    setAuditDeleteError(null);
+    setPendingAuditDelete({ all, ids, count: ids.length });
+  };
+
+  const confirmAuditDelete = async () => {
+    if (!pendingAuditDelete) {
+      return;
+    }
+
+    setIsDeletingAudit(true);
+    setAuditDeleteError(null);
+
+    try {
+      const response = await fetch("/api/admin/audit-log", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          pendingAuditDelete.all ? { all: true } : { ids: pendingAuditDelete.ids }
+        ),
+      });
+      const result = (await response.json().catch(() => null)) as {
+        error?: string;
+        deleted?: number;
+      } | null;
+
+      if (!response.ok) {
+        throw new Error(result?.error ?? "Unable to delete the audit entries.");
+      }
+
+      setPendingAuditDelete(null);
+      setSelectedAuditIds(new Set());
+      setExpandedAuditLogId(null);
+      // The filters may point at entries that no longer exist, which would
+      // leave the table empty and hide the new "deleted" entry.
+      setAuditActionFilter("all");
+      setAuditActorFilter("all");
+      setSearchQuery("");
+      setAuditDeletedCount(result?.deleted ?? pendingAuditDelete.count);
+      router.refresh();
+    } catch (error) {
+      setAuditDeleteError(
+        error instanceof Error ? error.message : "Unable to delete the audit entries."
+      );
+    } finally {
+      setIsDeletingAudit(false);
+    }
+  };
+
+  const renderAuditDeleteButton = (ids: string[]) => (
+    <button
+      type="button"
+      onClick={() => requestAuditDelete(ids)}
+      className="rounded-lg border border-red-700/30 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-red-800 transition-colors hover:border-red-700/60"
+    >
+      Delete
+    </button>
   );
 
   return (
@@ -2422,9 +2534,30 @@ export default function AdminDashboard({
             <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-bronze-dark">
               Audit Log
             </h2>
-            <p className="text-sm text-brown/80">{filteredAuditLog.length} results</p>
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-sm text-brown/80">{filteredAuditLog.length} results</p>
+              {selectedFilteredAuditIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => requestAuditDelete(selectedFilteredAuditIds)}
+                  className="rounded-lg border border-red-700/30 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-red-800 transition-colors hover:border-red-700/60"
+                >
+                  Delete selected ({selectedFilteredAuditIds.length})
+                </button>
+              )}
+              {filteredAuditLog.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => requestAuditDelete(filteredAuditIds, !hasAuditFilter)}
+                  className="rounded-lg bg-red-800 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-cream transition-colors hover:bg-red-900"
+                >
+                  {hasAuditFilter ? "Clear filtered" : "Clear all"}
+                </button>
+              )}
+            </div>
           </div>
 
+          {auditLog.length > 0 && (
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
@@ -2462,17 +2595,26 @@ export default function AdminDashboard({
               </select>
             </div>
           </div>
+          )}
 
           {filteredAuditLog.length > 0 ? (
             <div className="overflow-x-auto rounded-lg border border-bronze/20 bg-sand">
-              <table className="w-full min-w-[1100px] table-fixed border-collapse text-left text-sm text-brown">
+              <table className="w-full min-w-[1150px] table-fixed border-collapse text-left text-sm text-brown">
                 <thead className="border-b border-bronze/20 bg-parchment">
                   <tr className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
+                    <th className="w-[44px] min-w-[44px] px-3 py-2">
+                      <input
+                        type="checkbox"
+                        aria-label="Select all audit entries"
+                        checked={allFilteredAuditSelected}
+                        onChange={() => toggleAuditIds(filteredAuditIds)}
+                      />
+                    </th>
                     <th className="w-[180px] min-w-[180px] whitespace-nowrap px-3 py-2">Date/Time</th>
                     <th className="w-[220px] min-w-[220px] whitespace-nowrap px-3 py-2">Admin</th>
                     <th className="w-[210px] min-w-[210px] whitespace-nowrap px-3 py-2">Action</th>
                     <th className="w-[260px] min-w-[260px] whitespace-nowrap px-3 py-2">Target</th>
-                    <th className="w-[230px] min-w-[230px] whitespace-nowrap px-3 py-2">Details</th>
+                    <th className="w-[280px] min-w-[280px] whitespace-nowrap px-3 py-2">Details</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2513,6 +2655,18 @@ export default function AdminDashboard({
                       return (
                         <Fragment key={item.batchId}>
                           <tr className="border-b border-bronze/10 last:border-0">
+                            <td className="w-[44px] min-w-[44px] px-3 py-2">
+                              <input
+                                type="checkbox"
+                                aria-label="Select audit entry"
+                                checked={item.entries.every((entry) =>
+                                  selectedAuditIds.has(entry.id)
+                                )}
+                                onChange={() =>
+                                  toggleAuditIds(item.entries.map((entry) => entry.id))
+                                }
+                              />
+                            </td>
                             <td className="w-[180px] min-w-[180px] whitespace-nowrap px-3 py-2">
                               {formatAuditDate(earliestEntry.created_at)}
                             </td>
@@ -2547,7 +2701,9 @@ export default function AdminDashboard({
                                 ))}
                               </div>
                             </td>
-                            <td className="w-[230px] min-w-[230px] px-3 py-2">
+                            <td className="w-[280px] min-w-[280px] px-3 py-2">
+                              <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
                               {batchDetailSections.length > 0 ? (
                                 <div className="space-y-2">
                                   <button
@@ -2589,6 +2745,11 @@ export default function AdminDashboard({
                               ) : (
                                 <span className="text-brown/70">—</span>
                               )}
+                              </div>
+                              {renderAuditDeleteButton(
+                                item.entries.map((entry) => entry.id)
+                              )}
+                              </div>
                             </td>
                           </tr>
                         </Fragment>
@@ -2605,6 +2766,14 @@ export default function AdminDashboard({
                         key={entry.id}
                         className="border-b border-bronze/10 last:border-0"
                       >
+                        <td className="w-[44px] min-w-[44px] px-3 py-2">
+                          <input
+                            type="checkbox"
+                            aria-label="Select audit entry"
+                            checked={selectedAuditIds.has(entry.id)}
+                            onChange={() => toggleAuditIds([entry.id])}
+                          />
+                        </td>
                         <td className="w-[180px] min-w-[180px] whitespace-nowrap px-3 py-2">
                           {formatAuditDate(entry.created_at)}
                         </td>
@@ -2625,7 +2794,9 @@ export default function AdminDashboard({
                             entry.details
                           )}
                         </td>
-                        <td className="w-[230px] min-w-[230px] px-3 py-2">
+                        <td className="w-[280px] min-w-[280px] px-3 py-2">
+                          <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
                           {hasDetails ? (
                             <div className="space-y-2">
                               <button
@@ -2653,6 +2824,9 @@ export default function AdminDashboard({
                           ) : (
                             <span className="text-brown/70">—</span>
                           )}
+                          </div>
+                          {renderAuditDeleteButton([entry.id])}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -2661,9 +2835,209 @@ export default function AdminDashboard({
               </table>
             </div>
           ) : (
-            <p className="rounded-lg border border-bronze/20 bg-sand px-4 py-6 text-brown/80">
-              No audit log entries found.
-            </p>
+            auditLog.length === 0 ? (
+              <div className="flex min-h-[200px] items-center justify-center rounded-lg border border-bronze/20 bg-sand px-4 py-10 text-center">
+                <p className="font-display text-lg font-semibold uppercase tracking-wide text-brown/70">
+                  Nothing logged yet
+                </p>
+              </div>
+            ) : (
+              <p className="rounded-lg border border-bronze/20 bg-sand px-4 py-6 text-brown/80">
+                No audit log entries found.
+              </p>
+            )
+          )}
+
+          <div className="rounded-lg border border-bronze/20 bg-sand">
+            <button
+              type="button"
+              aria-expanded={isAuditArchiveOpen}
+              onClick={() => setIsAuditArchiveOpen((open) => !open)}
+              className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left font-display text-sm font-semibold uppercase tracking-[0.12em] text-bronze-dark"
+            >
+              <span>Archive ({auditArchive.length})</span>
+              <span aria-hidden="true">{isAuditArchiveOpen ? "−" : "+"}</span>
+            </button>
+            {isAuditArchiveOpen && (
+              <div className="border-t border-bronze/20 p-3">
+                {auditArchive.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[1200px] table-fixed border-collapse text-left text-sm text-brown">
+                      <thead className="border-b border-bronze/20 bg-parchment">
+                        <tr className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
+                          <th className="w-[180px] px-3 py-2">Deleted</th>
+                          <th className="w-[200px] px-3 py-2">Deleted by</th>
+                          <th className="w-[180px] px-3 py-2">Date/Time</th>
+                          <th className="w-[200px] px-3 py-2">Admin</th>
+                          <th className="w-[190px] px-3 py-2">Action</th>
+                          <th className="w-[240px] px-3 py-2">Target</th>
+                          <th className="w-[160px] px-3 py-2">Details</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {auditArchive.map((entry) => {
+                          const detailRows = getAuditDetailRows(entry.details);
+                          const isExpanded = expandedArchiveId === entry.id;
+
+                          return (
+                            <tr
+                              key={entry.id}
+                              className="border-b border-bronze/10 align-top last:border-0"
+                            >
+                              <td className="px-3 py-2">{formatAuditDate(entry.deleted_at)}</td>
+                              <td className="px-3 py-2 font-semibold text-ink">
+                                {getAuditActorLabel(
+                                  entry.deleted_by_id,
+                                  entry.deleted_by_name,
+                                  entry.deleted_by_email
+                                )}
+                              </td>
+                              <td className="px-3 py-2">{formatAuditDate(entry.created_at)}</td>
+                              <td className="px-3 py-2">
+                                {getAuditActorLabel(
+                                  entry.actor_id,
+                                  entry.actor_name,
+                                  entry.actor_email
+                                )}
+                              </td>
+                              <td className="px-3 py-2">{formatAuditAction(entry.action)}</td>
+                              <td className="px-3 py-2">
+                                {getAuditTargetLabel(
+                                  entry.target_table,
+                                  entry.target_id,
+                                  entry.details
+                                )}
+                              </td>
+                              <td className="px-3 py-2">
+                                {detailRows.length > 0 ? (
+                                  <div className="space-y-2">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setExpandedArchiveId(isExpanded ? null : entry.id)
+                                      }
+                                      className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40"
+                                    >
+                                      {isExpanded ? "Hide" : "View"}
+                                    </button>
+                                    {isExpanded && (
+                                      <div className="max-h-60 space-y-2 overflow-auto rounded-lg border border-bronze/20 bg-cream p-3 text-xs text-brown">
+                                        {detailRows.map((row) => (
+                                          <p key={row.label}>
+                                            <span className="font-semibold text-ink">
+                                              {row.label}:
+                                            </span>{" "}
+                                            {row.value}
+                                          </p>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-brown/70">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="px-1 py-3 text-brown/80">
+                    Nothing archived yet. Deleted audit entries are kept here.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {auditDeletedCount !== null && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="audit-deleted-title"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 px-4"
+            >
+              <div className="w-full max-w-sm space-y-4 rounded-lg border border-bronze/20 bg-cream p-5 shadow-xl">
+                <h3
+                  id="audit-deleted-title"
+                  className="font-display text-lg font-bold uppercase tracking-wide text-bronze-dark"
+                >
+                  Cleared
+                </h3>
+                <p className="text-sm text-brown">
+                  {auditDeletedCount} audit {auditDeletedCount === 1 ? "entry" : "entries"}{" "}
+                  moved to the archive. Filters have been reset.
+                </p>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    autoFocus
+                    onClick={() => setAuditDeletedCount(null)}
+                    className="rounded-lg bg-bronze-deep px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-cream transition-colors hover:bg-bronze"
+                  >
+                    OK
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {pendingAuditDelete && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="audit-delete-title"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 px-4"
+            >
+              <div className="w-full max-w-sm space-y-4 rounded-lg border border-bronze/20 bg-cream p-5 shadow-xl">
+                <h3
+                  id="audit-delete-title"
+                  className="font-display text-lg font-bold uppercase tracking-wide text-bronze-dark"
+                >
+                  {pendingAuditDelete.all
+                    ? "Clear entire audit log?"
+                    : `Delete ${pendingAuditDelete.count} ${
+                        pendingAuditDelete.count === 1 ? "entry" : "entries"
+                      }?`}
+                </h3>
+                <p className="text-sm text-brown">
+                  {pendingAuditDelete.all
+                    ? "Every audit log entry will be removed from the log."
+                    : "The chosen entries will be removed from the log."}{" "}
+                  They are kept in the archive at the bottom of this tab, with your
+                  name as who deleted them. They can&apos;t be restored.
+                </p>
+                {auditDeleteError && (
+                  <p role="alert" className="text-sm font-semibold text-red-800">
+                    {auditDeleteError}
+                  </p>
+                )}
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    disabled={isDeletingAudit}
+                    onClick={() => setPendingAuditDelete(null)}
+                    className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40 disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isDeletingAudit}
+                    onClick={confirmAuditDelete}
+                    className="rounded-lg bg-red-800 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-cream transition-colors hover:bg-red-900 disabled:opacity-60"
+                  >
+                    {isDeletingAudit
+                      ? "Deleting..."
+                      : pendingAuditDelete.all
+                        ? "Yes, clear all"
+                        : "Yes, delete"}
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </section>
       ) : (

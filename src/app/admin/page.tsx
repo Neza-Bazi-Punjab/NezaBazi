@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { site } from "@/lib/site";
 import AdminDashboard, {
   type AuditActor,
+  type ArchivedAuditEntry,
   type AuditLogEntry,
   type SoloRegistration,
   type Team,
@@ -116,6 +117,7 @@ export default async function AdminPage() {
     { data: teams },
     { data: teamMembers },
     { data: auditLog },
+    { data: auditArchive },
   ] = await Promise.all([
     supabase
       .from("solo_registrations")
@@ -128,6 +130,11 @@ export default async function AdminPage() {
       .select("*, actor:profiles!actor_id(id)")
       .order("created_at", { ascending: false })
       .limit(200),
+    supabase
+      .from("admin_audit_log_archive")
+      .select("*")
+      .order("deleted_at", { ascending: false })
+      .limit(500),
   ]);
   const serviceSupabase = createServiceRoleClient();
   const { data: usersData, error: usersError } =
@@ -163,6 +170,7 @@ export default async function AdminPage() {
             teams={(teams ?? []) as Team[]}
             teamMembers={(teamMembers ?? []) as TeamMember[]}
             auditLog={(auditLog ?? []) as AuditLogEntry[]}
+            auditArchive={(auditArchive ?? []) as ArchivedAuditEntry[]}
             auditActors={auditActors as AuditActor[]}
           />
         </div>

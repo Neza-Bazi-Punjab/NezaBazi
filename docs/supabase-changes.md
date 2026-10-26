@@ -64,6 +64,8 @@ These five are committed under `supabase/migrations/` and are applied by hand in
     - **Runs already drawn are shortened.** One UPDATE rewrites only the rows whose location is not already short (there were none on the live project when this was written), taking the live-state row first like every scoring function so it cannot interleave with a judge's write. The `updated_at` trigger stamps those rows and realtime sends one event each. Neither matters: nothing ranks or decides by a run's `updated_at` (it only keys a viewer's refetch), and no score, status or order changes, so there is no audit row.
     - **Staff lose nothing.** The commentary panel reads the village from the registration, not from the run.
 
+22. `20261026120000_audit_log_archive` adds `admin_audit_log_archive` and the service-role-only `admin_archive_audit_entries()`. Deleting from the dashboard's Audit Log tab (one entry, a selection, or Clear all) moves the rows to the archive in one transaction, stamped with who removed them and when, instead of destroying them. The archive is readable by administrators only, has no browser write access, and has no restore path. Until it is applied, deleting from the tab fails and removes nothing.
+
 ## Confirmation codes and check-in
 
 Every rider receives a unique `NBP-XXXXXX` code when they register — solo entrants and all four riders on a team, one code each.
