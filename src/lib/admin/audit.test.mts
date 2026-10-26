@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { buildAuditRecord, requireAuditSuccess } from "./audit.ts";
+import {
+  AUDIT_DELETE_MAX_IDS,
+  buildAuditRecord,
+  parseAuditDeleteRequest,
+  requireAuditSuccess,
+} from "./audit.ts";
 
 test("the verified actor overrides forged audit identity fields", () => {
   const record = buildAuditRecord(
@@ -108,4 +113,41 @@ test("solo registration migration tracks required horse and emergency fields", a
   }
 
   assert.match(migration, /security\s+invoker/i);
+});
+
+test("audit delete requests accept only a clear-all flag or a list of ids", () => {
+  const id = "3f2b8c1e-6a4d-4e0b-9c57-1d2e3f4a5b6c";
+
+  assert.deepEqual(parseAuditDeleteRequest({ all: true }), { ok: true, all: true });
+  assert.deepEqual(parseAuditDeleteRequest({ ids: [id, id] }), {
+    ok: true,
+    all: false,
+    ids: [id],
+  });
+
+  for (const body of [
+    null,
+    [],
+    {},
+    { all: false },
+    { all: "true" },
+    { all: true, ids: [id] },
+    { ids: [] },
+    { ids: ["not-a-uuid"] },
+    { ids: [42] },
+    { ids: Array.from({ length: AUDIT_DELETE_MAX_IDS + 1 }, () => id) },
+  ]) {
+    assert.equal(parseAuditDeleteRequest(body).ok, false);
+  }
+});
+
+test("the audit delete route is admin-only and records the deletion", async () => {
+  const route = await readFile(
+    new URL("../../app/api/admin/audit-log/route.ts", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(route, /await verifyAdminRequest\(\)/);
+  assert.match(route, /createServiceRoleClient\(\)/);
+  assert.match(route, /action:\s*"delete_audit_entries"/);
 });
