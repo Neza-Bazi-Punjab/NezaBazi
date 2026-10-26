@@ -269,9 +269,11 @@ test("admins can edit a team rider's horse name", () => {
 
   // Required on both paths. Neither horse_name column carries a required
   // check, so this route and the dashboard are the only thing enforcing it —
-  // and the rider table it drives has a Horse Name column to fill in.
+  // and the rider table it drives has a Horse Name column to fill in. (The
+  // route does have optional fields — the parents' names — but never this.)
   assert.match(route, /isBoundedString\(value\.horse_name, 200\)/);
-  assert.doesNotMatch(route, /isOptionalBoundedString/);
+  assert.doesNotMatch(route, /isOptionalBoundedString\(value\.horse_name/);
+  assert.doesNotMatch(teamFields, /field: "horse_name"[^}]*optional/);
   assert.match(dashboard, />\s*Horse Name\s*</);
 });
 

@@ -1,0 +1,5 @@
+# Noto Sans Gurmukhi (SIL Open Font License) is downloaded here by
+# scripts/build-paper-forms.mts on first run and reused afterwards. It is a
+# build input only — the PDFs embed the glyphs they use — so it is not
+# committed.
+*.ttf

@@ -58,6 +58,10 @@ const lockedInputClassName =
 const labelClassName =
   "font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink";
 
+/* Father's and mother's names are optional: they help the announcer
+   introduce a rider, and registration must never stall on them. */
+const PARENT_NAME_MAX_LENGTH = 200;
+
 const stepLabels = ["Rider Details", "Horse Details", "Emergency Contact", "Review"];
 const REVIEW_STEP = 3;
 
@@ -104,6 +108,9 @@ export default function RegisterForm({
   const [fullName, setFullName] = useState(() =>
     restore(lockProfileFields, initialValues?.full_name ?? "", initialDraft?.fullName)
   );
+  // Not account fields, so never locked: always resume from the draft.
+  const [fatherName, setFatherName] = useState(() => initialDraft?.fatherName ?? "");
+  const [motherName, setMotherName] = useState(() => initialDraft?.motherName ?? "");
   const [age, setAge] = useState(() =>
     restore(lockProfileFields, numberToInputValue(initialValues?.age), initialDraft?.age)
   );
@@ -147,6 +154,8 @@ export default function RegisterForm({
     () => ({
       step,
       fullName,
+      fatherName,
+      motherName,
       age,
       location,
       phone,
@@ -161,6 +170,8 @@ export default function RegisterForm({
     [
       step,
       fullName,
+      fatherName,
+      motherName,
       age,
       location,
       phone,
@@ -185,6 +196,14 @@ export default function RegisterForm({
   const getRiderDetailsError = () => {
     if (fullName.trim() === "") {
       return "Full name is required.";
+    }
+
+    if (fatherName.trim().length > PARENT_NAME_MAX_LENGTH) {
+      return `Father's name must be ${PARENT_NAME_MAX_LENGTH} characters or fewer.`;
+    }
+
+    if (motherName.trim().length > PARENT_NAME_MAX_LENGTH) {
+      return `Mother's name must be ${PARENT_NAME_MAX_LENGTH} characters or fewer.`;
     }
 
     if (parseBoundedInt(age, { min: 1, max: 120 }) === null) {
@@ -296,6 +315,9 @@ export default function RegisterForm({
     const { error } = await supabase.from("solo_registrations").insert({
       profile_id: user.id,
       full_name: fullName,
+      // Optional: a blank box is stored as null, never as an empty string.
+      father_name: fatherName.trim() || null,
+      mother_name: motherName.trim() || null,
       age: Number(age),
       location: location,
       phone: phone,
@@ -353,6 +375,36 @@ export default function RegisterForm({
           onChange={(e) => setFullName(e.target.value)}
           readOnly={lockProfileFields}
           className={lockProfileFields ? lockedInputClassName : inputClassName}
+        />
+      </div>
+
+      <div>
+        <label htmlFor="solo-father-name" className={labelClassName}>
+          Father&apos;s Name (optional)
+        </label>
+        <input
+          id="solo-father-name"
+          type="text"
+          value={fatherName}
+          onChange={(e) => setFatherName(e.target.value)}
+          maxLength={PARENT_NAME_MAX_LENGTH}
+          autoComplete="off"
+          className={inputClassName}
+        />
+      </div>
+
+      <div>
+        <label htmlFor="solo-mother-name" className={labelClassName}>
+          Mother&apos;s Name (optional)
+        </label>
+        <input
+          id="solo-mother-name"
+          type="text"
+          value={motherName}
+          onChange={(e) => setMotherName(e.target.value)}
+          maxLength={PARENT_NAME_MAX_LENGTH}
+          autoComplete="off"
+          className={inputClassName}
         />
       </div>
 
@@ -567,6 +619,8 @@ export default function RegisterForm({
               </div>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 {reviewRow("Full Name", fullName)}
+                {reviewRow("Father's Name", fatherName.trim())}
+                {reviewRow("Mother's Name", motherName.trim())}
                 {reviewRow("Age", age)}
                 {reviewRow("Location", location)}
                 {reviewRow("Phone", phone)}

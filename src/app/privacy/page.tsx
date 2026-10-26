@@ -29,7 +29,7 @@ export default function PrivacyPolicyPage() {
               <strong className="text-ink">Effective date:</strong> July 31, 2026
             </p>
             <p>
-              <strong className="text-ink">Last updated:</strong> July 31, 2026
+              <strong className="text-ink">Last updated:</strong> October 25, 2026
             </p>
             <p>
               <strong className="text-ink">Privacy contact:</strong>{" "}
@@ -94,6 +94,25 @@ export default function PrivacyPolicyPage() {
                   emergency contact, you should have their permission to do so.
                 </li>
                 <li>
+                  <strong className="text-ink">Father&apos;s and mother&apos;s names (optional).</strong>{" "}
+                  You may give your father&apos;s and mother&apos;s names when you
+                  register. They are used only so the event announcer can introduce
+                  you in the customary way. Leaving them blank never affects your
+                  entry.
+                </li>
+                <li>
+                  <strong className="text-ink">Paper registration.</strong> If you
+                  register on the printed form, an organiser types the details from
+                  your form into the same registration system on your behalf. If you
+                  give no email address, we store a placeholder in its place that
+                  cannot receive mail, and we do not email you; your confirmation code
+                  is given to you in person instead.
+                </li>
+                <li>
+                  <strong className="text-ink">Results.</strong> On event day judges
+                  record each of your runs and its result.
+                </li>
+                <li>
                   <strong className="text-ink">Technical information.</strong> Our
                   website and service providers may process information such as IP
                   address, browser and device type, request and security logs, pages
@@ -114,6 +133,16 @@ export default function PrivacyPolicyPage() {
                 <li>
                   Process solo and team registrations, organize the competition, and
                   administer confirmation codes and event check-in.
+                </li>
+                <li>
+                  Publish live results. During the event your name, team name, horse
+                  name, home district and state, and results appear on the public
+                  live scoreboard and in the graphics of the event&apos;s live stream.
+                  Your age, phone number, email address, parents&apos; names and
+                  emergency contacts are never shown publicly. The event&apos;s
+                  judges and commentators see your parents&apos; names, age,
+                  experience, horse details and optional headshot on staff-only
+                  screens so they can introduce you.
                 </li>
                 <li>
                   Communicate about accounts, registration, security, support, and

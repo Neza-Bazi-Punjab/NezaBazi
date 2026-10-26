@@ -5,6 +5,7 @@
    component because it is used standing at a table on event eve, on whatever
    device is to hand, not from the main registration tables. */
 import { useRef, useState } from "react";
+import { displayEmail } from "@/lib/paper-registration";
 
 type Rider = {
   id: string;
@@ -13,6 +14,9 @@ type Rider = {
   team_name: string | null;
   is_leader: boolean | null;
   full_name: string;
+  /* Optional at registration, so null for many riders. */
+  father_name: string | null;
+  mother_name: string | null;
   age: number;
   location: string;
   phone: string;
@@ -324,7 +328,7 @@ export default function CheckInPanel() {
                         )
                         .join(" + ")}
                       {" · "}
-                      {match.email}
+                      {displayEmail(match.email)}
                       {" · "}
                       {match.phone}
                     </span>
@@ -385,10 +389,12 @@ export default function CheckInPanel() {
           )}
 
           <div className="grid gap-4 sm:grid-cols-2">
+            <Detail label="Father's Name" value={rider.father_name ?? null} />
+            <Detail label="Mother's Name" value={rider.mother_name ?? null} />
             <Detail label="Age" value={rider.age} />
             <Detail label="Location" value={rider.location} />
             <Detail label="Phone" value={rider.phone} />
-            <Detail label="Email" value={rider.email} />
+            <Detail label="Email" value={displayEmail(rider.email)} />
             <Detail label="Experience" value={rider.years_experience} />
             <Detail label="Horse Age" value={rider.horse_age} />
             <Detail label="Horse Breed" value={rider.horse_breed} />

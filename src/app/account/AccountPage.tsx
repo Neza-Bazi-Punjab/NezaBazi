@@ -8,6 +8,7 @@ import LocationPicker from "@/components/LocationPicker";
 import SectionHeading from "@/components/SectionHeading";
 import { isValidEmail } from "@/lib/email-address";
 import { site } from "@/lib/site";
+import { displayEmail } from "@/lib/paper-registration";
 
 export type AccountProfile = {
   id: string;
@@ -25,6 +26,9 @@ export type AccountProfile = {
 export type AccountSoloRegistration = {
   id: string;
   full_name: string;
+  /* Optional at registration; hidden on the card while null. */
+  father_name: string | null;
+  mother_name: string | null;
   age: number;
   location: string;
   phone: string;
@@ -47,6 +51,8 @@ export type AccountTeamMember = {
   id: string;
   team_id: string;
   full_name: string;
+  father_name: string | null;
+  mother_name: string | null;
   age: number;
   location: string;
   phone: string;
@@ -105,6 +111,21 @@ const Detail = ({ label, value }: { label: string; value: string | number }) => 
     </p>
     <p className="mt-1 text-brown/85">{value}</p>
   </div>
+);
+
+/* Father's and mother's names are optional, so a card shows only the ones the
+   rider gave rather than two empty rows. */
+const ParentNames = ({
+  fatherName,
+  motherName,
+}: {
+  fatherName: string | null | undefined;
+  motherName: string | null | undefined;
+}) => (
+  <>
+    {fatherName ? <Detail label="Father's Name" value={fatherName} /> : null}
+    {motherName ? <Detail label="Mother's Name" value={motherName} /> : null}
+  </>
 );
 
 /* The rider's check-in code, plus whether they have already been checked in.
@@ -437,10 +458,17 @@ export default function AccountPageClient({
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <Detail label="Full Name" value={soloRegistration.full_name} />
+                    <ParentNames
+                      fatherName={soloRegistration.father_name}
+                      motherName={soloRegistration.mother_name}
+                    />
                     <Detail label="Age" value={soloRegistration.age} />
                     <Detail label="Location" value={soloRegistration.location} />
                     <Detail label="Phone" value={soloRegistration.phone} />
-                    <Detail label="Email" value={soloRegistration.email} />
+                    <Detail
+                      label="Email"
+                      value={displayEmail(soloRegistration.email)}
+                    />
                     <Detail
                       label="Experience"
                       value={soloRegistration.years_experience}
@@ -486,10 +514,14 @@ export default function AccountPageClient({
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <Detail label="Full Name" value={member.full_name} />
+                    <ParentNames
+                      fatherName={member.father_name}
+                      motherName={member.mother_name}
+                    />
                     <Detail label="Age" value={member.age} />
                     <Detail label="Location" value={member.location} />
                     <Detail label="Phone" value={member.phone} />
-                    <Detail label="Email" value={member.email} />
+                    <Detail label="Email" value={displayEmail(member.email)} />
                     <Detail label="Experience" value={member.years_experience} />
                     <Detail label="Horse Age" value={member.horse_age} />
                     <Detail label="Horse Breed" value={member.horse_breed} />
@@ -541,10 +573,17 @@ export default function AccountPageClient({
                         </h4>
 
                         <div className="grid gap-4 sm:grid-cols-2">
+                          <ParentNames
+                            fatherName={member.father_name}
+                            motherName={member.mother_name}
+                          />
                           <Detail label="Age" value={member.age} />
                           <Detail label="Location" value={member.location} />
                           <Detail label="Phone" value={member.phone} />
-                          <Detail label="Email" value={member.email} />
+                          <Detail
+                            label="Email"
+                            value={displayEmail(member.email)}
+                          />
                           <Detail label="Experience" value={member.years_experience} />
                           <Detail
                             label="Horse Name"

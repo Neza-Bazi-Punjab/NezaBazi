@@ -10,6 +10,8 @@
 // fail a registration that already succeeded.
 import "server-only";
 
+import { isPaperPlaceholderEmail } from "@/lib/paper-registration";
+
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 
 export type SendEmailResult =
@@ -39,6 +41,17 @@ export const sendEmail = async ({
   html,
   text,
 }: SendEmailInput): Promise<SendEmailResult> => {
+  // A rider entered from a paper form without an email address holds a
+  // generated placeholder on a domain that receives no mail. Refuse it before
+  // Resend is called: the send could only bounce, and bounces count against
+  // the sending domain every other rider's email depends on.
+  if (isPaperPlaceholderEmail(to)) {
+    return {
+      status: "skipped",
+      reason: "The rider registered on paper without an email address.",
+    };
+  }
+
   const apiKey = process.env.RESEND_API_KEY?.trim();
 
   if (!apiKey) {

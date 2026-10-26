@@ -193,6 +193,9 @@ export async function PATCH(request: Request) {
     // confirms, the next sign-in's POST sync reconciles the solo row by
     // profile_id.
     syncEmail: !emailRequiresConfirmation,
+    // The address the session already had confirmed (hasConfirmedEmail was
+    // checked above), never the one just requested.
+    confirmedEmail: previousEmail,
   });
 
   return NextResponse.json({

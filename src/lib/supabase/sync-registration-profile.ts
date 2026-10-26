@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   createClient as createSupabaseAdminClient,
+  type SupabaseClient,
   type User,
 } from "@supabase/supabase-js";
 import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
@@ -22,6 +23,45 @@ type RegistrationProfile = {
   // while an email change is awaiting confirmation, so an unconfirmed address
   // is never propagated onto registrations.
   syncEmail?: boolean;
+  // The address Supabase Auth has confirmed for this user. Both callers check
+  // hasConfirmedEmail first. Used only to claim a paper entry (below); never
+  // pass an address the user has not confirmed.
+  confirmedEmail?: string | null;
+};
+
+/* A paper entry (keyed in from the printed form at /admin/paper) has no
+   account, so solo_registrations.profile_id is null and the update by
+   profile_id below never reaches it. Once an administrator has replaced the
+   placeholder with the rider's real address and the rider signs up and
+   confirms that address, the row is claimed by it — the same email-identity
+   rule that links team riders. Paper rows only (an online row always has its
+   owner), only while unclaimed, and only when the user has no solo entry yet,
+   so nobody ends up holding two. Best effort: a failure (including the paper
+   migration not being applied yet) is logged and the sync carries on. */
+const claimPaperSoloRegistration = async (
+  serviceSupabase: SupabaseClient,
+  userId: string,
+  confirmedEmail: string
+) => {
+  const { count, error: countError } = await serviceSupabase
+    .from("solo_registrations")
+    .select("id", { count: "exact", head: true })
+    .eq("profile_id", userId);
+
+  if (countError || (count ?? 0) > 0) {
+    return;
+  }
+
+  const { error } = await serviceSupabase
+    .from("solo_registrations")
+    .update({ profile_id: userId })
+    .is("profile_id", null)
+    .eq("registration_source", "paper")
+    .ilike("email", escapeIlikePattern(confirmedEmail));
+
+  if (error) {
+    console.warn("Could not link a paper registration to the account", error.code);
+  }
 };
 
 type AccountMetadata = {
@@ -90,6 +130,7 @@ export const syncRegistrationProfile = async ({
   horseAge,
   horseBreed,
   syncEmail = true,
+  confirmedEmail = null,
 }: RegistrationProfile) => {
   const serviceSupabase = createSupabaseAdminClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -117,6 +158,10 @@ export const syncRegistrationProfile = async ({
 
   const warnings: string[] = [];
   let syncedCount = 0;
+
+  if (confirmedEmail && confirmedEmail.trim() !== "") {
+    await claimPaperSoloRegistration(serviceSupabase, userId, confirmedEmail.trim());
+  }
 
   // The solo row belongs to this user (profile_id), so writing the current
   // confirmed email onto it is always safe and self-heals it after an email
@@ -186,6 +231,8 @@ export const syncRegistrationProfileFromUser = async (user: User) => {
     userId: user.id,
     previousEmail: user.email,
     email: user.email.trim().toLowerCase(),
+    // hasConfirmedEmail(user) was checked above.
+    confirmedEmail: user.email,
     fullName,
     age,
     location,

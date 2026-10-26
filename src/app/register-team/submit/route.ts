@@ -9,6 +9,10 @@ import { createClient } from "@/lib/supabase/server";
 
 type RiderInput = {
   fullName: string;
+  /* Optional. A blank box arrives as "" and is stored as null; a tab opened
+     before these fields existed sends neither key, which reads the same. */
+  fatherName: string;
+  motherName: string;
   age: string;
   location: string;
   phone: string;
@@ -23,9 +27,119 @@ type RegisterTeamRequest = {
   teamName: string;
   existingTeamId?: string;
   // One contact for the whole section, held on `teams`.
-  emergencyContactName?: string;
-  emergencyContactPhone?: string;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
   riders: RiderInput[];
+};
+
+const PARENT_NAME_MAX_LENGTH = 200;
+
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const stringOrNull = (value: unknown) => (typeof value === "string" ? value : null);
+
+/* Absent and null both mean "left blank"; anything else that is not a string
+   is a malformed request. */
+const optionalString = (value: unknown) =>
+  value === undefined || value === null ? "" : stringOrNull(value);
+
+/* Every wizard field is a string. A rider that is not shaped like one is a
+   malformed request rather than something to explain field by field. */
+const parseRider = (value: unknown): RiderInput | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const rider = {
+    fullName: stringOrNull(value.fullName),
+    fatherName: optionalString(value.fatherName),
+    motherName: optionalString(value.motherName),
+    age: stringOrNull(value.age),
+    location: stringOrNull(value.location),
+    phone: stringOrNull(value.phone),
+    email: stringOrNull(value.email),
+    yearsExperience: stringOrNull(value.yearsExperience),
+    horseName: stringOrNull(value.horseName),
+    horseAge: stringOrNull(value.horseAge),
+    horseBreed: stringOrNull(value.horseBreed),
+  };
+
+  if (
+    rider.fullName === null ||
+    rider.fatherName === null ||
+    rider.motherName === null ||
+    rider.age === null ||
+    rider.location === null ||
+    rider.phone === null ||
+    rider.email === null ||
+    rider.yearsExperience === null ||
+    rider.horseName === null ||
+    rider.horseAge === null ||
+    rider.horseBreed === null
+  ) {
+    return null;
+  }
+
+  return {
+    fullName: rider.fullName,
+    fatherName: rider.fatherName,
+    motherName: rider.motherName,
+    age: rider.age,
+    location: rider.location,
+    phone: rider.phone,
+    email: rider.email,
+    yearsExperience: rider.yearsExperience,
+    horseName: rider.horseName,
+    horseAge: rider.horseAge,
+    horseBreed: rider.horseBreed,
+  };
+};
+
+const parseRequest = (value: unknown): RegisterTeamRequest | null => {
+  if (!isRecord(value) || !Array.isArray(value.riders)) {
+    return null;
+  }
+
+  const teamName = stringOrNull(value.teamName);
+  const emergencyContactName = optionalString(value.emergencyContactName);
+  const emergencyContactPhone = optionalString(value.emergencyContactPhone);
+  const existingTeamId =
+    value.existingTeamId === undefined || value.existingTeamId === null
+      ? undefined
+      : stringOrNull(value.existingTeamId);
+  const riders = value.riders.map(parseRider);
+
+  if (
+    teamName === null ||
+    emergencyContactName === null ||
+    emergencyContactPhone === null ||
+    existingTeamId === null ||
+    (existingTeamId !== undefined && !uuidPattern.test(existingTeamId))
+  ) {
+    return null;
+  }
+
+  const validRiders: RiderInput[] = [];
+
+  for (const rider of riders) {
+    if (!rider) {
+      return null;
+    }
+
+    validRiders.push(rider);
+  }
+
+  return {
+    teamName,
+    existingTeamId,
+    emergencyContactName,
+    emergencyContactPhone,
+    riders: validRiders,
+  };
 };
 
 
@@ -68,6 +182,14 @@ const validateRider = (rider: RiderInput, label: string) => {
     return `${label}: please enter a valid email address.`;
   }
 
+  if (rider.fatherName.trim().length > PARENT_NAME_MAX_LENGTH) {
+    return `${label}: father's name must be ${PARENT_NAME_MAX_LENGTH} characters or fewer.`;
+  }
+
+  if (rider.motherName.trim().length > PARENT_NAME_MAX_LENGTH) {
+    return `${label}: mother's name must be ${PARENT_NAME_MAX_LENGTH} characters or fewer.`;
+  }
+
   if (parseBoundedInt(rider.age, { min: 1, max: 120 }) === null) {
     return `${label}: please enter a valid age.`;
   }
@@ -103,12 +225,28 @@ export async function POST(request: Request) {
     );
   }
 
-  const body = (await request.json()) as RegisterTeamRequest;
-  const { teamName, existingTeamId, riders } = body;
-  const emergencyContactName = (body.emergencyContactName ?? "").trim();
-  const emergencyContactPhone = (body.emergencyContactPhone ?? "").trim();
+  let rawBody: unknown;
 
-  if (!teamName || teamName.trim() === "" || !Array.isArray(riders) || riders.length !== 4) {
+  try {
+    rawBody = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  }
+
+  const body = parseRequest(rawBody);
+
+  if (!body) {
+    return NextResponse.json(
+      { error: "Please provide a valid team registration." },
+      { status: 400 }
+    );
+  }
+
+  const { teamName, existingTeamId, riders } = body;
+  const emergencyContactName = body.emergencyContactName.trim();
+  const emergencyContactPhone = body.emergencyContactPhone.trim();
+
+  if (teamName.trim() === "" || riders.length !== 4) {
     return NextResponse.json(
       { error: "Please submit a team name and exactly 4 riders." },
       { status: 400 }
@@ -140,6 +278,8 @@ export async function POST(request: Request) {
 
   const normalizedRiders = riders.map((rider) => ({
     fullName: rider.fullName.trim(),
+    fatherName: rider.fatherName.trim(),
+    motherName: rider.motherName.trim(),
     age: rider.age.trim(),
     location: rider.location.trim(),
     phone: rider.phone.trim(),
@@ -322,6 +462,8 @@ export async function POST(request: Request) {
       normalizedRiders.map((rider, index) => ({
         team_id: teamId,
         full_name: rider.fullName,
+        father_name: rider.fatherName || null,
+        mother_name: rider.motherName || null,
         age: Number(rider.age),
         location: rider.location,
         phone: rider.phone,

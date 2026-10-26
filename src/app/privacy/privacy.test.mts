@@ -15,3 +15,13 @@ test("the footer exposes the production privacy policy URL", () => {
     "https://www.nezabazipunjab.com/privacy"
   );
 });
+
+test("the policy covers parents' names, paper registration and public results", async () => {
+  const { readFileSync } = await import("node:fs");
+  const page = readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
+
+  assert.match(page, /Father&apos;s and mother&apos;s names \(optional\)/);
+  assert.match(page, /Paper registration\./);
+  assert.match(page, /public\s+live scoreboard/);
+  assert.match(page, /parents&apos; names and\s+emergency contacts are never shown publicly/);
+});

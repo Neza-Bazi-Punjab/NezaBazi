@@ -11,6 +11,9 @@ export type DraftType = "solo" | "team";
 export type SoloDraftData = {
   step?: number;
   fullName?: string;
+  // Optional on the form; kept in the draft like every other field.
+  fatherName?: string;
+  motherName?: string;
   age?: string;
   location?: string;
   phone?: string;
@@ -25,6 +28,8 @@ export type SoloDraftData = {
 
 export type TeamRiderDraft = {
   fullName?: string;
+  fatherName?: string;
+  motherName?: string;
   age?: string;
   location?: string;
   phone?: string;

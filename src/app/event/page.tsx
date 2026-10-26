@@ -77,6 +77,27 @@ const eventStats = [
   },
 ];
 
+/* What this website itself does, as opposed to what happens on the day.
+   Riders arrive here to enter the championship, so the site is an account and
+   registration system as much as an event page — and Google's OAuth brand
+   review reads this page to confirm the sign-in button has a stated purpose. */
+const riderAccountSteps = [
+  {
+    title: "Create Your Account",
+    detail:
+      "Sign up with your email address and a password, or use Continue with Google. Signing in with Google shares only your name, email address and profile picture with this site.",
+  },
+  {
+    title: "Submit Your Registration",
+    detail:
+      "Enter as a single rider, or as the leader of a four-rider section. You provide your name, age, village or town, phone number and your horse's details.",
+  },
+  {
+    title: "Get Your Check-In Code",
+    detail: `Every rider receives a confirmation code by email. Bring it to check-in on ${site.checkInDate} — only riders who check in are drawn into the brackets.`,
+  },
+];
+
 const schedule = [
   {
     time: "Morning",
@@ -283,6 +304,58 @@ export default function EventPage() {
           </p>
         </Reveal>
         <BrushDivider className="text-bronze/80" flip />
+      </section>
+
+      {/* Rider accounts: what this website does, for riders and for Google's
+          OAuth brand review, which checks that the sign-in has a stated purpose */}
+      <section className="bg-sand">
+        <Reveal className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
+          <div className="flex flex-col gap-4 border-b border-bronze/25 pb-6 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="font-display text-xs font-semibold uppercase tracking-[0.3em] text-bronze">
+                Rider Accounts
+              </p>
+              <h2 className="mt-2 font-display text-4xl font-bold uppercase leading-none text-ink sm:text-5xl">
+                Register & Manage Your Entry
+              </h2>
+            </div>
+            <p className="max-w-md text-sm leading-6 text-brown/75">
+              {`This website is where riders enter the ${site.title}. Create a rider account to submit your registration, keep your details up to date, and collect the code you bring to check-in.`}
+            </p>
+          </div>
+
+          <ol className="mt-10 grid gap-5 lg:grid-cols-3">
+            {riderAccountSteps.map((step, index) => (
+              <li
+                key={step.title}
+                className="rounded-2xl border border-bronze/20 bg-cream p-5"
+              >
+                <p className="font-display text-6xl font-bold leading-none text-bronze/20">
+                  {String(index + 1).padStart(2, "0")}
+                </p>
+                <h3 className="mt-5 font-display text-xl font-bold uppercase leading-tight text-ink">
+                  {step.title}
+                </h3>
+                <p className="mt-3 text-sm leading-6 text-brown/85">
+                  {step.detail}
+                </p>
+              </li>
+            ))}
+          </ol>
+
+          <div className="mt-10 flex flex-col gap-5 rounded-2xl border border-bronze/25 bg-ink px-5 py-5 text-cream sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+            <p className="max-w-2xl text-sm leading-6 text-cream/85">
+              {`You can sign in at any time to review or change what you submitted. These details are used only to run the championship — the `}
+              <Link href="/privacy" className="text-bronze underline">
+                privacy policy
+              </Link>
+              {` explains how your information is stored and who can see it.`}
+            </p>
+            <ButtonLink href="/register" variant="light">
+              Register Now
+            </ButtonLink>
+          </div>
+        </Reveal>
       </section>
 
       {/* Contact: the site's channels, spelled out once in full */}

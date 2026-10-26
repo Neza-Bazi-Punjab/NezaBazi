@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
 import BrushDivider from "@/components/BrushDivider";
 import ButtonLink from "@/components/Button";
 import Reveal from "@/components/Reveal";
@@ -54,6 +55,13 @@ export default function RegisterPage() {
             Register a Team
           </ButtonLink>
         </div>
+
+        <Link
+          href="/register/paper"
+          className="mt-6 text-sm text-cream/80 underline decoration-bronze/70 underline-offset-4 transition-colors hover:text-bronze"
+        >
+          Prefer paper? Download the form
+        </Link>
       </Reveal>
 
       <BrushDivider className="relative text-sand" />

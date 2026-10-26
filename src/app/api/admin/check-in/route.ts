@@ -14,6 +14,9 @@ import { escapeIlikePattern } from "@/lib/supabase/query";
 
 type LookupRequest = { code?: unknown; query?: unknown };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
 type RiderMatch = {
   id: string;
   source: "solo" | "team";
@@ -157,7 +160,8 @@ export async function POST(request: Request) {
   let body: LookupRequest;
 
   try {
-    body = (await request.json()) as LookupRequest;
+    const rawBody: unknown = await request.json();
+    body = isRecord(rawBody) ? { code: rawBody.code, query: rawBody.query } : {};
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
@@ -200,6 +204,8 @@ export async function POST(request: Request) {
   const code = rawCode.toUpperCase().startsWith("NBP-")
     ? rawCode
     : `NBP-${rawCode}`;
+  // Rows go to the desk as the function returns them — every rider field,
+  // including father_name and mother_name (optional, so often null).
   const { data, error } = await serviceSupabase.rpc("admin_find_rider_by_code", {
     p_code: code,
   });
@@ -283,7 +289,10 @@ export async function PATCH(request: Request) {
   let body: CheckInRequest;
 
   try {
-    body = (await request.json()) as CheckInRequest;
+    const rawBody: unknown = await request.json();
+    body = isRecord(rawBody)
+      ? { code: rawBody.code, checkedIn: rawBody.checkedIn }
+      : {};
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
