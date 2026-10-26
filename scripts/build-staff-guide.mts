@@ -691,6 +691,10 @@ const directiveArgs = (text: string) => {
   return args;
 };
 
+/* An outline comment's end tag: "-->" or the spec's other form "--!>". */
+const COMMENT_END = /--!?>/;
+const COMMENT_END_TO_EOF = /--!?>[\s\S]*$/;
+
 const parseOutline = (source: string, name: string): { front: FrontMatter; blocks: Block[] } => {
   const lines = source.replace(/\r\n/g, "\n").split("\n");
   const front: Record<string, string> = {};
@@ -802,13 +806,16 @@ const parseOutline = (source: string, name: string): { front: FrontMatter; block
     if (trimmed.startsWith("<!--")) {
       let comment = trimmed;
 
-      while (!comment.includes("-->") && index < lines.length) {
+      /* A comment ends at "-->" or, as the HTML spec also allows, "--!>". The
+         outlines only ever use the first; both are accepted so the parser
+         matches the spec (and CodeQL's bad-tag-filter rule). */
+      while (!COMMENT_END.test(comment) && index < lines.length) {
         comment += `\n${lines[index]}`;
         index += 1;
       }
 
       flush();
-      const body = comment.replace(/^<!--/, "").replace(/-->[\s\S]*$/, "").trim();
+      const body = comment.replace(/^<!--/, "").replace(COMMENT_END_TO_EOF, "").trim();
       const [name, ...restParts] = body.split(/\s*:\s*/);
       const rest = restParts.join(":");
 
