@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { isProfileRole, type ProfileRole } from "@/lib/scoring/types";
 import { createClient } from "@/lib/supabase/client";
 import { navLinks } from "@/lib/site";
 import Logo from "./Logo";
@@ -16,6 +17,21 @@ const getUserLabel = ({
   user_metadata?: { full_name?: string };
 }) => user_metadata?.full_name ?? email ?? "Player";
 
+/* The staff panels each role can open. They sit among the account items
+   (beside My Account), never as tabs: the public tabs stay Home, Event and
+   Rulebook. Administrators can open every panel; players see nothing extra.
+   The panels check the role again server-side, so this is only a shortcut. */
+const staffLinksByRole: Record<ProfileRole, readonly { href: string; label: string }[]> = {
+  player: [],
+  judge: [{ href: "/judge", label: "Judge Panel" }],
+  commentator: [{ href: "/commentary", label: "Commentary" }],
+  admin: [
+    { href: "/admin", label: "Admin" },
+    { href: "/judge", label: "Judge Panel" },
+    { href: "/commentary", label: "Commentary" },
+  ],
+};
+
 /* Sticky top navigation: animated hover/active underlines on desktop and a
    mobile dropdown that smoothly expands and collapses (kept mounted so both
    directions animate). */
@@ -23,10 +39,19 @@ export default function Navbar() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [userLabel, setUserLabel] = useState<string | null>(null);
+  const [role, setRole] = useState<ProfileRole>("player");
   const [authLoading, setAuthLoading] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
   const [supabase] = useState(() => createClient());
   const pathname = usePathname();
+
+  /* Only a signed-in person ever sees staff links, even for the moment
+     between signing out and the role being cleared. */
+  const staffLinks = userLabel ? staffLinksByRole[role] : [];
+  /* An administrator's three staff links, My Account, Log Out and Register
+     Now do not fit in one desktop row until xl (they wrap at 1024px), so
+     below xl the Register Now button gives way for administrators only. */
+  const crowded = staffLinks.length > 1;
 
   /* Shared styling for mobile menu rows so nav links, auth links and the
      user/logout rows all read as one consistent list with equal tap areas. */
@@ -39,6 +64,9 @@ export default function Navbar() {
     opacity: open ? 1 : 0,
     transform: open ? "none" : "translateY(-6px)",
   });
+  /* Mobile rows after the public tabs: the staff links, then the two account
+     rows (My Account and Log Out, or Log In and Sign Up). */
+  const accountRowIndex = navLinks.length + staffLinks.length;
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -51,6 +79,44 @@ export default function Navbar() {
 
   useEffect(() => {
     let mounted = true;
+    /* Whose role is loaded (or loading), so the getUser result and the
+       initial auth event do not both query it, and a late answer for a
+       previous user is dropped. */
+    let roleUserId: string | null = null;
+
+    /* Reads the signed-in user's own `profiles.role` (RLS lets a user select
+       their own row). Anything that is not a known role counts as "player".
+       Never awaited by the render path, so the navbar shows straight away and
+       the staff links appear once the answer arrives. */
+    const loadRole = async (userId: string | null) => {
+      if (!mounted || userId === roleUserId) {
+        return;
+      }
+
+      roleUserId = userId;
+
+      if (!userId) {
+        setRole("player");
+        return;
+      }
+
+      const { data: profile, error } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (!mounted || roleUserId !== userId) {
+        return;
+      }
+
+      if (error) {
+        // Let the next auth event try again.
+        roleUserId = null;
+      }
+
+      setRole(isProfileRole(profile?.role) ? profile.role : "player");
+    };
 
     const loadUser = async () => {
       const {
@@ -63,6 +129,7 @@ export default function Navbar() {
 
       setUserLabel(user ? getUserLabel(user) : null);
       setAuthLoading(false);
+      void loadRole(user?.id ?? null);
     };
 
     loadUser();
@@ -72,6 +139,13 @@ export default function Navbar() {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUserLabel(session?.user ? getUserLabel(session.user) : null);
       setAuthLoading(false);
+
+      /* Calling Supabase from inside this callback can deadlock the auth
+         client, so the role lookup runs once the callback has returned. */
+      const userId = session?.user.id ?? null;
+      setTimeout(() => {
+        void loadRole(userId);
+      }, 0);
     });
 
     return () => {
@@ -112,6 +186,15 @@ export default function Navbar() {
           {!authLoading &&
             (userLabel ? (
               <div className="flex items-center gap-4">
+                {staffLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="nav-underline font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70 transition-colors hover:text-bronze"
+                  >
+                    {link.label}
+                  </Link>
+                ))}
                 <Link
                   href="/account"
                   className="nav-underline font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70 transition-colors hover:text-bronze"
@@ -145,7 +228,7 @@ export default function Navbar() {
             ))}
           <Link
             href="/register"
-            className="rounded-full bg-bronze px-6 py-2.5 font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream shadow-sm transition-[background-color,transform,box-shadow] duration-[var(--dur-base)] ease-[var(--ease-soft)] hover:bg-bronze-dark hover:shadow-md motion-safe:hover:-translate-y-0.5"
+            className={`${crowded ? "hidden xl:block " : ""}rounded-full bg-bronze px-6 py-2.5 font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream shadow-sm transition-[background-color,transform,box-shadow] duration-[var(--dur-base)] ease-[var(--ease-soft)] hover:bg-bronze-dark hover:shadow-md motion-safe:hover:-translate-y-0.5`}
           >
             Register Now
           </Link>
@@ -195,9 +278,25 @@ export default function Navbar() {
             {!authLoading &&
               (userLabel ? (
                 <>
+                  {staffLinks.map((link, i) => (
+                    <li
+                      key={link.href}
+                      className={mobileItemClass}
+                      style={mobileItemStyle(navLinks.length + i)}
+                    >
+                      <Link
+                        href={link.href}
+                        onClick={() => setOpen(false)}
+                        tabIndex={open ? undefined : -1}
+                        className={`${mobileRowClass} text-brown/80`}
+                      >
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
                   <li
                     className={mobileItemClass}
-                    style={mobileItemStyle(navLinks.length)}
+                    style={mobileItemStyle(accountRowIndex)}
                   >
                     <Link
                       href="/account"
@@ -210,7 +309,7 @@ export default function Navbar() {
                   </li>
                   <li
                     className={mobileItemClass}
-                    style={mobileItemStyle(navLinks.length + 1)}
+                    style={mobileItemStyle(accountRowIndex + 1)}
                   >
                     <button
                       type="button"
@@ -227,7 +326,7 @@ export default function Navbar() {
                 <>
                   <li
                     className={mobileItemClass}
-                    style={mobileItemStyle(navLinks.length)}
+                    style={mobileItemStyle(accountRowIndex)}
                   >
                     <Link
                       href="/login"
@@ -242,7 +341,7 @@ export default function Navbar() {
                   </li>
                   <li
                     className={mobileItemClass}
-                    style={mobileItemStyle(navLinks.length + 1)}
+                    style={mobileItemStyle(accountRowIndex + 1)}
                   >
                     <Link
                       href="/signup"
@@ -259,7 +358,7 @@ export default function Navbar() {
               ))}
             <li
               className={`pt-4 ${mobileItemClass}`}
-              style={mobileItemStyle(navLinks.length + 2)}
+              style={mobileItemStyle(accountRowIndex + 2)}
             >
               <Link
                 href="/register"

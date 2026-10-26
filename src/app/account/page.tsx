@@ -79,7 +79,7 @@ export default async function AccountPage() {
     supabase
       .from("solo_registrations")
       .select(
-        "id, full_name, age, location, phone, email, years_experience, horse_age, horse_breed, created_at, confirmation_code, checked_in_at"
+        "id, full_name, father_name, mother_name, age, location, phone, email, years_experience, horse_age, horse_breed, created_at, confirmation_code, checked_in_at"
       )
       .eq("profile_id", user.id)
       .maybeSingle(),
@@ -94,7 +94,7 @@ export default async function AccountPage() {
     ? await supabase
         .from("team_members")
         .select(
-          "id, team_id, full_name, age, location, phone, email, years_experience, horse_name, horse_age, horse_breed, is_leader, created_at, confirmation_code, checked_in_at"
+          "id, team_id, full_name, father_name, mother_name, age, location, phone, email, years_experience, horse_name, horse_age, horse_breed, is_leader, created_at, confirmation_code, checked_in_at"
         )
         .eq("team_id", team.id)
     : { data: null };
@@ -115,7 +115,7 @@ export default async function AccountPage() {
     const { data: memberRows } = await serviceSupabase
       .from("team_members")
       .select(
-        "id, team_id, full_name, age, location, phone, email, years_experience, horse_name, horse_age, horse_breed, is_leader, created_at, confirmation_code, checked_in_at"
+        "id, team_id, full_name, father_name, mother_name, age, location, phone, email, years_experience, horse_name, horse_age, horse_breed, is_leader, created_at, confirmation_code, checked_in_at"
       )
       .ilike("email", escapeIlikePattern(user.email))
       .eq("is_leader", false);

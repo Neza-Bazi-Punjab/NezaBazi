@@ -6,25 +6,108 @@ import {
   verifyAdminRequest,
 } from "@/lib/admin/server";
 import { isValidEmail } from "@/lib/email-address";
+import { isProfileRole, type ProfileRole } from "@/lib/scoring/types";
 import { escapeIlikePattern } from "@/lib/supabase/query";
+
+export const dynamic = "force-dynamic";
+
+/* A database read or write failed. The detail goes to the server log; the
+   administrator gets a sentence, not Postgres text. Auth API errors (from
+   supabase.auth.admin) are human-readable and are still passed through. */
+const databaseErrorResponse = (error: { code?: string; message?: string }) => {
+  console.error("Admin users route database error", { code: error.code, message: error.message });
+  return NextResponse.json(
+    { error: "The database could not complete this request. Try again." },
+    { status: 500 }
+  );
+};
 
 type ProfileRow = {
   id: string;
   role: string | null;
 };
 
-type UpdateRoleRequest = {
-  userId?: string;
-  newRole?: "admin" | "player";
-  email?: string;
-  linkedRegistrationUpdates?: Array<{
-    type?: "solo" | "team_member";
-    id?: string;
-  }>;
+type LinkedRegistrationUpdate = {
+  type: "solo" | "team_member";
+  id: string;
 };
 
-type DeleteUserRequest = {
-  userId?: string;
+type UpdateRoleRequest = {
+  userId: string;
+  /* player, judge, commentator or admin. admin_set_profile_role is the only
+     write path for a role, and it audits the change in the same transaction. */
+  newRole?: ProfileRole;
+  email?: string;
+  linkedRegistrationUpdates: LinkedRegistrationUpdate[];
+};
+
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isUserId = (value: unknown): value is string =>
+  typeof value === "string" && uuidPattern.test(value);
+
+const parseLinkedRegistrationUpdate = (
+  value: unknown
+): LinkedRegistrationUpdate | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const { type, id } = value;
+
+  if ((type !== "solo" && type !== "team_member") || !isUserId(id)) {
+    return null;
+  }
+
+  return { type, id };
+};
+
+/* Null when the body is not a well-formed update. Field-level problems that
+   deserve their own message (no update at all, a bad email) are reported by
+   the handler. */
+const parseUpdateRequest = (value: unknown): UpdateRoleRequest | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const { userId, newRole, email } = value;
+
+  if (
+    !isUserId(userId) ||
+    (newRole !== undefined && !isProfileRole(newRole)) ||
+    (email !== undefined && typeof email !== "string")
+  ) {
+    return null;
+  }
+
+  const rawUpdates = value.linkedRegistrationUpdates ?? [];
+
+  if (!Array.isArray(rawUpdates) || rawUpdates.length > 20) {
+    return null;
+  }
+
+  const linkedRegistrationUpdates: LinkedRegistrationUpdate[] = [];
+
+  for (const rawUpdate of rawUpdates) {
+    const update = parseLinkedRegistrationUpdate(rawUpdate);
+
+    if (!update) {
+      return null;
+    }
+
+    linkedRegistrationUpdates.push(update);
+  }
+
+  return {
+    userId,
+    newRole: isProfileRole(newRole) ? newRole : undefined,
+    email: typeof email === "string" ? email : undefined,
+    linkedRegistrationUpdates,
+  };
 };
 
 
@@ -163,15 +246,15 @@ export async function GET(request: Request) {
     ]);
 
     if (soloError) {
-      return NextResponse.json({ error: soloError.message }, { status: 400 });
+      return databaseErrorResponse(soloError);
     }
 
     if (teamsError) {
-      return NextResponse.json({ error: teamsError.message }, { status: 400 });
+      return databaseErrorResponse(teamsError);
     }
 
     if (riderError) {
-      return NextResponse.json({ error: riderError.message }, { status: 400 });
+      return databaseErrorResponse(riderError);
     }
 
     const teamsById = new Map(
@@ -190,7 +273,7 @@ export async function GET(request: Request) {
       : { data: [], error: null };
 
     if (teamMembersError) {
-      return NextResponse.json({ error: teamMembersError.message }, { status: 400 });
+      return databaseErrorResponse(teamMembersError);
     }
 
     // Team names for rider rows on teams this user doesn't lead.
@@ -210,7 +293,7 @@ export async function GET(request: Request) {
         .in("id", missingTeamIds);
 
       if (riderTeamsError) {
-        return NextResponse.json({ error: riderTeamsError.message }, { status: 400 });
+        return databaseErrorResponse(riderTeamsError);
       }
 
       for (const team of (riderTeams ?? []) as Array<{ id: string; team_name: string }>) {
@@ -265,7 +348,7 @@ export async function GET(request: Request) {
     .select("id, role");
 
   if (profilesError) {
-    return NextResponse.json({ error: profilesError.message }, { status: 400 });
+    return databaseErrorResponse(profilesError);
   }
 
   const profilesById = new Map(
@@ -273,13 +356,16 @@ export async function GET(request: Request) {
   );
 
   const users = usersData.users.map((user) => {
-    const profile = profilesById.get(user.id);
+    const storedRole = profilesById.get(user.id)?.role;
+    // Every role is reported as stored; anything unrecognised reads as the
+    // least privileged one rather than leaking an unknown value to the UI.
+    const role: ProfileRole = isProfileRole(storedRole) ? storedRole : "player";
 
     return {
       id: user.id,
       email: user.email ?? "",
       created_at: user.created_at,
-      role: profile?.role === "admin" ? "admin" : "player",
+      role,
       full_name: getMetadataString(user.user_metadata, "full_name"),
       phone: getMetadataString(user.user_metadata, "phone"),
     };
@@ -295,19 +381,39 @@ export async function PATCH(request: Request) {
     return adminCheck.response;
   }
 
-  const body = (await request.json()) as UpdateRoleRequest;
-  const { userId, newRole } = body;
-  const email = body.email?.trim();
+  let rawBody: unknown;
 
-  if (!userId || (!newRole && !email)) {
+  try {
+    rawBody = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  }
+
+  if (
+    isRecord(rawBody) &&
+    rawBody.newRole !== undefined &&
+    !isProfileRole(rawBody.newRole)
+  ) {
+    return NextResponse.json({ error: "Please provide a valid role." }, { status: 400 });
+  }
+
+  const body = parseUpdateRequest(rawBody);
+
+  if (!body) {
     return NextResponse.json(
       { error: "Please provide a user id and at least one update." },
       { status: 400 }
     );
   }
 
-  if (newRole && newRole !== "admin" && newRole !== "player") {
-    return NextResponse.json({ error: "Please provide a valid role." }, { status: 400 });
+  const { userId, newRole } = body;
+  const email = body.email?.trim();
+
+  if (!newRole && !email) {
+    return NextResponse.json(
+      { error: "Please provide a user id and at least one update." },
+      { status: 400 }
+    );
   }
 
   if (email !== undefined && !isValidEmail(email)) {
@@ -325,7 +431,7 @@ export async function PATCH(request: Request) {
     .maybeSingle();
 
   if (targetProfileError) {
-    return NextResponse.json({ error: targetProfileError.message }, { status: 400 });
+    return databaseErrorResponse(targetProfileError);
   }
 
   if (!targetProfile) {
@@ -341,14 +447,16 @@ export async function PATCH(request: Request) {
 
   const targetSubjectName = getUserSubjectName(targetUserData?.user);
 
-  if (targetProfile.role === "admin" && newRole === "player") {
+  // Any role other than admin is a demotion for an administrator: judges and
+  // commentators cannot reach the dashboard, so the last admin keeps it.
+  if (targetProfile.role === "admin" && newRole !== undefined && newRole !== "admin") {
     const { count, error: adminCountError } = await serviceSupabase
       .from("profiles")
       .select("id", { count: "exact", head: true })
       .eq("role", "admin");
 
     if (adminCountError) {
-      return NextResponse.json({ error: adminCountError.message }, { status: 400 });
+      return databaseErrorResponse(adminCountError);
     }
 
     if ((count ?? 0) <= 1) {
@@ -435,11 +543,7 @@ export async function PATCH(request: Request) {
 
     const registrationWarnings: string[] = [];
 
-    for (const update of body.linkedRegistrationUpdates ?? []) {
-      if (!update.id || !update.type) {
-        continue;
-      }
-
+    for (const update of body.linkedRegistrationUpdates) {
       const { error: registrationError } =
         update.type === "solo"
           ? await serviceSupabase
@@ -466,7 +570,7 @@ export async function PATCH(request: Request) {
         subject_name: targetSubjectName ?? oldEmail ?? email,
         old_email: oldEmail,
         new_email: email,
-        linked_registration_updates: body.linkedRegistrationUpdates ?? [],
+        linked_registration_updates: body.linkedRegistrationUpdates,
         warnings: registrationWarnings,
       });
     } catch {
@@ -498,7 +602,25 @@ export async function PATCH(request: Request) {
     );
 
     if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
+      if (updateError.code === "P0002") {
+        return NextResponse.json({ error: "Profile not found." }, { status: 404 });
+      }
+
+      // Before 20261025110000_staff_roles.sql is applied, the database
+      // function still knows only player and admin.
+      if (updateError.code === "22023" || updateError.code === "23514") {
+        return NextResponse.json(
+          {
+            error:
+              newRole === "judge" || newRole === "commentator"
+                ? "The judge and commentator roles are not set up in the database yet (apply 20261025110000_staff_roles.sql)."
+                : "That role is not allowed.",
+          },
+          { status: 400 }
+        );
+      }
+
+      return databaseErrorResponse(updateError);
     }
   }
 
@@ -512,8 +634,16 @@ export async function DELETE(request: Request) {
     return adminCheck.response;
   }
 
-  const body = (await request.json()) as DeleteUserRequest;
-  const { userId } = body;
+  let rawBody: unknown;
+
+  try {
+    rawBody = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  }
+
+  const requestedUserId = isRecord(rawBody) ? rawBody.userId : null;
+  const userId = isUserId(requestedUserId) ? requestedUserId : null;
 
   if (!userId) {
     return NextResponse.json({ error: "Please provide a user id." }, { status: 400 });
@@ -527,7 +657,7 @@ export async function DELETE(request: Request) {
     .maybeSingle();
 
   if (targetProfileError) {
-    return NextResponse.json({ error: targetProfileError.message }, { status: 400 });
+    return databaseErrorResponse(targetProfileError);
   }
 
   if (!targetProfile) {
@@ -541,7 +671,7 @@ export async function DELETE(request: Request) {
       .eq("role", "admin");
 
     if (adminCountError) {
-      return NextResponse.json({ error: adminCountError.message }, { status: 400 });
+      return databaseErrorResponse(adminCountError);
     }
 
     if ((count ?? 0) <= 1) {
@@ -610,7 +740,7 @@ export async function DELETE(request: Request) {
     .eq("id", userId);
 
   if (deleteProfileError) {
-    return NextResponse.json({ error: deleteProfileError.message }, { status: 400 });
+    return databaseErrorResponse(deleteProfileError);
   }
 
   try {

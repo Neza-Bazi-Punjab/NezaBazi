@@ -34,6 +34,19 @@ export const footerQuickLinks = [
   { href: "/event", label: "Event" },
   { href: "/rules", label: "Rulebook" },
   { href: "/register", label: "Registration" },
+  { href: "/live", label: "Live Scores" },
   { href: "/login", label: "Login" },
   { href: "/privacy", label: "Privacy Policy" },
 ] as const;
+
+/* The judges' phone panel, the commentary panel and the stream overlays fill
+   the whole screen, so the site navbar and footer are not rendered on them
+   (see SiteChrome). Matched per path segment: "/judge" and "/judge/x" are
+   chromeless, "/judgement" would not be. */
+export const chromelessPathPrefixes = ["/overlay", "/judge", "/commentary"] as const;
+
+export const isChromelessPath = (pathname: string | null | undefined) =>
+  typeof pathname === "string" &&
+  chromelessPathPrefixes.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );

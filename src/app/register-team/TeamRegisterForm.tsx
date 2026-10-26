@@ -17,6 +17,9 @@ import { isValidEmail } from "@/lib/email-address";
 
 type RiderInput = {
   fullName: string;
+  // Optional — they help the announcer, and never block a team's entry.
+  fatherName: string;
+  motherName: string;
   age: string;
   location: string;
   phone: string;
@@ -43,6 +46,8 @@ type LeaderProfile = {
 
 const emptyRider: RiderInput = {
   fullName: "",
+  fatherName: "",
+  motherName: "",
   age: "",
   location: "",
   phone: "",
@@ -58,6 +63,9 @@ const numberToInputValue = (value?: number | null) => (value == null ? "" : Stri
 
 const leaderProfileToRider = (leaderProfile?: LeaderProfile): RiderInput => ({
   fullName: leaderProfile?.full_name ?? "",
+  // Not held on the account, so there is nothing to prefill.
+  fatherName: "",
+  motherName: "",
   age: numberToInputValue(leaderProfile?.age),
   location: leaderProfile?.location ?? "",
   phone: leaderProfile?.phone ?? "",
@@ -70,6 +78,8 @@ const leaderProfileToRider = (leaderProfile?: LeaderProfile): RiderInput => ({
 
 const draftToRider = (draft?: TeamRiderDraft): RiderInput => ({
   fullName: draft?.fullName ?? "",
+  fatherName: draft?.fatherName ?? "",
+  motherName: draft?.motherName ?? "",
   age: draft?.age ?? "",
   location: draft?.location ?? "",
   phone: draft?.phone ?? "",
@@ -99,6 +109,8 @@ const parseBoundedInt = (
   return parsed;
 };
 
+const PARENT_NAME_MAX_LENGTH = 200;
+
 /* Client-side mirror of the server's per-rider checks so the wizard can gate
    "Next" and mark review-step completeness; the submit route re-validates. */
 const getRiderError = (rider: RiderInput) => {
@@ -115,6 +127,14 @@ const getRiderError = (rider: RiderInput) => {
     if (!rider[field] || rider[field].trim() === "") {
       return `${fieldLabel} is required.`;
     }
+  }
+
+  if (rider.fatherName.trim().length > PARENT_NAME_MAX_LENGTH) {
+    return `Father's name must be ${PARENT_NAME_MAX_LENGTH} characters or fewer.`;
+  }
+
+  if (rider.motherName.trim().length > PARENT_NAME_MAX_LENGTH) {
+    return `Mother's name must be ${PARENT_NAME_MAX_LENGTH} characters or fewer.`;
   }
 
   if (!isValidEmail(rider.email)) {
@@ -188,13 +208,18 @@ export default function TeamRegisterForm({
   );
   const [riders, setRiders] = useState<RiderInput[]>(() =>
     Array.from({ length: 4 }, (_, index) => {
-      // The leader row always mirrors the account when locked; other rows
-      // (and the leader row for admins) resume from the saved draft.
-      if (index === 0 && lockLeaderProfileFields) {
-        return leaderProfileToRider(leaderProfile);
-      }
-
       const draftRider = initialDraft?.riders?.[index];
+
+      // The leader row always mirrors the account when locked; other rows
+      // (and the leader row for admins) resume from the saved draft. Parents'
+      // names are not account fields, so a locked leader keeps the drafted ones.
+      if (index === 0 && lockLeaderProfileFields) {
+        return {
+          ...leaderProfileToRider(leaderProfile),
+          fatherName: draftRider?.fatherName ?? "",
+          motherName: draftRider?.motherName ?? "",
+        };
+      }
 
       if (draftRider) {
         return draftToRider(draftRider);
@@ -335,6 +360,36 @@ export default function TeamRegisterForm({
             onChange={(e) => updateRider(index, "fullName", e.target.value)}
             readOnly={locked}
             className={locked ? lockedInputClassName : inputClassName}
+          />
+        </div>
+
+        <div>
+          <label htmlFor={`rider-${index}-father-name`} className={labelClassName}>
+            Father&apos;s Name (optional)
+          </label>
+          <input
+            id={`rider-${index}-father-name`}
+            type="text"
+            value={rider.fatherName}
+            onChange={(e) => updateRider(index, "fatherName", e.target.value)}
+            maxLength={PARENT_NAME_MAX_LENGTH}
+            autoComplete="off"
+            className={inputClassName}
+          />
+        </div>
+
+        <div>
+          <label htmlFor={`rider-${index}-mother-name`} className={labelClassName}>
+            Mother&apos;s Name (optional)
+          </label>
+          <input
+            id={`rider-${index}-mother-name`}
+            type="text"
+            value={rider.motherName}
+            onChange={(e) => updateRider(index, "motherName", e.target.value)}
+            maxLength={PARENT_NAME_MAX_LENGTH}
+            autoComplete="off"
+            className={inputClassName}
           />
         </div>
 
@@ -628,6 +683,8 @@ export default function TeamRegisterForm({
 
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   {reviewRow("Full Name", rider.fullName)}
+                  {reviewRow("Father's Name", rider.fatherName.trim())}
+                  {reviewRow("Mother's Name", rider.motherName.trim())}
                   {reviewRow("Age", rider.age)}
                   {reviewRow("Location", rider.location)}
                   {reviewRow("Phone", rider.phone)}

@@ -5,9 +5,11 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:forms": "node --no-warnings scripts/build-paper-forms.mts",
+    "build:guide": "node --no-warnings scripts/build-staff-guide.mts",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --no-warnings --test src/lib/supabase/query.test.mts src/lib/supabase/email-confirmation.test.mts src/lib/safe-redirect.test.mts src/lib/email-address.test.mts src/lib/admin/audit.test.mts src/components/location-picker.test.mts src/app/admin/AdminDashboard.layout.test.mts src/app/admin/check-in.test.mts src/app/layout.test.mts src/app/auth/auth-flow.test.mts src/app/privacy/privacy.test.mts"
+    "test": "node --no-warnings --test src/lib/supabase/query.test.mts src/lib/supabase/email-confirmation.test.mts src/lib/safe-redirect.test.mts src/lib/email-address.test.mts src/lib/admin/audit.test.mts src/components/location-picker.test.mts src/components/navbar-roles.test.mts src/app/admin/AdminDashboard.layout.test.mts src/app/admin/check-in.test.mts src/app/layout.test.mts src/app/auth/auth-flow.test.mts src/app/privacy/privacy.test.mts src/app/admin/parent-names.test.mts src/app/live/live-pages.test.mts src/app/admin/paper-registration.test.mts src/lib/scoring/live-scoring.test.mts src/lib/scoring/sample-engine.test.mts src/app/api/scoring-routes.test.mts src/lib/scoring/public-state.test.mts src/lib/scoring/format.test.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
@@ -19,12 +21,14 @@
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@pdf-lib/fontkit": "^1.1.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.0",
+    "pdf-lib": "^1.17.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

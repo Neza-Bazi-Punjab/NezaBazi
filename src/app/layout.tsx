@@ -5,6 +5,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import Footer from "@/components/Footer";
 import Navbar from "@/components/Navbar";
+import SiteChrome from "@/components/SiteChrome";
 import { site } from "@/lib/site";
 
 const oswald = Oswald({
@@ -43,9 +44,13 @@ export default function RootLayout({
       className={`${oswald.variable} ${inter.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
-        <Navbar />
+        <SiteChrome>
+          <Navbar />
+        </SiteChrome>
         <main className="flex flex-1 flex-col">{children}</main>
-        <Footer />
+        <SiteChrome>
+          <Footer />
+        </SiteChrome>
         <Analytics />
         <SpeedInsights />
       </body>
