@@ -621,6 +621,7 @@ export default function AdminDashboard({
   } | null>(null);
   const [isDeletingAudit, setIsDeletingAudit] = useState(false);
   const [auditDeleteError, setAuditDeleteError] = useState<string | null>(null);
+  const [auditDeletedCount, setAuditDeletedCount] = useState<number | null>(null);
   const normalizedQuery = searchQuery.trim().toLowerCase();
 
   const loadProfileUsers = useCallback(async () => {
@@ -1519,6 +1520,7 @@ export default function AdminDashboard({
       });
       const result = (await response.json().catch(() => null)) as {
         error?: string;
+        deleted?: number;
       } | null;
 
       if (!response.ok) {
@@ -1528,6 +1530,12 @@ export default function AdminDashboard({
       setPendingAuditDelete(null);
       setSelectedAuditIds(new Set());
       setExpandedAuditLogId(null);
+      // The filters may point at entries that no longer exist, which would
+      // leave the table empty and hide the new "deleted" entry.
+      setAuditActionFilter("all");
+      setAuditActorFilter("all");
+      setSearchQuery("");
+      setAuditDeletedCount(result?.deleted ?? pendingAuditDelete.count);
       router.refresh();
     } catch (error) {
       setAuditDeleteError(
@@ -2818,6 +2826,38 @@ export default function AdminDashboard({
             <p className="rounded-lg border border-bronze/20 bg-sand px-4 py-6 text-brown/80">
               No audit log entries found.
             </p>
+          )}
+
+          {auditDeletedCount !== null && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="audit-deleted-title"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 px-4"
+            >
+              <div className="w-full max-w-sm space-y-4 rounded-lg border border-bronze/20 bg-cream p-5 shadow-xl">
+                <h3
+                  id="audit-deleted-title"
+                  className="font-display text-lg font-bold uppercase tracking-wide text-bronze-dark"
+                >
+                  Cleared
+                </h3>
+                <p className="text-sm text-brown">
+                  {auditDeletedCount} audit {auditDeletedCount === 1 ? "entry" : "entries"}{" "}
+                  deleted. Filters have been reset.
+                </p>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    autoFocus
+                    onClick={() => setAuditDeletedCount(null)}
+                    className="rounded-lg bg-bronze-deep px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-cream transition-colors hover:bg-bronze"
+                  >
+                    OK
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
 
           {pendingAuditDelete && (
