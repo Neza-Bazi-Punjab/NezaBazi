@@ -25,6 +25,7 @@ export const metadata: Metadata = {
     template: `%s | ${site.name}`,
   },
   description: site.description,
+  appleWebApp: { title: "Neza Bazi" },
   openGraph: {
     title: site.title,
     description: site.description,
