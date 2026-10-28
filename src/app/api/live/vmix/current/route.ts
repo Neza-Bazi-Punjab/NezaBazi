@@ -8,7 +8,8 @@
 //
 // Public like /api/live/state, built from the same assembled state — the
 // scoring_* tables and view only, never a registration table. ?sample=1
-// answers with rehearsal data instead and never reads the database.
+// answers with rehearsal data instead (?sample=solo: moving rehearsal data while
+// switched on, vmix-sample-live.ts) and never reads the database.
 import { NextResponse } from "next/server";
 import { PRIVATE_NO_STORE, PUBLIC_LIVE_CACHE } from "@/lib/scoring/http";
 import { buildPublicLiveSnapshot } from "@/lib/scoring/server";
@@ -19,11 +20,7 @@ import {
   wantsCsv,
   wantsSample,
 } from "@/lib/scoring/vmix";
-import {
-  SAMPLE_QUALIFICATION_ROUND_ID,
-  samplePublicLiveState,
-  sampleRunsForRound,
-} from "@/lib/scoring/vmix-sample";
+import { vmixSampleSource } from "@/lib/scoring/vmix-sample-live";
 
 export const dynamic = "force-dynamic";
 
@@ -32,15 +29,11 @@ export async function GET(request: Request) {
   const csv = wantsCsv(url);
 
   if (wantsSample(url)) {
+    const sample = await vmixSampleSource(url);
+
     return vmixResponse(
       VMIX_CURRENT_COLUMNS,
-      [
-        toVmixCurrentRow(
-          samplePublicLiveState(),
-          sampleRunsForRound(SAMPLE_QUALIFICATION_ROUND_ID).length,
-          true
-        ),
-      ],
+      [toVmixCurrentRow(sample.state(), sample.runsForRound(sample.liveRoundId).length, true)],
       csv,
       PUBLIC_LIVE_CACHE
     );

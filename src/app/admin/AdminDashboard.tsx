@@ -345,6 +345,7 @@ const formatAuditTargetTable = (targetTable: string | null) => {
     scoring_runs: "Scoring Run",
     scoring_live_state: "Live Display",
     scoring_advance_overrides: "Advance Override",
+    scoring_rehearsal: "Graphics Rehearsal Feed",
   };
 
   return labels[targetTable] ?? targetTable;

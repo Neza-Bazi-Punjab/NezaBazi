@@ -62,6 +62,7 @@ Add options after `?`, and join several with `&`:
 | --- | --- | --- |
 | `format=csv` | all four | CSV with a header row instead of JSON |
 | `sample=1` | all four | Fixed rehearsal data instead of live data (see Rehearsal, under Setting up) |
+| `sample=solo` | all four | Moving rehearsal data: a scripted solo competition that changes every 8 seconds, while the organisers have it running (see Rehearsal, under Setting up) |
 | `pool=A` | leaderboard | Only Pool A, ranked within the pool |
 | `limit=10` | leaderboard | At most 10 rows (default 50, maximum 200) |
 | `round=<round_id>` | entrants | Another round than the live one; take the `round_id` from the rounds feed |
@@ -92,7 +93,26 @@ The rounds feed lists both. For the Section round's entrants, with their four ri
 
 Every sample row has `sample` = `Yes`; live rows have `No`.
 
-> **Bind a "SAMPLE" badge to the `sample` column**, so rehearsal data can never go to air unnoticed. **Remove `?sample=1` from every Data Source before the event.**
+## Moving rehearsal with ?sample=solo
+
+`?sample=1` never changes, so it cannot show how your titles behave when results come in. Add `?sample=solo` instead, to any feed, and while the organisers have the rehearsal feed running the feeds play a **scripted solo qualification on a loop**, one step every **8 seconds**, about four minutes per loop:
+
+1. Pool A is called (`display_mode` = `pool_call`), and its first rider comes on course.
+2. Results come in one by one. A carry skips that rider's later attempts, as on the day, and the standings re-rank.
+3. A result is recorded wrongly and then changed, and a short break shows a message.
+4. Pool A finishes and the screens switch to the standings, then Pool B is called.
+5. In Pool B, a result is recorded and then undone, which puts that rider back on course, and one run is skipped.
+6. The qualification finishes: standings, a closing message, a blank screen, and the loop starts again.
+
+It follows the same rules as real scoring and uses the same columns, options and timing (a 1–2 second refresh). The only difference is that nobody is scoring: the steps come from a script, at a steady pace. Real judging has pauses and bursts.
+
+- Every viewer sees the same moment of the loop, with real times in `last_scored_at` and `updated_at`.
+- Every row still has `sample` = `Yes`. Nothing is read from or written to the live database.
+- Section 1 stays complete, as in `?sample=1`.
+
+> **Ask us to start it.** The organisers start and stop the rehearsal feed from the website. While it is stopped, `?sample=solo` answers exactly like `?sample=1`: frozen, and still marked `sample` = `Yes`. To check whether it is running, open `https://www.nezabazipunjab.com/overlay` and look for "Moving sample right now", or open a `?sample=solo` address twice, ten seconds apart: if it is running, the answers differ. A start or stop reaches the feeds within a second or two.
+
+> **Bind a "SAMPLE" badge to the `sample` column**, so rehearsal data can never go to air unnoticed. **Remove `?sample=1` and `?sample=solo` from every Data Source before the event.**
 
 # Screens — what the organisers want on screen
 
@@ -215,7 +235,7 @@ If you would rather have values pushed into an existing title than bind Data Sou
 > `node vmix-bridge.mjs --input "Scorebug" --only rider_name,team_name,last_result --map rider_name=Name`
 
 - That sends `rider_name` to the title field `Name`, and so on.
-- `--sample` uses the rehearsal data, and `--dry-run --once` prints what it would send without touching vMix.
+- `--sample` uses the rehearsal data, `--moving-sample` the moving rehearsal data, and `--dry-run --once` prints what it would send without touching vMix.
 - It retries by itself when the network or vMix drops, and sends everything again when vMix comes back.
 - `--help` lists every option.
 - It handles the one-row current feed only.
@@ -244,7 +264,8 @@ The setup page, with the steps for vMix and other software, is `https://www.neza
 | Old values | Check the Data Source's refresh interval in the Data Sources manager. For a Web Browser input, right-click it and choose **Reload**. Then open the feed address in an ordinary browser to see what it says now. |
 | HTTP 503 | A temporary server problem. vMix keeps the last good values and picks up the next good answer by itself at the next refresh. |
 | HTTP 404 | The address is mistyped (or the website update that publishes the feeds is not live yet — ask us). |
-| The SAMPLE badge shows | That Data Source still has `?sample=1` on its address: its rows are rehearsal data. Remove it. |
+| The SAMPLE badge shows | That Data Source still has `?sample=1` or `?sample=solo` on its address: its rows are rehearsal data. Remove it. |
+| `?sample=solo` does not move | The rehearsal feed is stopped. It answers like `?sample=1` until the organisers start it. |
 
 ## What has not been tested yet
 
@@ -256,10 +277,10 @@ The setup page, with the steps for vMix and other software, is `https://www.neza
 Go through this on the vMix computer before the first pool is called.
 
 1. Every Data Source refreshes every **1–2 seconds** (check in the Data Sources manager).
-2. `?sample=1` is gone from every Data Source address, and `--sample` from the bridge script if you run it.
+2. `?sample=1` and `?sample=solo` are gone from every Data Source address, and `--sample` and `--moving-sample` from the bridge script if you run it.
 3. Every title has its **SAMPLE** badge bound to the `sample` column, and no badge is showing.
 4. Your titles honour `display_mode` (see Screens), or you use the ready-made overlays, which follow it by themselves.
-5. The current feed, `https://www.nezabazipunjab.com/api/live/vmix/current`, opened in an ordinary browser, shows `"sample":"No"`. `"sample":"Yes"` means `?sample=1` is still on the address.
+5. The current feed, `https://www.nezabazipunjab.com/api/live/vmix/current`, opened in an ordinary browser, shows `"sample":"No"`. `"sample":"Yes"` means `?sample=1` or `?sample=solo` is still on the address.
 6. You know whom to contact: on the day, the head organiser at the scoring laptop; before the day, {site.email}.
 
 ## Contact

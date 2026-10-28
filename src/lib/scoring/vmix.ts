@@ -375,9 +375,13 @@ export const toVmixRoundRows = (
 export const wantsCsv = (url: URL) =>
   url.searchParams.get("format")?.trim().toLowerCase() === "csv";
 
-/* ?sample=1 (or true / yes): the rehearsal rows, never the database. */
+/* ?sample=1 (or true / yes): the frozen rehearsal rows; ?sample=solo: the
+   moving ones of vmix-sample-live.ts while the admin switch is on. Never the
+   scoring data. */
 export const wantsSample = (url: URL) =>
-  ["1", "true", "yes"].includes(url.searchParams.get("sample")?.trim().toLowerCase() ?? "");
+  ["1", "true", "yes", "solo"].includes(
+    url.searchParams.get("sample")?.trim().toLowerCase() ?? ""
+  );
 
 /* JSON array (one element per row) or CSV with a header row. */
 export const vmixResponse = (

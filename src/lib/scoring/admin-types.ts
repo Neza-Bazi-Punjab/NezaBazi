@@ -34,6 +34,13 @@ export type AdvanceOverrideRow = {
   updated_at: string;
 };
 
+/* The "Graphics rehearsal feed" switch (scoring_rehearsal). */
+export type RehearsalSwitch = {
+  solo_sample_enabled: boolean;
+  updated_at: string;
+  updated_by_name: string | null;
+};
+
 export type AdminScoringState = {
   /* False until the live scoring migration has been applied. */
   configured: boolean;
@@ -44,6 +51,8 @@ export type AdminScoringState = {
   leaderboards_by_round: Record<string, LeaderboardRow[]>;
   live: LiveState | null;
   overrides: AdvanceOverrideRow[];
+  /* Null until the rehearsal feed migration has been applied. */
+  rehearsal: RehearsalSwitch | null;
   candidates: {
     solo: SoloCandidate[];
     teams: TeamCandidate[];

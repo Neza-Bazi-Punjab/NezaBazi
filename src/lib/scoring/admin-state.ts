@@ -21,6 +21,7 @@ import {
   isScoringNotConfiguredError,
   loadAllLeaderboards,
 } from "@/lib/scoring/server";
+import { readRehearsalSwitch } from "@/lib/scoring/rehearsal";
 import type { LiveState, ScoringRound, ScoringRun } from "@/lib/scoring/types";
 
 type SoloCandidateRow = { id: string; full_name: string; checked_in_at: string | null };
@@ -88,7 +89,10 @@ const loadCandidates = async (client: ServiceRoleClient) => {
 export const buildAdminScoringState = async (
   client: ServiceRoleClient
 ): Promise<AdminScoringState> => {
-  const candidates = await loadCandidates(client);
+  const [candidates, rehearsal] = await Promise.all([
+    loadCandidates(client),
+    readRehearsalSwitch(client),
+  ]);
 
   const [roundsResult, liveResult, runsResult, overridesResult, boards] = await Promise.all([
     client.from("scoring_rounds").select(ROUND_COLUMNS).order("sort_order", { ascending: true }),
@@ -129,6 +133,7 @@ export const buildAdminScoringState = async (
         leaderboards_by_round: {},
         live: null,
         overrides: [],
+        rehearsal,
         candidates,
       };
     }
@@ -155,6 +160,7 @@ export const buildAdminScoringState = async (
     leaderboards_by_round: boards.leaderboards,
     live: (liveResult.data ?? null) as LiveState | null,
     overrides: overridesResult.rows,
+    rehearsal,
     candidates,
   };
 };
