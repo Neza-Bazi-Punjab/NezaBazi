@@ -6,6 +6,7 @@
 // The round_id values are what /api/live/vmix/entrants?round= takes.
 //   ?format=csv  CSV with a header row instead of a JSON array
 //   ?sample=1    rehearsal rows (sample = "Yes"); the database is not read
+//   ?sample=solo moving rehearsal rows while switched on (vmix-sample-live.ts)
 // Every field is always present; with nothing to show the response is one row
 // of empty values, so vMix keeps a stable schema.
 //
@@ -21,11 +22,7 @@ import {
   wantsCsv,
   wantsSample,
 } from "@/lib/scoring/vmix";
-import {
-  SAMPLE_QUALIFICATION_ROUND_ID,
-  sampleAllRuns,
-  sampleRounds,
-} from "@/lib/scoring/vmix-sample";
+import { vmixSampleSource } from "@/lib/scoring/vmix-sample-live";
 
 export const dynamic = "force-dynamic";
 
@@ -34,9 +31,11 @@ export async function GET(request: Request) {
   const csv = wantsCsv(url);
 
   if (wantsSample(url)) {
+    const sample = await vmixSampleSource(url);
+
     return vmixResponse(
       VMIX_ROUNDS_COLUMNS,
-      toVmixRoundRows(sampleRounds(), sampleAllRuns(), SAMPLE_QUALIFICATION_ROUND_ID, true),
+      toVmixRoundRows(sample.rounds(), sample.allRuns(), sample.liveRoundId, true),
       csv,
       PUBLIC_LIVE_CACHE
     );

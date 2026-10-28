@@ -31,7 +31,8 @@
 //     background, nothing to design or bind.
 //
 // Before event day the live feed is empty; --sample reads the rehearsal data
-// (?sample=1) instead, every row marked sample = "Yes".
+// (?sample=1) instead, every row marked sample = "Yes"; --moving-sample reads
+// the moving rehearsal data (?sample=solo), a scripted qualification on a loop.
 //
 // Behaviour worth knowing:
 //   * The first pass sends every selected value; after that only changes.
@@ -80,6 +81,10 @@ Options:
   --sample               Read the rehearsal data (?sample=1) instead of the
                          live feed, for building and testing titles before
                          event day. Every row carries sample = "Yes".
+  --moving-sample        Read the moving rehearsal data (?sample=solo): a
+                         scripted qualification that changes every 8 seconds,
+                         on a loop, while an organiser has it switched on.
+                         Every row carries sample = "Yes".
   --once                 One pass, then exit.
   --dry-run              Print what would be sent instead of contacting vMix.
   -h, --help             Show this help.
@@ -130,6 +135,7 @@ const parseCommandLine = (argv) => {
         map: { type: "string", multiple: true },
         only: { type: "string", multiple: true },
         sample: { type: "boolean" },
+        "moving-sample": { type: "boolean" },
         once: { type: "boolean" },
         "dry-run": { type: "boolean" },
         help: { type: "boolean", short: "h" },
@@ -214,7 +220,9 @@ const parseCommandLine = (argv) => {
   const sitePath = siteUrl.pathname.replace(/\/+$/, "");
   const feedUrl = new URL(`${sitePath}${FEED_PATH}`, siteUrl.origin);
 
-  if (values.sample === true) {
+  if (values["moving-sample"] === true) {
+    feedUrl.searchParams.set("sample", "solo");
+  } else if (values.sample === true) {
     feedUrl.searchParams.set("sample", "1");
   }
 

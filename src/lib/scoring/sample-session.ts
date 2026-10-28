@@ -165,8 +165,11 @@ const UP_NEXT_RIDERS = 3;
 type Assembled = { state: PublicLiveState; runs: ScoringRun[]; all: SampleSeed };
 
 /* loadLiveSnapshot, over a session instead of the tables. */
-const assemble = (key: string): Assembled => {
-  const all = session(key).snapshot();
+const assemble = (key: string): Assembled => assembleSnapshot(session(key).snapshot());
+
+/* The same assembly over any engine snapshot (the moving vMix sample in
+   vmix-sample-live.ts replays its own engine and reads it through this). */
+export const assembleSnapshot = (all: SampleSeed): Assembled => {
   const { live } = all;
   const rounds = [...all.rounds].sort((a, b) => a.sort_order - b.sort_order);
   const currentRound = rounds.find((round) => round.id === live.current_round_id) ?? null;

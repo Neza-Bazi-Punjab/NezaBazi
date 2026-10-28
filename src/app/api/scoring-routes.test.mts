@@ -42,6 +42,7 @@ test("every expected route exists", () => {
   assert.deepEqual(adminRoutes, [
     "src/app/api/admin/scoring/advance/route.ts",
     "src/app/api/admin/scoring/pool/route.ts",
+    "src/app/api/admin/scoring/rehearsal/route.ts",
     "src/app/api/admin/scoring/rounds/[id]/entrants/[entrantKey]/route.ts",
     "src/app/api/admin/scoring/rounds/[id]/entrants/route.ts",
     "src/app/api/admin/scoring/rounds/[id]/route.ts",
@@ -175,6 +176,7 @@ test("public routes and the public state never touch registration data", () => {
     "src/lib/scoring/vmix.ts",
     "src/lib/scoring/vmix-columns.ts",
     "src/lib/scoring/vmix-sample.ts",
+    "src/lib/scoring/vmix-sample-live.ts",
     "src/lib/scoring/csv.ts",
   ];
 
@@ -512,4 +514,40 @@ test("the training session never imports or calls a database client", () => {
   const gate = code(repoFile("src/lib/scoring/sample-mode.ts"));
   assert.doesNotMatch(gate, /@supabase|createServiceRoleClient|\.rpc\(|\.from\(|build(Judge|Commentary|PublicLive)State/);
   assert.equal(gate.match(/verifyRoleRequest\(/g)?.length, 1);
+});
+
+test("the moving sample (?sample=solo) is rehearsal data behind an admin switch", () => {
+  const live = repoFile("src/lib/scoring/vmix-sample-live.ts");
+  const rehearsal = repoFile("src/lib/scoring/rehearsal.ts");
+  const vmix = repoFile("src/lib/scoring/vmix.ts");
+  const migration = repoFile("supabase/migrations/20261028120000_scoring_rehearsal_feed.sql");
+
+  // ?sample=solo goes down the same branch as ?sample=1, before any scoring read.
+  assert.match(vmix, /\["1", "true", "yes", "solo"\]/);
+  // It replays the training engine; the only database read is the switch.
+  assert.match(live, /createSampleEngine\(/);
+  assert.doesNotMatch(live, /createPublicScoringClient|createServiceRoleClient|supabase/i);
+  assert.match(
+    live,
+    /wantsSoloSample\(url\) && \(await isSoloSampleOn\(\)\) \? movingSample\(now\) : FIXED_SAMPLE/
+  );
+  // The switch is read as the anonymous role, from scoring_rehearsal only,
+  // at most once a second, and anything unexpected reads as off.
+  assert.match(rehearsal, /createPublicScoringClient\(\)\s+\.from\("scoring_rehearsal"\)\s+\.select\("solo_sample_enabled"\)/);
+  assert.match(rehearsal, /const SWITCH_CACHE_MS = 1_000;/);
+  assert.doesNotMatch(rehearsal, /solo_registrations|team_members|\bteams\b/);
+
+  // Off by default; the public sees the switch, never who flipped it; writes
+  // go through the audited function, service role only.
+  assert.match(migration, /solo_sample_enabled boolean not null default false/);
+  assert.match(migration, /grant select \(id, solo_sample_enabled, updated_at\)\s+on table public\.scoring_rehearsal to anon, authenticated;/);
+  assert.match(migration, /insert into public\.admin_audit_log/);
+  assert.match(migration, /revoke execute on function public\.scoring_set_rehearsal_sample\(text, boolean, uuid, text, text\)\s+from public, anon, authenticated;/);
+
+  // Every vMix route takes its sample rows from the one source.
+  for (const path of publicRoutes.filter((route) => route.includes("/vmix/"))) {
+    const source = repoFile(path);
+    assert.match(source, /await vmixSampleSource\(url\)/, path);
+    assert.doesNotMatch(source, /from "@\/lib\/scoring\/vmix-sample"/, path);
+  }
 });

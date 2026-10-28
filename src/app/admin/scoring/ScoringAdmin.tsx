@@ -814,6 +814,23 @@ export default function ScoringAdmin({
       },
     });
 
+  /* The graphics rehearsal feed: the moving vMix sample, ?sample=solo. Only
+     sample addresses follow it; no screen, panel or real feed changes. */
+  const setSoloSample = (enabled: boolean) =>
+    ask({
+      title: enabled ? "Start the rehearsal feed?" : "Stop the rehearsal feed?",
+      detail: enabled
+        ? "Feed addresses with ?sample=solo start playing a scripted qualification with invented riders, a step every 8 seconds. Real scores, the public scoreboard, the overlays and the judges' and commentators' panels do not change."
+        : "Feed addresses with ?sample=solo stop moving and show the fixed rehearsal data instead. Nothing else changes.",
+      confirmLabel: enabled ? "Start" : "Stop",
+      danger: false,
+      run: async () => {
+        await perform("/api/admin/scoring/rehearsal", "POST", { sample: "solo", enabled }, () =>
+          enabled ? "The rehearsal feed is running." : "The rehearsal feed is stopped."
+        );
+      },
+    });
+
   /* "Put on course": this run becomes the rider on course on every screen —
      the judges' panel, the commentary panel, /live and the overlays — through
      the judges' live route (administrators may use it). One click in the live
@@ -1311,6 +1328,53 @@ export default function ScoringAdmin({
         >
           Download rider list (CSV)
         </a>
+      </section>
+
+      {/* Moving vMix sample for the graphics team */}
+      <section aria-labelledby="rehearsal-heading" className={`${cardClass} flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between print:hidden`}>
+        <div>
+          <h2 id="rehearsal-heading" className={subheadingClass}>
+            Graphics Rehearsal Feed
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-brown/80">
+            For the graphics team to test their titles: while it runs, feed addresses ending in{" "}
+            <code className="rounded bg-bronze/10 px-1 font-mono text-xs">?sample=solo</code> play
+            a scripted qualification with invented riders, on a loop. Real scores and every
+            screen stay as they are, so it is safe to leave running.
+          </p>
+          <p className="mt-2 text-sm text-brown">
+            {data?.rehearsal ? (
+              <>
+                <span className="font-semibold">
+                  {data.rehearsal.solo_sample_enabled ? "Running" : "Stopped"}
+                </span>
+                {data.rehearsal.updated_by_name && (
+                  <span className="text-brown/70">
+                    {" "}
+                    · {data.rehearsal.solo_sample_enabled ? "started" : "stopped"} by{" "}
+                    {data.rehearsal.updated_by_name},{" "}
+                    {new Date(data.rehearsal.updated_at).toLocaleString()}
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-brown/70">
+                Not set up yet: apply the rehearsal feed migration
+                (20261028120000_scoring_rehearsal_feed.sql).
+              </span>
+            )}
+          </p>
+        </div>
+        {data?.rehearsal && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setSoloSample(!data.rehearsal?.solo_sample_enabled)}
+            className={`${data.rehearsal.solo_sample_enabled ? secondaryButton : primaryButton} shrink-0`}
+          >
+            {data.rehearsal.solo_sample_enabled ? "Stop" : "Start"}
+          </button>
+        )}
       </section>
 
       <div className="grid gap-8 lg:grid-cols-[320px_minmax(0,1fr)]">

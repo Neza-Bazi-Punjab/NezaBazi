@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { isSoloSampleOn } from "@/lib/scoring/rehearsal";
 import { VMIX_FEEDS, VMIX_SAMPLE_SECTION_ROUND_ID } from "@/lib/scoring/vmix-columns";
 import { site } from "@/lib/site";
 
@@ -7,6 +8,10 @@ export const metadata: Metadata = {
   title: "Live data feed & overlays",
   description: "Live scoring data for vMix and other graphics systems, plus optional ready-made overlays.",
 };
+
+/* Rebuilt at most every 10 seconds, so the moving sample's On / Off line is
+   at most that old when the page is opened. It does not update while open. */
+export const revalidate = 10;
 
 const overlays = [
   {
@@ -66,11 +71,13 @@ function ColumnList({ columns }: { columns: readonly string[] }) {
   );
 }
 
-export default function OverlayIndexPage() {
+export default async function OverlayIndexPage() {
+  const soloSampleOn = await isSoloSampleOn();
   const liveStateUrl = `${site.url}/api/live/state`;
   const sampleUrl = `${site.url}/api/live/vmix/current?sample=1`;
   const sampleCsvUrl = `${site.url}/api/live/vmix/leaderboard?sample=1&format=csv`;
   const sampleSectionUrl = `${site.url}/api/live/vmix/entrants?sample=1&round=${VMIX_SAMPLE_SECTION_ROUND_ID}`;
+  const movingSampleUrl = `${site.url}/api/live/vmix/current?sample=solo`;
 
   return (
     <div className="min-h-dvh bg-ink text-cream">
@@ -174,6 +181,23 @@ export default function OverlayIndexPage() {
             </p>
             <p>
               <code className={code}>{sampleSectionUrl}</code>
+            </p>
+            <p className="text-cream/85">
+              To see your titles react to results, use <code className={code}>?sample=solo</code>{" "}
+              instead: a scripted qualification that moves on every 8 seconds, on a loop of about
+              four minutes — pools called, results in, a result changed and one undone, a run
+              skipped, the screens switching. The organisers switch it on for you; while it is
+              off it answers like <code className={code}>?sample=1</code>.
+            </p>
+            <p className="text-cream/85">
+              Moving sample right now:{" "}
+              <strong className="text-cream">
+                {soloSampleOn ? "On" : "Off"}
+              </strong>{" "}
+              <span className="text-cream/60">(refresh this page to check again)</span>
+            </p>
+            <p>
+              <code className={code}>{movingSampleUrl}</code>
             </p>
           </div>
 

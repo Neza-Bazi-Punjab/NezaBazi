@@ -24,7 +24,7 @@ How fresh is it? Judges record a result on `/judge` and the database commits it.
 
 The handout PDF is `public/documents/vmix-guide.pdf`, linked from the `/overlay` page and as **vMix guide (PDF)** in the admin dashboard's tab bar. It is built from [vmix-data-feed.md](vmix-data-feed.md) by `npm run build:guide` (which rebuilds the staff guide too), so edit the Markdown, rebuild, and commit both; never edit the PDF by hand.
 
-Every data feed also takes `?format=csv` (CSV with a header row instead of JSON) and `?sample=1` (rehearsal data). The `/api/live/...` endpoints are cached at the edge for one second, and may be served up to four seconds old while the cache refreshes, so thousands of viewers cost the database about one read a second. Polling faster than once a second gains nothing.
+Every data feed also takes `?format=csv` (CSV with a header row instead of JSON), `?sample=1` (frozen rehearsal data) and `?sample=solo` (moving rehearsal data, below). The `/api/live/...` endpoints are cached at the edge for one second, and may be served up to four seconds old while the cache refreshes, so thousands of viewers cost the database about one read a second. Polling faster than once a second gains nothing.
 
 ## 1. The data feed (vMix Data Sources)
 
@@ -41,6 +41,14 @@ Things worth knowing:
 - `last_rider_name`, `last_result` and the other `last_*` columns are the most recently recorded result in **any** round. `pool_label` in the current feed is the pool *called* to the start, which "Call Pool C" sets ahead of the riding.
 
 **Rehearsal with `?sample=1`.** The live feeds stay empty until event day, so every feed answers `?sample=1` with fixed rehearsal data from `src/lib/scoring/vmix-sample.ts`, without reading the database. That data is a live Single qualification in Pools A and B (Pool A finished, Pool B on its second pass with a rider on course, the message "Sample data for rehearsal — not real results"), and a completed Section round with two teams of four. Every sample row has `sample` = `Yes` (live rows have `No`), so a title can show a SAMPLE badge. The sample round ids are fixed: the qualification is `5a3b1e00-0000-4000-8000-000000000001` and the Section round `5a3b1e00-0000-4000-8000-000000000002`, for `entrants?sample=1&round=…`. `/api/live/state` has no sample mode.
+
+**Moving rehearsal with `?sample=solo`.** `?sample=1` never changes, so the graphics team cannot see how a title behaves when results come in. While the rehearsal feed is running, `?sample=solo` plays a scripted Single qualification on a loop instead, built in `src/lib/scoring/vmix-sample-live.ts`. There is one step every 8 seconds and 29 steps a loop, about four minutes. The script covers calling Pools A and B, results with carries skipping later attempts, a changed result, an undone result, a skipped run, and the screens going to the standings, a message and blank. Each step is a call on the training engine (`sample-engine.ts`, the database functions in TypeScript), so the rules are the real ones. The step is worked out from the clock, and the engine is replayed from a fresh seed on every request. Nothing is stored, every server instance and viewer sees the same moment, and timestamps are real times. The riders are the invented ones of `?sample=1`, and every row has `sample` = `Yes`. The bridge script reads it with `--moving-sample`. The name leaves room for a team (Section) loop later, as `?sample=team`.
+
+> **Start and stop it from `/admin/scoring`**, on the **Graphics Rehearsal Feed** card under the rider list: **Start** or **Stop**, then confirm. It is **stopped by default**, and the card shows who last changed it and when. Each change is in the audit log as "Start Rehearsal Feed" or "Stop Rehearsal Feed". While it is stopped, `?sample=solo` answers exactly like `?sample=1`: frozen, still `sample` = `Yes`. A change reaches the feeds within a second or two. Each server reads the switch at most once a second, through the public key, from `scoring_rehearsal`, which shows the public the switch but never who changed it. The `/overlay` page shows "Moving sample right now: On / Off" (at most ten seconds old when the page is opened; refresh to check again).
+>
+> **It is safe to leave running**, on event day too. It changes only addresses with `?sample=solo`; real scores, `/live`, the overlays, the judges' and commentators' panels and the real feeds never change. The thing to watch is a `?sample=solo` address left on a Data Source while on air, which the SAMPLE badge and the event-day checklist cover. Stopping it on the day is an extra safeguard, not a requirement.
+>
+> The card needs the sixth migration, `20261028120000_scoring_rehearsal_feed.sql` (section 5). Until it is applied the card says "Not set up yet" and `?sample=solo` stays frozen.
 
 **Rider list for name straps.** Separately from the public feeds, an administrator can download every registered rider from `/admin/scoring` → **Download rider list (CSV)** (`GET /api/admin/scoring/export`, administrators only; `?format=json` for JSON). Its columns are `source`, `full_name`, `team_name`, `is_leader`, `horse_name`, `horse_breed`, `horse_age`, `location_short`, `years_experience`, `checked_in`, `pool_label` and `round_name` (the pool and round of the latest start list that includes them). It deliberately carries no phone, email, age, parents' names emergency contact, full address or confirmation code (the code is the rider's check-in credential and never leaves the organisers); `location_short` is the district and state the announcer uses. Share it with the graphics team only.
 
@@ -171,7 +179,7 @@ Judges and administrators choose what every screen shows from the **Screens** ca
 
 **The bridge logs "vMix answered HTTP …" for a field.** The title has no field of that name, or `--input` does not match the input's name or number. Fix it and restart the bridge.
 
-## 5. For the administrator: applying the five migrations
+## 5. For the administrator: applying the migrations
 
 The live Supabase project is not connected to development sessions, so these files are applied by hand. Until they are, every live scoring page shows a calm "not set up yet" state rather than an error, but registration (see below) is a different matter.
 
@@ -182,6 +190,7 @@ The live Supabase project is not connected to development sessions, so these fil
 3. `supabase/migrations/20261025120000_live_scoring.sql`
 4. `supabase/migrations/20261025130000_paper_registrations.sql`
 5. `supabase/migrations/20261026100000_scoring_short_location.sql`
+6. `supabase/migrations/20261028120000_scoring_rehearsal_feed.sql`: the Graphics Rehearsal Feed switch. Any time after the live scoring file; until it is applied, the card on `/admin/scoring` says "Not set up yet". Check with `select * from public.scoring_rehearsal;`: one row, `solo_sample_enabled` = `false`.
 
 **Each file is idempotent**: running it a second time changes nothing. Each one checks its own preconditions first and stops with a plain-English error if the database is not the shape it expects (for example, the live scoring file refuses to run before the staff roles file, the paper file refuses to run before the parents' names file, and the short location file refuses to run before the live scoring file). The parents' names, paper and short location files also check their own results at the end and fail rather than report success over a partial change; for the staff roles and live scoring files, that is what the verification queries below are for. If a run fails, read the message, fix the cause, and run the same file again.
 

@@ -4,7 +4,7 @@ Step-by-step instructions for the people running the championship on the site: o
 
 Everything an administrator, judge or commentator does on these pages is recorded in the admin audit log with their name, so mistakes can always be traced and put right.
 
-**Before any of this:** the five database migrations must be applied and the site deployed. Section 5 of [live-stream.md](live-stream.md) has the order and the checks. Until then `/admin/scoring` says "Live scoring is not set up yet".
+**Before any of this:** the database migrations must be applied and the site deployed. Section 5 of [live-stream.md](live-stream.md) has the order and the checks. Until then `/admin/scoring` says "Live scoring is not set up yet".
 
 ## Who can open what
 
@@ -65,11 +65,13 @@ The same rider may hold one solo entry and one team place under the same email: 
 
 ## 3. The day before: check-in
 
+> **The graphics rehearsal feed can stay running.** The **Graphics Rehearsal Feed** card on `/admin/scoring` (section 4) starts and stops the moving vMix sample, `?sample=solo`. It changes nothing but those sample addresses, so it is safe on event day. Stopping it then is an extra safeguard in case the graphics team forgets to take `?sample=solo` off an address. Details: [live-stream.md](live-stream.md), under "Moving rehearsal".
+
 Check-in works as it always has: `/admin` → **Check-in** tab, type the rider's code (or search by name, email or phone), check the record, confirm. Paper riders check in the same way with the code from the office box. Only checked-in riders are drawn into the first rounds, and a team needs all four riders checked in.
 
 ## 4. Event day: running the rounds at `/admin/scoring`
 
-Open `/admin/scoring` on a laptop. Its header shows the live round, the called pool and what the screens are showing, and has links to the judges' panel and the public scoreboard. Press **Refresh** at any time. Below it are the **Screens** card (section 4.9) and **Download rider list (CSV)**: every registered rider with team, horse, district and state, experience, check-in and current pool, for the graphics team's name straps. It carries no phone numbers, emails, ages, parents' names or emergency contacts, full addresses or confirmation codes — the code is the rider's check-in credential and never leaves the organisers. Still, give the file to the graphics team only.
+Open `/admin/scoring` on a laptop. Its header shows the live round, the called pool and what the screens are showing, and has links to the judges' panel and the public scoreboard. Press **Refresh** at any time. Below it are the **Screens** card (section 4.9) and **Download rider list (CSV)**: every registered rider with team, horse, district and state, experience, check-in and current pool, for the graphics team's name straps. It carries no phone numbers, emails, ages, parents' names or emergency contacts, full addresses or confirmation codes — the code is the rider's check-in credential and never leaves the organisers. Still, give the file to the graphics team only. Under that, **Graphics Rehearsal Feed** starts and stops the moving sample the graphics team tests with (`?sample=solo`); it touches no real data or screen.
 
 ### 4.1 Create the rounds (can be done the day before)
 
@@ -254,6 +256,6 @@ Everyone else gets the same "Log in" or "Access denied" page as `/judge`. The pr
 
 **On a practice laptop at the venue (no login).** Add `SCORING_SAMPLE_MODE=1` to `.env.local` on that laptop and start the site with `npm run dev`. **Never set this variable on the live site.** Anyone on the same Wi-Fi can then open `/judge/demo` and `/commentary/demo` at the laptop's network address that `npm run dev` prints. Everyone shares **one** practice session there, and the banner says so. A reset restarts it for everyone. `/live?sample=1` on that laptop shows what the public would see.
 
-**Same as the day, either way.** Two-tap scoring, the automatic skip after a qualifying carry, undo, change, skip, **Call Pool**, **Screens**, and the start list with **Find a rider** all behave exactly as on event day. Nothing is written to the database or the audit log, and the sample riders and their families are invented. The vMix feeds' `?sample=1` keep their fixed rehearsal data and do not follow the practice.
+**Same as the day, either way.** Two-tap scoring, the automatic skip after a qualifying carry, undo, change, skip, **Call Pool**, **Screens**, and the start list with **Find a rider** all behave exactly as on event day. Nothing is written to the database or the audit log, and the sample riders and their families are invented. The vMix feeds do not follow the practice either: `?sample=1` keeps its fixed rehearsal data, and `?sample=solo` plays its own scripted loop.
 
 **Dress rehearsal.** Before event day the whole team rehearses together once, on the real system with test riders only; the run sheet is `public/documents/rehearsal-guide.pdf` (served at `/documents/rehearsal-guide.pdf`), built by `npm run build:guide` from [2026-10-26-rehearsal-guide-outline.md](superpowers/plans/2026-10-26-rehearsal-guide-outline.md).

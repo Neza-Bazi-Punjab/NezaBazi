@@ -6,6 +6,7 @@
 //   ?limit=10   at most 10 rows (default 50, maximum 200)
 //   ?format=csv CSV with a header row instead of a JSON array
 //   ?sample=1   rehearsal rows (sample = "Yes"); the database is not read
+//   ?sample=solo moving rehearsal rows while switched on (vmix-sample-live.ts)
 // Every field is always present; with nothing to show the response is one row
 // of empty values, so vMix keeps a stable schema.
 //
@@ -22,7 +23,7 @@ import {
   wantsCsv,
   wantsSample,
 } from "@/lib/scoring/vmix";
-import { samplePublicLiveState } from "@/lib/scoring/vmix-sample";
+import { vmixSampleSource } from "@/lib/scoring/vmix-sample-live";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
   if (wantsSample(url)) {
     return vmixResponse(
       VMIX_LEADERBOARD_COLUMNS,
-      toVmixLeaderboardRows(samplePublicLiveState(), query, true),
+      toVmixLeaderboardRows((await vmixSampleSource(url)).state(), query, true),
       csv,
       PUBLIC_LIVE_CACHE
     );

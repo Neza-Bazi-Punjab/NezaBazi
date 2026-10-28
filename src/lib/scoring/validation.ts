@@ -519,6 +519,20 @@ export const parseAdvanceOverrideRequest = (
   });
 };
 
+export type RehearsalSampleRequest = { sample: "solo"; enabled: boolean };
+
+export const parseRehearsalSampleRequest = (body: unknown): Parsed<RehearsalSampleRequest> => {
+  if (!isRecord(body) || body.sample !== "solo") {
+    return fail("Choose a sample.");
+  }
+
+  if (typeof body.enabled !== "boolean") {
+    return fail("Choose on or off.");
+  }
+
+  return pass({ sample: "solo", enabled: body.enabled });
+};
+
 /* Path segments ----------------------------------------------------------------- */
 
 /* Dynamic segments arrive decoded by Next, but a client that double-encodes a
