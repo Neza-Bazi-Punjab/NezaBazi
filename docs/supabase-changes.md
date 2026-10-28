@@ -65,6 +65,7 @@ These five are committed under `supabase/migrations/` and are applied by hand in
     - **Staff lose nothing.** The commentary panel reads the village from the registration, not from the run.
 
 22. `20261026120000_audit_log_archive` adds `admin_audit_log_archive` and the service-role-only `admin_archive_audit_entries()`. Deleting from the dashboard's Audit Log tab (one entry, a selection, or Clear all) moves the rows to the archive in one transaction, stamped with who removed them and when, instead of destroying them. The archive is readable by administrators only, has no browser write access, and has no restore path. Until it is applied, deleting from the tab fails and removes nothing.
+23. `20261028120000_scoring_rehearsal_feed` adds `scoring_rehearsal` (a single row: whether the moving vMix rehearsal sample, `?sample=solo`, is running, when it last changed and who changed it) and the service-role-only `scoring_set_rehearsal_sample()`, which flips it and writes its audit row (`start_rehearsal_feed` / `stop_rehearsal_feed`) in the same transaction. It is off by default. The public can read the switch and when it changed through a column grant, never who changed it, because the vMix feeds read it with the public key. It touches no existing table, can be applied any time after migration 19, and was applied to the live project on 28 Oct 2026. Until it is applied, the **Graphics Rehearsal Feed** card on `/admin/scoring` says "Not set up yet" and `?sample=solo` answers like `?sample=1`.
 
 ## Confirmation codes and check-in
 
