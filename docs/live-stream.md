@@ -22,7 +22,7 @@ How fresh is it? Judges record a result on `/judge` and the database commits it.
 | Overlays (optional) | `https://www.nezabazipunjab.com/overlay/scorebug`, `/lower-third`, `/leaderboard` (`?pool=A`, `?all=1`), `/ticker`, `/pool-call` |
 | Public scoreboard (to check from a phone) | `https://www.nezabazipunjab.com/live` |
 
-The handout PDF is `public/documents/vmix-guide.pdf`, linked from the `/overlay` page and as **vMix guide (PDF)** in the admin dashboard's tab bar. It is built from [vmix-data-feed.md](vmix-data-feed.md) by `npm run build:guide` (which rebuilds the staff guide too), so edit the Markdown, rebuild, and commit both; never edit the PDF by hand.
+The handout PDF is `public/documents/vmix-guide.pdf`, linked from the `/overlay` page and as **vMix guide** on the **PDF Guides** page (`/admin/guides`), linked from the admin dashboard's tab bar. It is built from [vmix-data-feed.md](vmix-data-feed.md) by `npm run build:guide` (which rebuilds the staff guide too), so edit the Markdown, rebuild, and commit both; never edit the PDF by hand.
 
 Every data feed also takes `?format=csv` (CSV with a header row instead of JSON), `?sample=1` (frozen rehearsal data) and `?sample=solo` (moving rehearsal data, below). The `/api/live/...` endpoints are cached at the edge for one second, and may be served up to four seconds old while the cache refreshes, so thousands of viewers cost the database about one read a second. Polling faster than once a second gains nothing.
 

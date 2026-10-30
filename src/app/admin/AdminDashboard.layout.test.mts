@@ -26,29 +26,24 @@ test("registration tables contain long values and usable edit fields", () => {
   }
 });
 
-test("the tab bar links the three printed guides in one style, and all three PDFs are built", () => {
-  const linkTo = (href: string) => {
-    const start = source.indexOf(`href="${href}"`);
-    assert.ok(start > 0, `${href} is linked from the tab bar`);
-    return source.slice(start, source.indexOf("</a>", start));
-  };
-  const classOf = (link: string) => link.match(/className="([^"]+)"/)?.[1];
+test("the tab bar links one PDF Guides page that opens the three guides, and all three PDFs are built", () => {
+  assert.match(source, /href="\/admin\/guides"[\s\S]{0,300}?>\s*PDF Guides\s*</);
+  assert.doesNotMatch(source, /href="\/documents\//);
 
-  const staff = linkTo("/documents/staff-guide.pdf");
-  const vmix = linkTo("/documents/vmix-guide.pdf");
-  const rehearsal = linkTo("/documents/rehearsal-guide.pdf");
-  assert.match(staff, />\s*Staff guide \(PDF\)\s*$/);
-  assert.match(vmix, />\s*vMix guide \(PDF\)\s*$/);
-  assert.match(rehearsal, />\s*Rehearsal guide \(PDF\)\s*$/);
+  const page = readFileSync(new URL("./guides/page.tsx", import.meta.url), "utf8");
 
-  for (const link of [staff, vmix, rehearsal]) {
-    assert.match(link, /target="_blank"/);
-    assert.match(link, /rel="noopener noreferrer"/);
+  for (const [href, title] of [
+    ["/documents/staff-guide.pdf", "Staff guide"],
+    ["/documents/vmix-guide.pdf", "vMix guide"],
+    ["/documents/rehearsal-guide.pdf", "Rehearsal guide"],
+  ]) {
+    assert.match(page, new RegExp(`href: "${href}",\\s+title: "${title}"`));
   }
 
-  assert.ok(classOf(staff), "the staff guide link is styled");
-  assert.equal(classOf(vmix), classOf(staff));
-  assert.equal(classOf(rehearsal), classOf(staff));
+  // Every guide opens in a new tab, from the one link template, and the page
+  // is behind the same administrator gate as the rest of /admin.
+  assert.match(page, /href=\{guide\.href\}\s+target="_blank"\s+rel="noopener noreferrer"/);
+  assert.match(page, /profile\.role !== "admin"/);
 
   for (const file of ["staff-guide.pdf", "vmix-guide.pdf", "rehearsal-guide.pdf"]) {
     assert.ok(

@@ -307,3 +307,49 @@ test("a team carries one emergency contact, not one per rider", () => {
   // The reason it is collected: the desk needs a number to call.
   assert.match(checkIn, /teamEmergency/);
 });
+
+test("the desk's instant search loads a short rider list, admins only, never cached", () => {
+  const listBody = checkInRoute.slice(
+    checkInRoute.indexOf("const listRiders"),
+    checkInRoute.indexOf("type CheckInRequest")
+  );
+
+  // The same few columns as the search results: nothing from the full record
+  // (age, address, parents, emergency contacts) until a rider is selected.
+  assert.match(listBody, /\.select\("id, full_name, email, phone, confirmation_code, checked_in_at"\)/);
+  assert.doesNotMatch(listBody, /location|emergency|father_name|\bage\b/);
+  // One row per code, like the search.
+  assert.match(listBody, /const byCode = new Map/);
+
+  // Behind the same administrator check as every other request here.
+  const post = checkInRoute.slice(checkInRoute.indexOf("export async function POST"));
+  assert.ok(post.indexOf("verifyAdminRequest()") < post.indexOf("body.roster === true"));
+  assert.match(post, /\{ riders \},\s+\{ headers: \{ "Cache-Control": "private, no-store" \} \}/);
+
+  // The panel filters the list on the device and refreshes it from the server.
+  const panel = repoFile("src/app/admin/CheckInPanel.tsx");
+  assert.match(panel, /searchRiders\(roster, query\)/);
+  assert.match(panel, /const ROSTER_REFRESH_MS = 5_000;/);
+  assert.match(panel, /void loadRoster\(\);/);
+});
+
+test("the Check-in tab has a desk and a Who's checked in overview, from the same list", () => {
+  const panel = repoFile("src/app/admin/CheckInPanel.tsx");
+  const status = repoFile("src/app/admin/CheckInStatus.tsx");
+
+  // Two switches; the desk stays the default view.
+  assert.match(panel, /useState<"desk" \| "status">\("desk"\)/);
+  assert.match(panel, />\s*Check-in desk\s*</);
+  assert.match(panel, />\s*Who&apos;s checked in\s*</);
+  // The overview reads the desk's own refreshed list, never its own copy.
+  assert.match(panel, /<CheckInStatus roster=\{roster\} failed=\{rosterFailed\} onSelect=\{openFromStatus\} \/>/);
+  assert.doesNotMatch(status, /fetch\(/);
+
+  // A team is ready only with all four riders registered and checked in,
+  // the same rule the start-list draw applies.
+  assert.match(status, /const TEAM_SIZE = 4;/);
+  assert.match(status, /members\.length === TEAM_SIZE && members\.every\(\(rider\) => rider\.checked_in_at\)/);
+
+  // The rider list carries each team rider's team id so teams can be counted.
+  assert.match(checkInRoute, /is_leader, team_id, teams\(team_name\)/);
+});
