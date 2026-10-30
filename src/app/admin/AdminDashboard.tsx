@@ -1627,7 +1627,8 @@ export default function AdminDashboard({
             Audit Log
           </button>
           {/* Separate pages rather than tabs: each is a full workspace of its
-              own. Styled as inactive tabs so the bar still reads as one. */}
+              own (PDF Guides gathers the printed guides). Styled as inactive
+              tabs so the bar still reads as one. */}
           <Link
             href="/admin/scoring"
             className="rounded-lg border border-bronze/20 px-5 py-3 text-center font-display text-sm font-semibold uppercase tracking-[0.15em] text-bronze-dark transition-colors hover:border-bronze/40"
@@ -1640,30 +1641,12 @@ export default function AdminDashboard({
           >
             Paper entry
           </Link>
-          <a
-            href="/documents/staff-guide.pdf"
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            href="/admin/guides"
             className="rounded-lg border border-bronze/20 px-5 py-3 text-center font-display text-sm font-semibold uppercase tracking-[0.15em] text-bronze-dark transition-colors hover:border-bronze/40"
           >
-            Staff guide (PDF)
-          </a>
-          <a
-            href="/documents/vmix-guide.pdf"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-lg border border-bronze/20 px-5 py-3 text-center font-display text-sm font-semibold uppercase tracking-[0.15em] text-bronze-dark transition-colors hover:border-bronze/40"
-          >
-            vMix guide (PDF)
-          </a>
-          <a
-            href="/documents/rehearsal-guide.pdf"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-lg border border-bronze/20 px-5 py-3 text-center font-display text-sm font-semibold uppercase tracking-[0.15em] text-bronze-dark transition-colors hover:border-bronze/40"
-          >
-            Rehearsal guide (PDF)
-          </a>
+            PDF Guides
+          </Link>
         </div>
 
         <div className="font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70">

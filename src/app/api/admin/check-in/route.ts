@@ -12,7 +12,7 @@ import {
 import { verifyAdminRequest } from "@/lib/admin/server";
 import { escapeIlikePattern } from "@/lib/supabase/query";
 
-type LookupRequest = { code?: unknown; query?: unknown };
+type LookupRequest = { code?: unknown; query?: unknown; roster?: unknown };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -27,6 +27,8 @@ type RiderMatch = {
   email: string;
   phone: string;
   team_name: string | null;
+  /* The team this rider rides for, so the desk can count a team's riders. */
+  team_id: string | null;
   is_leader: boolean | null;
   confirmation_code: string;
   checked_in_at: string | null;
@@ -57,7 +59,7 @@ const searchRiders = async (
     serviceSupabase
       .from("team_members")
       .select(
-        "id, full_name, email, phone, confirmation_code, checked_in_at, is_leader, teams(team_name)"
+        "id, full_name, email, phone, confirmation_code, checked_in_at, is_leader, team_id, teams(team_name)"
       )
       .ilike(column, pattern)
       .limit(MATCH_LIMIT)
@@ -90,6 +92,7 @@ const searchRiders = async (
     existing.entries = [...new Set([...existing.entries, ...match.entries])];
     // Prefer the team label, which carries the team name.
     existing.team_name = existing.team_name ?? match.team_name;
+    existing.team_id = existing.team_id ?? match.team_id;
     existing.is_leader = existing.is_leader ?? match.is_leader;
   };
 
@@ -103,6 +106,7 @@ const searchRiders = async (
         email: row.email,
         phone: row.phone,
         team_name: null,
+        team_id: null,
         is_leader: null,
         confirmation_code: row.confirmation_code,
         checked_in_at: row.checked_in_at,
@@ -128,6 +132,7 @@ const searchRiders = async (
         email: row.email,
         phone: row.phone,
         team_name: team?.team_name ?? null,
+        team_id: row.team_id,
         is_leader: row.is_leader,
         confirmation_code: row.confirmation_code,
         checked_in_at: row.checked_in_at,
@@ -141,6 +146,94 @@ const searchRiders = async (
 
   return { matches, error: null };
 };
+/* Every rider at once, for the desk's instant search: the panel keeps this
+   short list (name, email, phone, team, code, check-in status) and filters it
+   as the administrator types, refreshing it every few seconds and after each
+   check-in. A rider's full record is still loaded fresh, by code, when they
+   are selected. ~150 riders today; ROSTER_LIMIT is far above any real field. */
+const ROSTER_LIMIT = 5000;
+
+const listRiders = async (
+  serviceSupabase: ServiceRoleClient
+): Promise<{ riders: RiderMatch[]; error: string | null }> => {
+  const [solo, team] = await Promise.all([
+    serviceSupabase
+      .from("solo_registrations")
+      .select("id, full_name, email, phone, confirmation_code, checked_in_at")
+      .limit(ROSTER_LIMIT),
+    serviceSupabase
+      .from("team_members")
+      .select(
+        "id, full_name, email, phone, confirmation_code, checked_in_at, is_leader, team_id, teams(team_name)"
+      )
+      .limit(ROSTER_LIMIT),
+  ]);
+
+  const failure = solo.error ?? team.error;
+
+  if (failure) {
+    return { riders: [], error: failure.message };
+  }
+
+  // One row per code, as in searchRiders: a rider with a solo entry and a
+  // team place shares one code and is listed once, with both entries.
+  const byCode = new Map<string, RiderMatch>();
+
+  for (const row of solo.data ?? []) {
+    byCode.set(row.confirmation_code, {
+      id: row.id,
+      source: "solo",
+      entries: ["solo"],
+      full_name: row.full_name,
+      email: row.email,
+      phone: row.phone,
+      team_name: null,
+      team_id: null,
+      is_leader: null,
+      confirmation_code: row.confirmation_code,
+      checked_in_at: row.checked_in_at,
+    });
+  }
+
+  for (const row of team.data ?? []) {
+    const relation = row.teams as unknown as
+      | { team_name: string }
+      | { team_name: string }[]
+      | null;
+    const teamName = (Array.isArray(relation) ? relation[0] ?? null : relation)?.team_name ?? null;
+    const existing = byCode.get(row.confirmation_code);
+
+    if (existing) {
+      existing.entries = [...new Set([...existing.entries, "team" as const])];
+      existing.team_name = existing.team_name ?? teamName;
+      existing.team_id = existing.team_id ?? row.team_id;
+      existing.is_leader = existing.is_leader ?? row.is_leader;
+      continue;
+    }
+
+    byCode.set(row.confirmation_code, {
+      id: row.id,
+      source: "team",
+      entries: ["team"],
+      full_name: row.full_name,
+      email: row.email,
+      phone: row.phone,
+      team_name: teamName,
+      team_id: row.team_id,
+      is_leader: row.is_leader,
+      confirmation_code: row.confirmation_code,
+      checked_in_at: row.checked_in_at,
+    });
+  }
+
+  return {
+    riders: [...byCode.values()].sort((first, second) =>
+      first.full_name.localeCompare(second.full_name)
+    ),
+    error: null,
+  };
+};
+
 type CheckInRequest = {
   code?: unknown;
   checkedIn?: unknown;
@@ -161,12 +254,28 @@ export async function POST(request: Request) {
 
   try {
     const rawBody: unknown = await request.json();
-    body = isRecord(rawBody) ? { code: rawBody.code, query: rawBody.query } : {};
+    body = isRecord(rawBody)
+      ? { code: rawBody.code, query: rawBody.query, roster: rawBody.roster }
+      : {};
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
   const serviceSupabase = createServiceRoleClient();
+
+  // The whole rider list, for the desk's instant search.
+  if (body.roster === true) {
+    const { riders, error: rosterError } = await listRiders(serviceSupabase);
+
+    if (rosterError) {
+      return NextResponse.json({ error: rosterError }, { status: 400 });
+    }
+
+    return NextResponse.json(
+      { riders },
+      { headers: { "Cache-Control": "private, no-store" } }
+    );
+  }
 
   // Second path: the rider has no code, so find them by name, email or phone
   // and let the administrator pick from the matches.

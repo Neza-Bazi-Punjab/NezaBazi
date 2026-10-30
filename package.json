@@ -9,7 +9,7 @@
     "build:guide": "node --no-warnings scripts/build-staff-guide.mts",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --no-warnings --test src/lib/supabase/query.test.mts src/lib/supabase/email-confirmation.test.mts src/lib/safe-redirect.test.mts src/lib/email-address.test.mts src/lib/admin/audit.test.mts src/components/location-picker.test.mts src/components/navbar-roles.test.mts src/app/admin/AdminDashboard.layout.test.mts src/app/admin/check-in.test.mts src/app/layout.test.mts src/app/auth/auth-flow.test.mts src/app/privacy/privacy.test.mts src/app/admin/parent-names.test.mts src/app/live/live-pages.test.mts src/app/admin/paper-registration.test.mts src/lib/scoring/live-scoring.test.mts src/lib/scoring/sample-engine.test.mts src/app/api/scoring-routes.test.mts src/lib/scoring/public-state.test.mts src/lib/scoring/format.test.mts"
+    "test": "node --no-warnings --test src/lib/supabase/query.test.mts src/lib/supabase/email-confirmation.test.mts src/lib/safe-redirect.test.mts src/lib/email-address.test.mts src/lib/admin/audit.test.mts src/components/location-picker.test.mts src/components/navbar-roles.test.mts src/app/admin/AdminDashboard.layout.test.mts src/app/admin/check-in.test.mts src/app/layout.test.mts src/app/auth/auth-flow.test.mts src/app/privacy/privacy.test.mts src/app/admin/parent-names.test.mts src/app/live/live-pages.test.mts src/app/admin/paper-registration.test.mts src/lib/scoring/live-scoring.test.mts src/lib/scoring/sample-engine.test.mts src/app/api/scoring-routes.test.mts src/lib/scoring/public-state.test.mts src/lib/scoring/format.test.mts src/lib/check-in-search.test.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

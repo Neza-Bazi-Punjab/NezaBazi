@@ -66,6 +66,7 @@ src/
                         podium and the printable pool sheet
                         (+ the graphics rehearsal feed's Start/Stop card)
       paper/            Key in a paper registration form on a rider's behalf
+      guides/           PDF Guides page: the staff, vMix and rehearsal guides
     live/               Public live scoreboard: on course, up next, standings, pools
     judge/              Judges' panel (phone): record results, call pools, undo
     commentary/         Commentary panel: rider background for the announcer
@@ -199,7 +200,7 @@ On event day judges record every run from a phone, and a public scoreboard, a co
 
 **Paper forms.** `npm run build:forms` (Node 24) regenerates `public/documents/registration-form-solo.pdf` and `registration-form-team.pdf` from `src/lib/site.ts` and the field list in `src/lib/paper-registration.ts`. It downloads Noto Sans Gurmukhi into `scripts/fonts/` on first run (not committed) for the Punjabi labels, and still builds English-only if the download fails. The PDFs are committed. Rebuilds are not byte-identical, so rebuild only when the form changes and never in CI. A rider without email is stored under a placeholder on `paper.nezabazipunjab.com`; that domain must never receive mail (no MX records).
 
-**Printed guides.** `npm run build:guide` (Node 24) builds the three PDFs in `public/documents/` that are linked from the admin dashboard's tab bar: `staff-guide.pdf` (how the live scoring works, by role) from `docs/superpowers/plans/2026-10-25-staff-guide-outline.md`, `vmix-guide.pdf` (the graphics team's handout) from `docs/vmix-data-feed.md`, and `rehearsal-guide.pdf` (how to practise alone and run a dress rehearsal) from `docs/superpowers/plans/2026-10-26-rehearsal-guide-outline.md`. The text files are the source: edit one, rebuild, and commit both the text and the PDF. The dialect (headings, steps, tables, callouts, pictures, `{site.*}` placeholders) is described at the top of the staff-guide outline.
+**Printed guides.** `npm run build:guide` (Node 24) builds the three PDFs in `public/documents/` that are linked from the admin dashboard's tab bar (the **PDF Guides** page, `/admin/guides`): `staff-guide.pdf` (how the live scoring works, by role) from `docs/superpowers/plans/2026-10-25-staff-guide-outline.md`, `vmix-guide.pdf` (the graphics team's handout) from `docs/vmix-data-feed.md`, and `rehearsal-guide.pdf` (how to practise alone and run a dress rehearsal) from `docs/superpowers/plans/2026-10-26-rehearsal-guide-outline.md`. The text files are the source: edit one, rebuild, and commit both the text and the PDF. The dialect (headings, steps, tables, callouts, pictures, `{site.*}` placeholders) is described at the top of the staff-guide outline.
 
 **vMix bridge.** `node scripts/vmix-bridge.mjs --input "<title>"` is an optional, dependency-free script that pushes the current feed into a vMix title through vMix's local API (`--sample` for rehearsal data, `--moving-sample` for the moving loop); see [docs/live-stream.md](docs/live-stream.md).
 
