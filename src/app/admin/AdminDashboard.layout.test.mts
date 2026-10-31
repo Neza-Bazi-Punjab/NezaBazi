@@ -119,3 +119,16 @@ test("the admin menu collapses on a laptop and remembers it on this device", () 
   assert.match(layout, /<AdminNav initialCollapsed=\{collapsed\} \/>/);
   assert.doesNotMatch(layout, /<script/);
 });
+
+test("each admin section page loads only the data it shows", () => {
+  const section = readFileSync(new URL("./AdminDashboardSection.tsx", import.meta.url), "utf8");
+
+  assert.match(section, /solo: tab === "solo",\s+teams: tab === "team",\s+audit: tab === "audit",/);
+  assert.match(section, /needs\.solo\s+\? supabase\.from\("solo_registrations"\)/);
+  assert.match(section, /needs\.teams\s+\? supabase\.from\("teams"\)/);
+  assert.match(section, /needs\.teams \? supabase\.from\("team_members"\)/);
+  assert.match(section, /needs\.audit\s+\? supabase\s+\.from\("admin_audit_log"\)/);
+  assert.match(section, /needs\.audit\s+\? supabase\s+\.from\("admin_audit_log_archive"\)/);
+  // The account list (up to 1000 users) is read for the audit log only.
+  assert.match(section, /if \(needs\.audit\) \{\s+const \{ data: usersData, error: usersError \} =\s+await createServiceRoleClient\(\)\.auth\.admin\.listUsers/);
+});

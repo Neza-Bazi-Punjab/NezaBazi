@@ -55,6 +55,17 @@ export default async function AdminDashboardSection({
   }
 
   const { supabase } = access;
+
+  /* Each page loads only what it shows. Check-in and Staff fetch their own
+     data through their own routes, so they need none of this. Every load is
+     fresh from the database on each visit and after each save, as before. */
+  const needs = {
+    solo: tab === "solo",
+    teams: tab === "team",
+    audit: tab === "audit",
+  };
+  const none = Promise.resolve({ data: [] as unknown[] });
+
   const [
     { data: soloRegistrations },
     { data: teams },
@@ -62,41 +73,51 @@ export default async function AdminDashboardSection({
     { data: auditLog },
     { data: auditArchive },
   ] = await Promise.all([
-    supabase
-      .from("solo_registrations")
-      .select("*")
-      .order("created_at", { ascending: false }),
-    supabase.from("teams").select("*").order("created_at", { ascending: false }),
-    supabase.from("team_members").select("*"),
-    supabase
-      .from("admin_audit_log")
-      .select("*, actor:profiles!actor_id(id)")
-      .order("created_at", { ascending: false })
-      .limit(200),
-    supabase
-      .from("admin_audit_log_archive")
-      .select("*")
-      .order("deleted_at", { ascending: false })
-      .limit(500),
+    needs.solo
+      ? supabase.from("solo_registrations").select("*").order("created_at", { ascending: false })
+      : none,
+    needs.teams
+      ? supabase.from("teams").select("*").order("created_at", { ascending: false })
+      : none,
+    needs.teams ? supabase.from("team_members").select("*") : none,
+    needs.audit
+      ? supabase
+          .from("admin_audit_log")
+          .select("*, actor:profiles!actor_id(id)")
+          .order("created_at", { ascending: false })
+          .limit(200)
+      : none,
+    needs.audit
+      ? supabase
+          .from("admin_audit_log_archive")
+          .select("*")
+          .order("deleted_at", { ascending: false })
+          .limit(500)
+      : none,
   ]);
-  const serviceSupabase = createServiceRoleClient();
-  const { data: usersData, error: usersError } =
-    await serviceSupabase.auth.admin.listUsers({
-      page: 1,
-      perPage: 1000,
-    });
 
-  if (usersError) {
-    console.error("Unable to load admin audit actor lookup", usersError);
+  // The account list only puts names to the audit log's actors.
+  let auditActors: AuditActor[] = [];
+
+  if (needs.audit) {
+    const { data: usersData, error: usersError } =
+      await createServiceRoleClient().auth.admin.listUsers({
+        page: 1,
+        perPage: 1000,
+      });
+
+    if (usersError) {
+      console.error("Unable to load admin audit actor lookup", usersError);
+    }
+
+    auditActors =
+      usersData?.users.map((authUser) => ({
+        id: authUser.id,
+        email: authUser.email ?? "",
+        full_name: getMetadataString(authUser.user_metadata, "full_name"),
+        phone: getMetadataString(authUser.user_metadata, "phone"),
+      })) ?? [];
   }
-
-  const auditActors =
-    usersData?.users.map((authUser) => ({
-      id: authUser.id,
-      email: authUser.email ?? "",
-      full_name: getMetadataString(authUser.user_metadata, "full_name"),
-      phone: getMetadataString(authUser.user_metadata, "phone"),
-    })) ?? [];
 
   return (
     <>
@@ -112,7 +133,7 @@ export default async function AdminDashboardSection({
             teamMembers={(teamMembers ?? []) as TeamMember[]}
             auditLog={(auditLog ?? []) as AuditLogEntry[]}
             auditArchive={(auditArchive ?? []) as ArchivedAuditEntry[]}
-            auditActors={auditActors as AuditActor[]}
+            auditActors={auditActors}
           />
         </div>
       </section>
