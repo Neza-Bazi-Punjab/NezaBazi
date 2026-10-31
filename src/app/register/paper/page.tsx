@@ -40,11 +40,13 @@ export default function PaperRegistrationPage() {
     <>
       <PageHeader
         title="Paper Registration"
-        intro="Can’t register online? Print the form, fill it in by hand, and hand it in. It asks for the same details as the online form, in English and Punjabi."
+        intro="Print a form, fill it in by hand, and hand it in. In English and Punjabi."
       />
 
       <section className="bg-cream">
-        <div className="mx-auto max-w-4xl space-y-16 px-6 py-16">
+        {/* Same left edge as the page heading above (PageHeader's max-w-6xl),
+            with the text kept to a readable width, as on the Rulebook. */}
+        <div className="mx-auto max-w-6xl space-y-16 px-6 py-16 [&>*]:max-w-4xl">
           <div>
             <SectionHeading>When to Use It</SectionHeading>
             <div className="mt-8 space-y-4 leading-7 text-brown/85">

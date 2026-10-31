@@ -20,7 +20,7 @@ Anyone else who opens a staff page sees a "Log in" or "Access denied" page. Role
 ## 1. Give staff their roles (a few days before)
 
 1. Each judge and commentator signs up on the site like any rider and confirms their email address.
-2. An administrator opens `/admin` → **Profiles** tab → **Add Staff**.
+2. An administrator opens **Staff** in the admin menu (`/admin/staff`) → **Add Staff**.
 3. Search by email or name, choose the **Role** (Judge, Commentator, or Admin for another organiser), and confirm.
 4. To change someone later, use the **Role** dropdown in their row. Choosing **Player** removes their staff access.
 5. Ask each of them to sign in and open their page (`/judge` or `/commentary`) on the device they will use on the day.
@@ -35,7 +35,7 @@ Some riders will not register online. They fill in a printed form and an adminis
 
 **Key one in.**
 
-1. Open `/admin/paper` (or **Paper entry** in the admin dashboard's tab bar).
+1. Open `/admin/paper` (or **Paper entry** in the admin menu).
 2. Choose **Solo rider** or **Team of 4**.
 3. Type the fields in the order the sheet prints them. Father's and mother's names are optional, as they are online.
 4. Watch the **Possible duplicate** box: while you type a phone number, name or email, the panel lists registrations that look like the same rider — someone who also registered online, or a form already keyed in. Check before saving.
@@ -67,7 +67,7 @@ The same rider may hold one solo entry and one team place under the same email: 
 
 > **The graphics rehearsal feed can stay running.** The **Graphics Rehearsal Feed** card on `/admin/scoring` (section 4) starts and stops the moving vMix sample, `?sample=solo`. It changes nothing but those sample addresses, so it is safe on event day. Stopping it then is an extra safeguard in case the graphics team forgets to take `?sample=solo` off an address. Details: [live-stream.md](live-stream.md), under "Moving rehearsal".
 
-Check-in works as it always has: `/admin` → **Check-in** tab, type the rider's code (or search by name, email or phone), check the record, confirm. Paper riders check in the same way with the code from the office box. Only checked-in riders are drawn into the first rounds, and a team needs all four riders checked in.
+Check-in works as it always has: **Check-in** in the admin menu (`/admin/check-in`), type the rider's code (or search by name, email or phone), check the record, confirm. Paper riders check in the same way with the code from the office box. Only checked-in riders are drawn into the first rounds, and a team needs all four riders checked in.
 
 ## 4. Event day: running the rounds at `/admin/scoring`
 

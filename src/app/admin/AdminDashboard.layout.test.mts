@@ -26,8 +26,9 @@ test("registration tables contain long values and usable edit fields", () => {
   }
 });
 
-test("the tab bar links one PDF Guides page that opens the three guides, and all three PDFs are built", () => {
-  assert.match(source, /href="\/admin\/guides"[\s\S]{0,300}?>\s*PDF Guides\s*</);
+test("the admin menu links one PDF guides page that opens the three guides, and all three PDFs are built", () => {
+  const nav = readFileSync(new URL("./AdminNav.tsx", import.meta.url), "utf8");
+  assert.match(nav, /\{ href: "\/admin\/guides", label: "PDF guides" \}/);
   assert.doesNotMatch(source, /href="\/documents\//);
 
   const page = readFileSync(new URL("./guides/page.tsx", import.meta.url), "utf8");
@@ -51,4 +52,70 @@ test("the tab bar links one PDF Guides page that opens the three guides, and all
       `public/documents/${file} is built (npm run build:guide)`
     );
   }
+});
+
+test("every admin section is its own page, in one grouped menu", () => {
+  const nav = readFileSync(new URL("./AdminNav.tsx", import.meta.url), "utf8");
+  const layout = readFileSync(new URL("./layout.tsx", import.meta.url), "utf8");
+
+  // Grouped in the order of the event, each item its own address.
+  for (const [href, label] of [
+    ["/admin", "Overview"],
+    ["/admin/solo", "Solo riders"],
+    ["/admin/teams", "Teams"],
+    ["/admin/paper", "Paper entry"],
+    ["/admin/check-in", "Check-in"],
+    ["/admin/scoring", "Scoring"],
+    ["/admin/staff", "Staff"],
+    ["/admin/audit", "Audit log"],
+    ["/admin/guides", "PDF guides"],
+  ]) {
+    assert.match(nav, new RegExp(`\\{ href: "${href}", label: "${label}" \\}`));
+  }
+  for (const group of ["Registrations", "Event day", "Staff & records"]) {
+    assert.match(nav, new RegExp(`group: "${group}"`));
+  }
+  assert.match(nav, /aria-current=\{active \? "page" : undefined\}/);
+
+  // The menu is shown to administrators only.
+  assert.match(layout, /if \(access\.kind !== "admin"\) \{\s+return children;\s+\}/);
+
+  // The dashboard no longer switches tabs itself: each page names its section,
+  // and every section page sits behind the shared administrator gate.
+  assert.doesNotMatch(source, /setActiveTab/);
+  assert.match(source, /tab: activeTab,/);
+  for (const [folder, tab] of [
+    ["solo", "solo"],
+    ["teams", "team"],
+    ["check-in", "checkin"],
+    ["staff", "profiles"],
+    ["audit", "audit"],
+  ]) {
+    const page = readFileSync(new URL(`./${folder}/page.tsx`, import.meta.url), "utf8");
+    assert.match(page, new RegExp(`tab="${tab}"`), folder);
+    assert.match(page, new RegExp(`path="/admin/${folder}"`), folder);
+  }
+  const section = readFileSync(new URL("./AdminDashboardSection.tsx", import.meta.url), "utf8");
+  assert.match(section, /const access = await getAdminAccess\(\);\s+if \(access\.kind !== "admin"\)/);
+  const gate = readFileSync(new URL("./admin-access.tsx", import.meta.url), "utf8");
+  assert.match(gate, /profile\.role !== "admin"/);
+});
+
+test("the admin menu collapses on a laptop and remembers it on this device", () => {
+  const nav = readFileSync(new URL("./AdminNav.tsx", import.meta.url), "utf8");
+  const layout = readFileSync(new URL("./layout.tsx", import.meta.url), "utf8");
+  const state = readFileSync(new URL("./admin-nav-state.ts", import.meta.url), "utf8");
+
+  assert.match(nav, /aria-label=\{collapsed \? "Expand menu" : "Collapse menu"\}/);
+  assert.match(nav, /aria-expanded=\{!collapsed\}/);
+  // A narrow strip with no links when collapsed, the full column otherwise.
+  assert.match(nav, /collapsed \? "lg:w-14" : "lg:w-60"/);
+  assert.match(nav, /collapsed \? "lg:hidden" : ""/);
+  // Remembered in a cookie the layout reads, so the server draws it collapsed:
+  // no restore script, no flash, no hydration mismatch.
+  assert.match(state, /export const COLLAPSED_COOKIE = "nezabazi_admin_nav";/);
+  assert.match(nav, /document\.cookie = `\$\{COLLAPSED_COOKIE\}=/);
+  assert.match(layout, /\(await cookies\(\)\)\.get\(COLLAPSED_COOKIE\)\?\.value === "1"/);
+  assert.match(layout, /<AdminNav initialCollapsed=\{collapsed\} \/>/);
+  assert.doesNotMatch(layout, /<script/);
 });

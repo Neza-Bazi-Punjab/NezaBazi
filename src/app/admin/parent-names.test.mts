@@ -316,6 +316,7 @@ test("the dashboard labels scoring audit rows and links the new admin pages", ()
   // Paper entries are audited as their own action.
   assert.match(dashboard, /paper_registration: "Paper Registration Entered",/);
 
-  assert.match(dashboard, /<Link\s+href="\/admin\/scoring"[\s\S]*?>\s*Scoring\s*<\/Link>/);
-  assert.match(dashboard, /<Link\s+href="\/admin\/paper"[\s\S]*?>\s*Paper entry\s*<\/Link>/);
+  const nav = repoFile("src/app/admin/AdminNav.tsx");
+  assert.match(nav, /\{ href: "\/admin\/scoring", label: "Scoring" \}/);
+  assert.match(nav, /\{ href: "\/admin\/paper", label: "Paper entry" \}/);
 });

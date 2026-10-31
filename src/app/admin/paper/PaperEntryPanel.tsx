@@ -299,7 +299,7 @@ function DuplicateNotice({ name, phone, email }: { name: string; phone: string; 
 // Fields.
 
 const inputClassName =
-  "mt-2 w-full rounded-lg border bg-cream px-4 py-3 text-ink outline-none focus:border-bronze";
+  "mt-1 w-full rounded-lg border bg-cream px-3 py-2 text-ink outline-none focus:border-bronze";
 
 /* The sheet's rows, as grid spans. Mobile stacks every field. */
 const SOLO_SPANS: Record<PaperRiderKey, string> = {
@@ -318,6 +318,32 @@ const SOLO_SPANS: Record<PaperRiderKey, string> = {
   horse_age: "sm:col-span-2",
   horse_breed: "sm:col-span-5",
 };
+
+/* On a laptop every box sits on the same four even columns, so the edges of
+   the boxes line up from row to row and the form reads like the sheet:
+     names            Full name (2) · Father · Mother
+     contact          Age · Phone · Email (2)
+     address          Village / city · District · State · Country
+     riding & horse   Experience · Horse name · Horse age · Horse breed */
+const LG_SPANS: Record<PaperRiderKey, string> = {
+  full_name: "lg:col-span-2",
+  father_name: "lg:col-span-1",
+  mother_name: "lg:col-span-1",
+  age: "lg:col-span-1",
+  phone: "lg:col-span-1",
+  email: "lg:col-span-2",
+  village_city: "lg:col-span-1",
+  district: "lg:col-span-1",
+  state: "lg:col-span-1",
+  country: "lg:col-span-1",
+  years_experience: "lg:col-span-1",
+  horse_name: "lg:col-span-1",
+  horse_age: "lg:col-span-1",
+  horse_breed: "lg:col-span-1",
+};
+
+/* The four-column grid every section of the form uses on a laptop. */
+const FORM_GRID = "grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-12 lg:grid-cols-4";
 
 const TEAM_SPANS: Record<PaperRiderKey, string> = {
   full_name: "sm:col-span-4",
@@ -368,14 +394,17 @@ function Field({
 
   return (
     <div className={className}>
-      <label htmlFor={id} className="block">
-        <span className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
+      {/* One line, so the boxes of a row line up: the English label stays
+          whole and the Punjabi beside it shortens if the box is narrow (the
+          full text is in its tooltip). */}
+      <label htmlFor={id} className="flex min-w-0 items-baseline gap-2 whitespace-nowrap">
+        <span className="shrink-0 font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
           {definition.label}
           {optional && (
             <span className="ml-1 normal-case tracking-normal text-brown/60">(optional)</span>
           )}
         </span>
-        <span lang="pa" className="block text-sm text-brown/70">
+        <span lang="pa" title={definition.punjabi} className="min-w-0 truncate text-sm text-brown/70">
           {definition.punjabi}
         </span>
       </label>
@@ -394,7 +423,7 @@ function Field({
         className={`${inputClassName} ${error ? "border-red-700" : "border-bronze/40"}`}
       />
       {note && (
-        <p id={`${id}-note`} className="mt-2 text-sm leading-6 text-brown/75">
+        <p id={`${id}-note`} className="mt-1 text-xs leading-5 text-brown/75">
           {note}
         </p>
       )}
@@ -407,7 +436,7 @@ function Field({
   );
 }
 
-const EMAIL_NOTE = `Optional. If the rider has no email, leave it blank: a placeholder address on ${PAPER_EMAIL_DOMAIN} is stored instead, no email is ever sent to it, and the dashboard shows "No email (paper entry)". Give the rider their code from the next screen.`;
+const EMAIL_NOTE = `Optional. Leave blank if they have none: a placeholder on ${PAPER_EMAIL_DOMAIN} is stored and no email is sent. Give them their code from the next screen.`;
 
 function SectionTitle({ english, punjabi }: { english: string; punjabi: string }) {
   return (
@@ -450,7 +479,7 @@ function RiderFields({
         value={rider[definition.key]}
         error={errorFor(errorKey)}
         note={definition.kind === "email" ? EMAIL_NOTE : undefined}
-        className={spans[definition.key]}
+        className={`${spans[definition.key]} ${LG_SPANS[definition.key]}`}
         onChange={(value) => onChange(definition.key, value)}
         onBlur={() => onBlur(errorKey)}
       />
@@ -458,7 +487,7 @@ function RiderFields({
   };
 
   const duplicateCheck = (
-    <div key="duplicates" className="sm:col-span-12">
+    <div key="duplicates" className="sm:col-span-12 lg:col-span-4">
       <DuplicateNotice name={rider.full_name} phone={rider.phone} email={rider.email} />
     </div>
   );
@@ -468,18 +497,18 @@ function RiderFields({
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-12">
-        {riderPart.flatMap((definition) =>
-          // Right after the email box: by then the name, phone and email
-          // have all been typed, which is everything the check uses.
-          definition.key === "email" ? [renderField(definition), duplicateCheck] : [renderField(definition)]
-        )}
+      <div className={FORM_GRID}>
+        {riderPart.map(renderField)}
+        {/* After the rider's own boxes, on a row of its own: by then the
+            name, phone and email have all been typed, which is everything
+            the check uses. */}
+        {duplicateCheck}
       </div>
 
       {horsePart.length > 0 && (
-        <div className="mt-8 space-y-5">
+        <div className="mt-5 space-y-3">
           <SectionTitle english="Horse details" punjabi="ਘੋੜੇ ਦੇ ਵੇਰਵੇ" />
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-12">{horsePart.map(renderField)}</div>
+          <div className={FORM_GRID}>{horsePart.map(renderField)}</div>
         </div>
       )}
     </>
@@ -661,7 +690,7 @@ export default function PaperEntryPanel() {
 
   return (
     <div ref={topRef} className="scroll-mt-24">
-      <form onSubmit={submit} noValidate className="space-y-8">
+      <form onSubmit={submit} noValidate className="space-y-5">
         <fieldset>
           <legend className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
             Which form is it?
@@ -685,7 +714,7 @@ export default function PaperEntryPanel() {
 
         {mode === "solo" ? (
           <>
-            <section className="space-y-5 rounded-lg border border-bronze/20 bg-sand p-5 sm:p-6">
+            <section className="space-y-4 rounded-lg border border-bronze/20 bg-sand p-4 sm:p-5">
               <SectionTitle english="Rider details" punjabi="ਸਵਾਰ ਦੇ ਵੇਰਵੇ" />
               <RiderFields
                 idPrefix="paper-solo-"
@@ -699,9 +728,9 @@ export default function PaperEntryPanel() {
               />
             </section>
 
-            <section className="space-y-5 rounded-lg border border-bronze/20 bg-sand p-5 sm:p-6">
+            <section className="space-y-4 rounded-lg border border-bronze/20 bg-sand p-4 sm:p-5">
               <SectionTitle english="Emergency contact" punjabi="ਐਮਰਜੈਂਸੀ ਸੰਪਰਕ" />
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-12">
+              <div className={FORM_GRID}>
                 {PAPER_EMERGENCY_FIELDS.map((definition) => (
                   <Field
                     key={definition.key}
@@ -709,7 +738,11 @@ export default function PaperEntryPanel() {
                     definition={definition}
                     value={solo[definition.key]}
                     error={errorFor(definition.key)}
-                    className={definition.key === "emergency_contact_name" ? "sm:col-span-7" : "sm:col-span-5"}
+                    className={
+                      definition.key === "emergency_contact_name"
+                        ? "sm:col-span-7 lg:col-span-2"
+                        : "sm:col-span-5 lg:col-span-1"
+                    }
                     onChange={(value) => updateSoloRider(definition.key, value)}
                     onBlur={() => markTouched(definition.key)}
                   />
@@ -719,15 +752,15 @@ export default function PaperEntryPanel() {
           </>
         ) : (
           <>
-            <section className="space-y-5 rounded-lg border border-bronze/20 bg-sand p-5 sm:p-6">
+            <section className="space-y-4 rounded-lg border border-bronze/20 bg-sand p-4 sm:p-5">
               <SectionTitle english="Team details" punjabi="ਟੀਮ ਦੇ ਵੇਰਵੇ" />
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-12">
+              <div className={FORM_GRID}>
                 <Field
                   id="paper-team-team_name"
                   definition={PAPER_TEAM_NAME_FIELD}
                   value={team.team_name}
                   error={errorFor("team_name")}
-                  className="sm:col-span-12"
+                  className="sm:col-span-12 lg:col-span-2"
                   onChange={(value) => updateTeamField("team_name", value)}
                   onBlur={() => markTouched("team_name")}
                 />
@@ -738,7 +771,11 @@ export default function PaperEntryPanel() {
                     definition={definition}
                     value={team[definition.key]}
                     error={errorFor(definition.key)}
-                    className={definition.key === "emergency_contact_name" ? "sm:col-span-7" : "sm:col-span-5"}
+                    className={
+                      definition.key === "emergency_contact_name"
+                        ? "sm:col-span-7 lg:col-span-1"
+                        : "sm:col-span-5 lg:col-span-1"
+                    }
                     onChange={(value) => updateTeamField(definition.key, value)}
                     onBlur={() => markTouched(definition.key)}
                   />
@@ -749,7 +786,7 @@ export default function PaperEntryPanel() {
             {team.riders.map((rider, index) => (
               <section
                 key={index}
-                className="space-y-5 rounded-lg border border-bronze/20 bg-sand p-5 sm:p-6"
+                className="space-y-4 rounded-lg border border-bronze/20 bg-sand p-4 sm:p-5"
               >
                 <SectionTitle
                   english={index === 0 ? "Rider 1 — team leader" : `Rider ${index + 1}`}

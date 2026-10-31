@@ -4,6 +4,7 @@ import PageHeader from "@/components/PageHeader";
 import SectionHeading from "@/components/SectionHeading";
 import { createClient } from "@/lib/supabase/server";
 import { site } from "@/lib/site";
+import AdminPageHeading from "../AdminPageHeading";
 
 export const metadata: Metadata = {
   title: "PDF Guides",
@@ -27,7 +28,7 @@ const PDF_GUIDES = [
     title: "vMix guide",
     audience: "The live-stream graphics team",
     description:
-      "The four live data feeds, every column, the ?sample=1 and ?sample=solo test data, and the checklist before going on air.",
+      "The live data feeds for the stream graphics, how to test them, and the checklist before going on air.",
   },
   {
     href: "/documents/rehearsal-guide.pdf",
@@ -103,21 +104,16 @@ export default async function AdminGuidesPage() {
 
   return (
     <>
-      <PageHeader
+      <AdminPageHeading
         title="PDF Guides"
-        intro="The printed guides for running the championship. Each one opens in a new tab, ready to read, print or share."
+        intro="The printed guides for running the championship. Each opens in a new tab, ready to read, print or share."
       />
 
+      {/* Same left edge as every admin page; the cards keep a comfortable
+          width and leave the space on the right. */}
       <section className="bg-cream">
-        <div className="mx-auto max-w-5xl px-6 py-12 sm:py-16">
-          <Link
-            href="/admin"
-            className="inline-flex items-center gap-2 font-display text-xs font-semibold uppercase tracking-[0.15em] text-bronze-dark transition-colors hover:text-bronze"
-          >
-            ← Admin Dashboard
-          </Link>
-
-          <ul className="mt-8 grid gap-6 md:grid-cols-3">
+        <div className="px-6 pb-12 pt-4 sm:pb-16 sm:pt-6">
+          <ul className="grid max-w-5xl gap-6 md:grid-cols-3">
             {PDF_GUIDES.map((guide) => (
               <li key={guide.href}>
                 <a
