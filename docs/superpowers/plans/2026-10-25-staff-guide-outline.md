@@ -92,13 +92,13 @@ Organisers have the **Admin** role. Use a laptop for everything in this section.
 ## 1. Give staff their roles (a few days before)
 
 1. Each judge, commentator and check-in helper signs up and confirms their email (see Getting access).
-2. Open {site.url}/admin, choose the **Profiles** tab, then **Add Staff**.
+2. Open {site.url}/admin/staff (**Staff** in the admin menu), then **Add Staff**.
 3. Search by email or name, choose the **Role** (Judge, Commentator, or Admin for another organiser) and confirm.
 4. To change a role later, use the **Role** dropdown in their row. **Player** removes staff access. The last administrator cannot be given another role.
 
 ## 2. Create the rounds (can be done the day before)
 
-Open {site.url}/admin/scoring (or **Scoring** in the admin tab bar). Press **New Round**, fill in the boxes and press **Create Round**. A typical day:
+Open {site.url}/admin/scoring (or **Scoring** in the admin menu). Press **New Round**, fill in the boxes and press **Create Round**. A typical day:
 
 | Name | Event | Round number | Attempts per rider | Target points | Pool size |
 | --- | --- | --- | --- | --- | --- |
@@ -121,7 +121,7 @@ Only riders who check in are drawn into the first rounds, and a team needs all f
 
 For riders who will not register online. Print the **Solo Rider Form** or the **Team Form** from {site.url}/register/paper.
 
-1. Open **Paper entry** in the admin tab bar ({site.url}/admin/paper) and choose **Solo rider** or **Team of 4**.
+1. Open **Paper entry** in the admin menu ({site.url}/admin/paper) and choose **Solo rider** or **Team of 4**.
 2. Type the fields in the order the sheet prints them. Check the **Possible duplicate** box: it lists registrations that look like the same rider. Email is optional.
 3. Press **Save Registration** (or **Save Team**). Write the confirmation code from the next screen in the **Office use only** box, with your name and the date. A rider without email gets the code from you.
 
@@ -288,7 +288,7 @@ Read the names out so the riders come to the start. The panel goes back to the r
 
 Check-in is in the admin dashboard, so you need the **Admin** role (see Getting access). A laptop is easiest.
 
-1. Open {site.url}/admin and choose the **Check-in** tab.
+1. Open {site.url}/admin/check-in (**Check-in** in the admin menu).
 2. Type the rider's **Confirmation Code** (it looks like NBP-7K4M2Q) and press **Find Rider**.
 3. No code? Search by name, email or phone number and pick the rider from the list.
 4. Check the details with the rider: name, horse, emergency contact.

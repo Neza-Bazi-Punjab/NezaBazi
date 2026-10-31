@@ -4,6 +4,7 @@ import PageHeader from "@/components/PageHeader";
 import SectionHeading from "@/components/SectionHeading";
 import { createClient } from "@/lib/supabase/server";
 import { site } from "@/lib/site";
+import AdminPageHeading from "../AdminPageHeading";
 import PaperEntryPanel from "./PaperEntryPanel";
 
 export const metadata: Metadata = {
@@ -89,21 +90,17 @@ export default async function AdminPaperEntryPage() {
 
   return (
     <>
-      <PageHeader
+      <AdminPageHeading
         title="Paper Entry"
-        intro="Key in a paper registration form exactly as written. The fields follow the order of the printed sheet, top to bottom."
+        intro="Key in a paper registration form exactly as written, in the order of the printed sheet."
       />
 
+      {/* Same left edge as every admin page. Four even columns on a laptop
+          keep the form short; the width is capped so the boxes stay a
+          readable size on a wide screen. */}
       <section className="bg-cream">
-        <div className="mx-auto max-w-5xl px-6 py-12 sm:py-16">
-          <Link
-            href="/admin"
-            className="inline-flex items-center gap-2 font-display text-xs font-semibold uppercase tracking-[0.15em] text-bronze-dark transition-colors hover:text-bronze"
-          >
-            ← Admin Dashboard
-          </Link>
-
-          <div className="mt-8">
+        <div className="px-6 pb-12 pt-4 sm:pb-16 sm:pt-6">
+          <div className="max-w-6xl">
             <PaperEntryPanel />
           </div>
         </div>

@@ -1,7 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { isValidEmail } from "@/lib/email-address";
 /* A paper registration without an email is stored under a generated
@@ -133,9 +132,12 @@ type AdminDashboardProps = {
   auditLog: AuditLogEntry[];
   auditArchive: ArchivedAuditEntry[];
   auditActors: AuditActor[];
+  /* Which section this page shows; each has its own address under /admin
+     (see AdminNav), so refresh and Back stay on it. */
+  tab: AdminSection;
 };
 
-type ActiveTab = "profiles" | "solo" | "team" | "checkin" | "audit";
+export type AdminSection = "profiles" | "solo" | "team" | "checkin" | "audit";
 
 type AdminProfileUser = {
   id: string;
@@ -282,6 +284,13 @@ const soloRegisteredDateFormatter = new Intl.DateTimeFormat("en-US", {
 const adminTableInputClass =
   "block w-full min-w-0 rounded-lg border border-bronze/20 bg-cream px-2 py-2 text-brown focus:border-bronze focus:outline-none";
 
+/* How long the pointer rests on a cut-off cell before its full text shows. */
+const FULL_TEXT_DELAY_MS = 350;
+
+/* A table cell's text, cut off with "…" when it does not fit. Resting the
+   pointer on a cut-off cell shows the whole text in a small box just below it
+   (cells that fit show nothing). The box is fixed to the window, so the
+   table's scrolling and clipping cannot cut it off. */
 function AdminTableText({
   value,
   className = "",
@@ -290,13 +299,48 @@ function AdminTableText({
   className?: string;
 }) {
   const text = String(value);
+  const [full, setFull] = useState<{ left: number; top: number } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const show = (event: React.MouseEvent<HTMLSpanElement>) => {
+    const cell = event.currentTarget;
+
+    if (cell.scrollWidth <= cell.clientWidth) {
+      return;
+    }
+
+    timer.current = setTimeout(() => {
+      const box = cell.getBoundingClientRect();
+      setFull({ left: box.left, top: box.bottom + 4 });
+    }, FULL_TEXT_DELAY_MS);
+  };
+
+  const hide = () => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    setFull(null);
+  };
+
+  useEffect(() => hide, []);
 
   return (
     <span
       className={`block min-w-0 max-w-full truncate ${className}`}
-      title={text}
+      onMouseEnter={show}
+      onMouseLeave={hide}
     >
       {text}
+      {full && (
+        <span
+          role="tooltip"
+          style={{ left: full.left, top: full.top }}
+          className="pointer-events-none fixed z-50 max-w-sm whitespace-normal break-words rounded-md border border-bronze/25 bg-ink px-2.5 py-1.5 text-xs font-normal leading-5 text-cream shadow-lg"
+        >
+          {text}
+        </span>
+      )}
     </span>
   );
 }
@@ -567,6 +611,48 @@ const requestRegistrationMutation = async (
   }
 };
 
+/* The search bar at the top of the Solo riders and Teams lists: the search
+   box and how many results it shows. Filters as you type. */
+function ListSearchBar({
+  value,
+  onChange,
+  label,
+  count,
+  noun,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  label: string;
+  count: number;
+  noun: [singular: string, plural: string];
+}) {
+  return (
+    <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
+      <label className="relative block w-full sm:max-w-md">
+        <span className="sr-only">{label}</span>
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brown/50"
+        >
+          <circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+          <path d="M13 13l4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+        <input
+          type="search"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="Search by name, email, or phone..."
+          className="w-full rounded-lg border border-bronze/20 bg-cream py-2 pl-9 pr-3 text-sm text-brown focus:border-bronze focus:outline-none"
+        />
+      </label>
+      <p className="text-sm text-brown/75">
+        Showing <strong className="text-ink">{count}</strong> {count === 1 ? noun[0] : noun[1]}
+      </p>
+    </div>
+  );
+}
+
 export default function AdminDashboard({
   currentAdminId,
   soloRegistrations,
@@ -575,9 +661,9 @@ export default function AdminDashboard({
   auditLog,
   auditArchive,
   auditActors,
+  tab: activeTab,
 }: AdminDashboardProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<ActiveTab>("profiles");
   const [searchQuery, setSearchQuery] = useState("");
   const [profileUsers, setProfileUsers] = useState<AdminProfileUser[]>([]);
   const [profilesLoading, setProfilesLoading] = useState(false);
@@ -1491,6 +1577,26 @@ export default function AdminDashboard({
     filteredAuditIds.length > 0 &&
     selectedFilteredAuditIds.length === filteredAuditIds.length;
 
+  /* Clicking anywhere on an audit row selects it, like its checkbox. Clicks
+     on the row's own controls (the checkbox, View / Hide) do their own job,
+     and a click that ends a text selection (copying a detail) selects nothing. */
+  const toggleAuditRow = (event: React.MouseEvent<HTMLTableRowElement>, ids: string[]) => {
+    if ((event.target as HTMLElement).closest("button, a, input, label, select, textarea")) {
+      return;
+    }
+
+    if (window.getSelection()?.toString()) {
+      return;
+    }
+
+    toggleAuditIds(ids);
+  };
+
+  const auditRowClass = (selected: boolean) =>
+    `cursor-pointer border-b border-bronze/10 transition-colors last:border-0 ${
+      selected ? "bg-bronze/10" : "hover:bg-cream/70"
+    }`;
+
   const toggleAuditIds = (ids: string[]) => {
     setSelectedAuditIds((current) => {
       const next = new Set(current);
@@ -1569,95 +1675,9 @@ export default function AdminDashboard({
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col gap-4 border-b border-bronze/20 pb-6 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-          <button
-            type="button"
-            onClick={() => setActiveTab("profiles")}
-            className={`rounded-lg px-5 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] transition-colors ${
-              activeTab === "profiles"
-                ? "bg-bronze-deep text-cream hover:bg-bronze"
-                : "border border-bronze/20 text-bronze-dark hover:border-bronze/40"
-            }`}
-          >
-            Profiles
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("solo")}
-            className={`rounded-lg px-5 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] transition-colors ${
-              activeTab === "solo"
-                ? "bg-bronze-deep text-cream hover:bg-bronze"
-                : "border border-bronze/20 text-bronze-dark hover:border-bronze/40"
-            }`}
-          >
-            Solo Registrations
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("team")}
-            className={`rounded-lg px-5 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] transition-colors ${
-              activeTab === "team"
-                ? "bg-bronze-deep text-cream hover:bg-bronze"
-                : "border border-bronze/20 text-bronze-dark hover:border-bronze/40"
-            }`}
-          >
-            Team Registrations
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("checkin")}
-            className={`rounded-lg px-5 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] transition-colors ${
-              activeTab === "checkin"
-                ? "bg-bronze-deep text-cream hover:bg-bronze"
-                : "border border-bronze/20 text-bronze-dark hover:border-bronze/40"
-            }`}
-          >
-            Check-in
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("audit")}
-            className={`rounded-lg px-5 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] transition-colors ${
-              activeTab === "audit"
-                ? "bg-bronze-deep text-cream hover:bg-bronze"
-                : "border border-bronze/20 text-bronze-dark hover:border-bronze/40"
-            }`}
-          >
-            Audit Log
-          </button>
-          {/* Separate pages rather than tabs: each is a full workspace of its
-              own (PDF Guides gathers the printed guides). Styled as inactive
-              tabs so the bar still reads as one. */}
-          <Link
-            href="/admin/scoring"
-            className="rounded-lg border border-bronze/20 px-5 py-3 text-center font-display text-sm font-semibold uppercase tracking-[0.15em] text-bronze-dark transition-colors hover:border-bronze/40"
-          >
-            Scoring
-          </Link>
-          <Link
-            href="/admin/paper"
-            className="rounded-lg border border-bronze/20 px-5 py-3 text-center font-display text-sm font-semibold uppercase tracking-[0.15em] text-bronze-dark transition-colors hover:border-bronze/40"
-          >
-            Paper entry
-          </Link>
-          <Link
-            href="/admin/guides"
-            className="rounded-lg border border-bronze/20 px-5 py-3 text-center font-display text-sm font-semibold uppercase tracking-[0.15em] text-bronze-dark transition-colors hover:border-bronze/40"
-          >
-            PDF Guides
-          </Link>
-        </div>
-
-        <div className="font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70">
-          {soloRegistrations.length} solo registrations · {teams.length} teams registered ·{" "}
-          {auditLog.length} audit entries
-        </div>
-      </div>
-
       {/* Check-in has its own code field and searches every rider server-side,
           so the table filter would only be confusing there. */}
-      {activeTab !== "checkin" && (
+      {activeTab !== "checkin" && activeTab !== "solo" && activeTab !== "team" && (
         <div>
           <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
             Search
@@ -2167,18 +2187,22 @@ export default function AdminDashboard({
           )}
         </section>
       ) : activeTab === "solo" ? (
-        <section className="space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-bronze-dark">
-              Solo Registrations
-            </h2>
-            <p className="text-sm text-brown/80">
-              {filteredSoloRegistrations.length} results
-            </p>
+        /* Search and table in one card, so the table starts right under the
+           page heading. */
+        <section className="overflow-hidden rounded-lg border border-bronze/20 bg-sand">
+          <h2 className="sr-only">Solo registrations</h2>
+          <div className="border-b border-bronze/20">
+            <ListSearchBar
+              value={searchQuery}
+              onChange={setSearchQuery}
+              label="Search solo registrations"
+              count={filteredSoloRegistrations.length}
+              noun={["result", "results"]}
+            />
           </div>
 
           {filteredSoloRegistrations.length > 0 ? (
-            <div className="max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-bronze/20 bg-sand">
+            <div className="max-w-full overflow-x-auto overscroll-x-contain">
               <table className="w-full min-w-[2380px] table-fixed border-collapse text-left text-sm text-brown">
                 <colgroup>
                   <col className="w-[190px]" />
@@ -2486,14 +2510,14 @@ export default function AdminDashboard({
                               <button
                                 type="button"
                                 onClick={() => startEditingSolo(registration)}
-                                className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40"
+                                className="rounded-md border border-bronze/20 px-2.5 py-1 font-display text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40"
                               >
                                 Edit
                               </button>
                               <button
                                 type="button"
                                 onClick={() => startDeletingSolo(registration.id)}
-                                className="rounded-lg border border-bronze/20 px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40"
+                                className="rounded-md border border-bronze/20 px-2.5 py-1 font-display text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40"
                               >
                                 Delete
                               </button>
@@ -2507,9 +2531,7 @@ export default function AdminDashboard({
               </table>
             </div>
           ) : (
-            <p className="rounded-lg border border-bronze/20 bg-sand px-4 py-6 text-brown/80">
-              No results found.
-            </p>
+            <p className="px-4 py-6 text-brown/80">No results found.</p>
           )}
         </section>
       ) : activeTab === "audit" ? (
@@ -2638,7 +2660,17 @@ export default function AdminDashboard({
 
                       return (
                         <Fragment key={item.batchId}>
-                          <tr className="border-b border-bronze/10 last:border-0">
+                          <tr
+                            onClick={(event) =>
+                              toggleAuditRow(
+                                event,
+                                item.entries.map((entry) => entry.id)
+                              )
+                            }
+                            className={auditRowClass(
+                              item.entries.every((entry) => selectedAuditIds.has(entry.id))
+                            )}
+                          >
                             <td className="w-[44px] min-w-[44px] px-3 py-2">
                               <input
                                 type="checkbox"
@@ -2748,7 +2780,8 @@ export default function AdminDashboard({
                     return (
                       <tr
                         key={entry.id}
-                        className="border-b border-bronze/10 last:border-0"
+                        onClick={(event) => toggleAuditRow(event, [entry.id])}
+                        className={auditRowClass(selectedAuditIds.has(entry.id))}
                       >
                         <td className="w-[44px] min-w-[44px] px-3 py-2">
                           <input
@@ -3026,11 +3059,15 @@ export default function AdminDashboard({
         </section>
       ) : (
         <section className="space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-bronze-dark">
-              Team Registrations
-            </h2>
-            <p className="text-sm text-brown/80">{filteredTeams.length} results</p>
+          <h2 className="sr-only">Team registrations</h2>
+          <div className="rounded-lg border border-bronze/20 bg-sand">
+            <ListSearchBar
+              value={searchQuery}
+              onChange={setSearchQuery}
+              label="Search teams"
+              count={filteredTeams.length}
+              noun={["team", "teams"]}
+            />
           </div>
 
           {filteredTeams.length > 0 ? (

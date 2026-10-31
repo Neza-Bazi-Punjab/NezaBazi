@@ -74,7 +74,7 @@ Once, about a week before {site.eventDate} and before check-in day, with everyon
 
 ## The day before (head organiser, 20 minutes)
 
-1. **Accounts.** Under Admin › **Profiles**, check that every judge, commentator and organiser taking part has their role (see the staff guide, Getting access). Ask each to open their page once.
+1. **Accounts.** Under Admin › **Staff**, check that every judge, commentator and organiser taking part has their role (see the staff guide, Getting access). Ask each to open their page once.
 2. **Eight test riders.** At {site.url}/admin/paper choose **Solo rider** and enter `TEST Rider 1` to `TEST Rider 8`: horse `Test Horse 1` to `Test Horse 8`, any district, ages 20 to 40, phone numbers `9000000001` to `9000000008` (each must differ). Give a few of them a father's and mother's name (such as `Test Father 1`) so the commentator can check those lines. Fill the other required boxes with anything plausible.
 3. **No email.** There is no "no email" box: leave **Email (if you have one)** blank. No email is sent, and the registrations list shows "No email (paper entry)". The **Possible duplicate** box may list the other test riders as you type; that is fine.
 4. **Write down each code.** Press **Save Registration**, then copy the confirmation code from the next screen: the registrations list does not show it.
@@ -109,7 +109,7 @@ The public pages and feeds are now exactly as they were before the rehearsal. Th
 
 | The rehearsal passes when | If not |
 | --- | --- |
-| Everyone opened their page without **Access Denied** | Their role is not set: Admin › **Profiles** (staff guide, Getting access). |
+| Everyone opened their page without **Access Denied** | Their role is not set: Admin › **Staff** (staff guide, Getting access). |
 | The draw held exactly the eight test riders, in pools of 3, 3 and 2 | Do not draw: use the box on the run sheet. |
 | Every pool call reached /live, the commentary panel and the judges | Reload the page that missed it, and report. |
 | Every result was on /live within a few seconds | Not there after five seconds: check the badge, reload, report. |

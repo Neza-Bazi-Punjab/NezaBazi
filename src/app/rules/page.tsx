@@ -82,11 +82,13 @@ export default function RulesPage() {
     <>
       <PageHeader
         title="Rulebook"
-        intro={`The official rulebook of the ${site.title} — ${site.cupName}. Download the rulebook PDF in English and Punjabi, or watch the rules explained on video.`}
+        intro="The official rules, in English and Punjabi."
       />
 
       <section className="bg-cream">
-        <div className="mx-auto max-w-5xl px-6 py-16">
+        {/* Same left edge as the page heading above (PageHeader's max-w-6xl),
+            the content kept to its own width. */}
+        <div className="mx-auto max-w-6xl px-6 py-16 [&>*]:max-w-5xl">
           {/* The rulebook, framed to match the dimension panel below.
               The pages themselves are drawn by the browser's own PDF viewer,
               which no stylesheet can reach — so the grey chrome is removed

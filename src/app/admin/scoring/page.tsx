@@ -5,6 +5,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
+import AdminPageHeading from "../AdminPageHeading";
 import SectionHeading from "@/components/SectionHeading";
 import { createServiceRoleClient } from "@/lib/admin/server";
 import { buildAdminScoringState } from "@/lib/scoring/admin-state";
@@ -97,13 +98,13 @@ export default async function AdminScoringPage() {
 
   return (
     <>
-      <PageHeader
-        title="Scoring Admin"
-        intro={`Rounds, start lists, pools and results for the ${site.title}.`}
+      <AdminPageHeading
+        title="Scoring"
+        intro="Rounds, start lists, pools, results and what the screens show."
       />
 
       <section className="bg-cream">
-        <div className="mx-auto max-w-[1500px] px-4 py-12 sm:px-6 sm:py-16">
+        <div className="px-4 pb-12 pt-4 sm:px-6 sm:pb-16 sm:pt-6">
           <ScoringAdmin initialState={initialState} />
         </div>
       </section>
