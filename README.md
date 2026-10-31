@@ -141,6 +141,7 @@ docs/                  Plain-English notes for teammates
   live-stream.md       Data feeds, bridge script, overlays, OBS, troubleshooting,
                        and applying the live-scoring migrations
   event-day-runbook.md Step by step for organisers, judges and commentators
+  performance.md       Speed changes, how they were measured, and the results
 scripts/
   build-paper-forms.mts  Generates the printable registration PDFs (npm run build:forms)
   vmix-bridge.mjs      Pushes the live feed into a vMix title (stream team, optional)
