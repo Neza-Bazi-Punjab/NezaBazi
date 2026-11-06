@@ -7,6 +7,7 @@ import Footer from "@/components/Footer";
 import Navbar from "@/components/Navbar";
 import AppSplash from "@/components/AppSplash";
 import SiteChrome from "@/components/SiteChrome";
+import { IOS_SPLASH_SCREENS, iosSplashFile, iosSplashMedia } from "@/lib/ios-splash-screens";
 import { site } from "@/lib/site";
 
 const oswald = Oswald({
@@ -28,8 +29,18 @@ export const metadata: Metadata = {
   description: site.description,
   /* "Add to Home Screen" on an iPhone opens the site full screen, like an
      app, rather than as a Safari tab (src/components/AddToHomeScreen.tsx).
-     The app keeps its own sign-in, separate from Safari's. */
-  appleWebApp: { capable: true, title: "Neza Bazi", statusBarStyle: "default" },
+     The app keeps its own sign-in, separate from Safari's.
+     startupImage: the bronze launch screen iPhone shows before the page
+     arrives, one per screen size (src/lib/ios-splash-screens.ts). */
+  appleWebApp: {
+    capable: true,
+    title: "Neza Bazi",
+    statusBarStyle: "default",
+    startupImage: IOS_SPLASH_SCREENS.map((screen) => ({
+      url: iosSplashFile(screen),
+      media: iosSplashMedia(screen),
+    })),
+  },
   openGraph: {
     title: site.title,
     description: site.description,
@@ -46,6 +57,8 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      // The splash script in AppSplash.tsx marks <html> before React loads.
+      suppressHydrationWarning
       className={`${oswald.variable} ${inter.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
