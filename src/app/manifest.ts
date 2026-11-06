@@ -25,6 +25,11 @@ export default function manifest(): MetadataRoute.Manifest {
        Android's own launch screen uses it, so the two run together. */
     background_color: "#f7efe4",
     theme_color: "#fdf8ef",
+    /* Lets Chrome on Android tell the site "this app is already installed"
+       (navigator.getInstalledRelatedApps), so AddToHomeScreen hides. */
+    related_applications: [
+      { platform: "webapp", url: `${site.url}/manifest.webmanifest` },
+    ],
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },

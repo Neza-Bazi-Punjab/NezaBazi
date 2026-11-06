@@ -78,8 +78,6 @@ export default function Home() {
               </ButtonLink>
             </div>
 
-            {/* iPhones only; draws nothing on desktop or once installed. */}
-            <AddToHomeScreen className="mt-4" />
           </div>
 
           {/* Rider photo dissolves into the parchment at every viewport — no
@@ -98,6 +96,10 @@ export default function Home() {
         </div>
         <BrushDivider className="text-bronze/80" />
       </section>
+
+      {/* Floating round button, bottom right: phones only; draws nothing on
+          desktop, in the installed app, or once tapped or hidden. */}
+      <AddToHomeScreen />
     </>
   );
 }
