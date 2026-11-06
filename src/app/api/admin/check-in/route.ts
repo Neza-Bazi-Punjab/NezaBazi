@@ -1,7 +1,8 @@
 // Rider check-in desk, the day before the event.
 //
-// POST looks a rider up by the confirmation code they present; PATCH records
-// that they arrived (or undoes it). Both go through the service role because
+// POST looks a rider up by the confirmation code they present, with their
+// headshot and their team's; PATCH records that they arrived (or undoes it),
+// for one rider or a whole team at once. Both go through the service role because
 // administrators have no direct write access to the registration tables — the
 // database function writes the change and its audit record together.
 import { NextResponse } from "next/server";
@@ -10,6 +11,7 @@ import {
   type ServiceRoleClient,
 } from "@/lib/admin/server";
 import { verifyAdminRequest } from "@/lib/admin/server";
+import { findProfileIdByEmail, getHeadshotUrl } from "@/lib/admin/headshot-urls";
 import { escapeIlikePattern } from "@/lib/supabase/query";
 
 type LookupRequest = { code?: unknown; query?: unknown; roster?: unknown };
@@ -236,7 +238,27 @@ const listRiders = async (
 
 type CheckInRequest = {
   code?: unknown;
+  teamId?: unknown;
   checkedIn?: unknown;
+};
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/* A photo is a help to the desk, never a requirement: any failure here leaves
+   the rider without one rather than failing the lookup. */
+const headshotFor = async (
+  serviceSupabase: ServiceRoleClient,
+  profileId: string | null
+) => (profileId ? getHeadshotUrl(serviceSupabase, profileId) : null);
+
+const soloHeadshot = async (serviceSupabase: ServiceRoleClient, registrationId: string) => {
+  const { data } = await serviceSupabase
+    .from("solo_registrations")
+    .select("profile_id")
+    .eq("id", registrationId)
+    .maybeSingle();
+
+  return headshotFor(serviceSupabase, (data?.profile_id as string | null | undefined) ?? null);
 };
 
 // Generated codes are NBP- plus six characters, but stay lenient about case,
@@ -341,7 +363,9 @@ export async function POST(request: Request) {
     id: string;
     full_name: string;
     is_leader: boolean;
+    confirmation_code: string;
     checked_in_at: string | null;
+    headshot_url: string | null;
   }> = [];
 
   const teamEntry = entries.find(
@@ -363,12 +387,13 @@ export async function POST(request: Request) {
       await Promise.all([
         serviceSupabase
           .from("team_members")
-          .select("id, full_name, is_leader, checked_in_at")
+          .select("id, full_name, email, is_leader, confirmation_code, checked_in_at")
           .eq("team_id", teamEntry.team_id)
-          .order("is_leader", { ascending: false }),
+          .order("is_leader", { ascending: false })
+          .order("full_name"),
         serviceSupabase
           .from("teams")
-          .select("emergency_contact_name, emergency_contact_phone")
+          .select("emergency_contact_name, emergency_contact_phone, leader_profile_id")
           .eq("id", teamEntry.team_id)
           .maybeSingle(),
       ]);
@@ -381,11 +406,52 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: contactError.message }, { status: 400 });
     }
 
-    teammates = teamRows ?? [];
-    teamEmergency = teamRow ?? null;
+    // The leader registered the team, so the team's account is theirs; anyone
+    // else is found through a solo entry under their email, if they made one.
+    teammates = await Promise.all(
+      (teamRows ?? []).map(async ({ email, ...teammate }) => {
+        let headshot_url: string | null = null;
+
+        try {
+          const profileId =
+            teammate.is_leader && teamRow?.leader_profile_id
+              ? (teamRow.leader_profile_id as string)
+              : await findProfileIdByEmail(serviceSupabase, email);
+          headshot_url = await headshotFor(serviceSupabase, profileId);
+        } catch {
+          headshot_url = null;
+        }
+
+        return { ...teammate, headshot_url };
+      })
+    );
+    teamEmergency = teamRow
+      ? {
+          emergency_contact_name: teamRow.emergency_contact_name,
+          emergency_contact_phone: teamRow.emergency_contact_phone,
+        }
+      : null;
   }
 
-  return NextResponse.json({ rider, entries, teammates, teamEmergency });
+  // The rider's own photo: their account's, through the solo entry if they
+  // have one, otherwise the one already found for their place on the team.
+  const soloEntry = entries.find((entry: { source: string }) => entry.source === "solo");
+  let headshotUrl: string | null = null;
+
+  try {
+    headshotUrl = soloEntry
+      ? await soloHeadshot(serviceSupabase, soloEntry.id)
+      : null;
+  } catch {
+    headshotUrl = null;
+  }
+
+  if (!headshotUrl && teamEntry) {
+    headshotUrl =
+      teammates.find((teammate) => teammate.id === teamEntry.id)?.headshot_url ?? null;
+  }
+
+  return NextResponse.json({ rider, entries, teammates, teamEmergency, headshotUrl });
 }
 
 export async function PATCH(request: Request) {
@@ -400,13 +466,61 @@ export async function PATCH(request: Request) {
   try {
     const rawBody: unknown = await request.json();
     body = isRecord(rawBody)
-      ? { code: rawBody.code, checkedIn: rawBody.checkedIn }
+      ? { code: rawBody.code, teamId: rawBody.teamId, checkedIn: rawBody.checkedIn }
       : {};
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const { code, checkedIn } = body;
+  const { code, teamId, checkedIn } = body;
+
+  // The whole team at once: every rider not already in that state, one at a
+  // time through the same function as a single check-in, so each rider gets
+  // their own audit record exactly as if checked in one by one.
+  if (teamId !== undefined) {
+    if (typeof teamId !== "string" || !uuidPattern.test(teamId) || typeof checkedIn !== "boolean") {
+      return NextResponse.json(
+        { error: "Please provide a valid check-in update." },
+        { status: 400 }
+      );
+    }
+
+    const serviceSupabase = createServiceRoleClient();
+    const { data: members, error: membersError } = await serviceSupabase
+      .from("team_members")
+      .select("full_name, confirmation_code, checked_in_at")
+      .eq("team_id", teamId);
+
+    if (membersError) {
+      return NextResponse.json({ error: membersError.message }, { status: 400 });
+    }
+
+    if (!members || members.length === 0) {
+      return NextResponse.json({ error: "No riders found for that team." }, { status: 404 });
+    }
+
+    const toChange = members.filter((member) => (member.checked_in_at !== null) !== checkedIn);
+    const failed: string[] = [];
+
+    for (const member of toChange) {
+      const { error } = await serviceSupabase.rpc("admin_set_check_in", {
+        p_code: member.confirmation_code,
+        p_checked_in: checkedIn,
+        p_actor_id: adminCheck.actor.id,
+        p_actor_name: adminCheck.actor.name,
+        p_actor_email: adminCheck.actor.email,
+      });
+
+      if (error) {
+        failed.push(member.full_name);
+      }
+    }
+
+    return NextResponse.json(
+      { ok: failed.length === 0, changed: toChange.length - failed.length, failed },
+      { status: failed.length === 0 ? 200 : 207 }
+    );
+  }
 
   if (
     typeof code !== "string" ||

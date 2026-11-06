@@ -110,12 +110,28 @@ export async function PATCH(request: Request) {
     );
   }
 
-  const body = (await request.json()) as UpdateProfileRequest;
-  const fullName = (body.fullName ?? "").trim();
-  const location = (body.location ?? "").trim();
-  const phone = (body.phone ?? "").trim();
-  const email = (body.email ?? "").trim();
-  const age = parseBoundedInt(body.age ?? "", { min: 1, max: 120 });
+  // Broken JSON, or a body that is not an object, gets a clear 400 rather than
+  // crashing the route; a field that is not text is treated as empty and
+  // fails its own check below.
+  let rawBody: unknown;
+
+  try {
+    rawBody = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  }
+
+  if (typeof rawBody !== "object" || rawBody === null || Array.isArray(rawBody)) {
+    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  }
+
+  const body = rawBody as Record<keyof UpdateProfileRequest, unknown>;
+  const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+  const fullName = text(body.fullName);
+  const location = text(body.location);
+  const phone = text(body.phone);
+  const email = text(body.email);
+  const age = parseBoundedInt(text(body.age), { min: 1, max: 120 });
 
   if (fullName === "" || fullName.length > 200) {
     return NextResponse.json({ error: "Please enter a valid full name." }, { status: 400 });

@@ -353,3 +353,62 @@ test("the Check-in tab has a desk and a Who's checked in overview, from the same
   // The rider list carries each team rider's team id so teams can be counted.
   assert.match(checkInRoute, /is_leader, team_id, teams\(team_name\)/);
 });
+
+test("the desk shows rider photos through the same signed-URL helper as commentary", () => {
+  const panel = repoFile("src/app/admin/CheckInPanel.tsx");
+  const headshots = repoFile("src/lib/admin/headshot-urls.ts");
+  const riderDetail = repoFile("src/lib/scoring/rider-detail.ts");
+
+  // One helper, shared: the path is checked to sit in the rider's own folder
+  // before it is signed, so nobody can show someone else's photo as theirs.
+  assert.match(headshots, /import "server-only";/);
+  assert.match(headshots, /path\.split\("\/"\)\[0\]\.toLowerCase\(\) === profileId\.toLowerCase\(\)/);
+  assert.match(riderDetail, /from "@\/lib\/admin\/headshot-urls"/);
+  assert.match(checkInRoute, /from "@\/lib\/admin\/headshot-urls"/);
+
+  // The rider and every teammate come back with a photo URL (or null), and a
+  // teammate's email is used for the lookup but never sent to the browser.
+  assert.match(checkInRoute, /headshotUrl \}\);/);
+  assert.match(checkInRoute, /map\(async \(\{ email, \.\.\.teammate \}\)/);
+  assert.match(checkInRoute, /return \{ \.\.\.teammate, headshot_url \};/);
+
+  // A missing or broken photo falls back to initials, never a broken image.
+  assert.match(panel, /onError=\{\(\) => setFailedUrl\(url\)\}/);
+  assert.match(panel, /initials\(name\)/);
+});
+
+test("a team checks in one rider at a time or all at once, each rider audited", () => {
+  const panel = repoFile("src/app/admin/CheckInPanel.tsx");
+
+  // Whole team: only riders not yet in, each through the same audited
+  // function as a single check-in, with the session's actor.
+  assert.match(checkInRoute, /if \(teamId !== undefined\)/);
+  assert.match(checkInRoute, /uuidPattern\.test\(teamId\)/);
+  assert.match(
+    checkInRoute,
+    /members\.filter\(\(member\) => \(member\.checked_in_at !== null\) !== checkedIn\)/
+  );
+  assert.match(checkInRoute, /for \(const member of toChange\)[\s\S]*?rpc\("admin_set_check_in"/);
+
+  // The desk asks before checking in the whole team, and each card in the
+  // team grid has its own button.
+  assert.match(panel, /setConfirmTeam\(true\)/);
+  assert.match(panel, /JSON\.stringify\(\{ teamId, checkedIn: true \}\)/);
+  assert.match(panel, /setTeammateCheckedIn\(teammate, teammate\.checked_in_at === null\)/);
+});
+
+test("Who's checked in has a Teams list and a Solo riders list, teams counted out of four", () => {
+  const status = repoFile("src/app/admin/CheckInStatus.tsx");
+
+  assert.match(status, /useState<"teams" \| "solo">\("teams"\)/);
+  assert.match(status, /\$\{team\.arrived\} of \$\{TEAM_SIZE\} checked in/);
+  assert.match(status, /All \$\{TEAM_SIZE\} checked in/);
+});
+
+test("a broken profile update body is refused, not crashed on", () => {
+  const profileRoute = repoFile("src/app/api/account/profile/route.ts");
+
+  assert.match(profileRoute, /try \{\s*rawBody = await request\.json\(\);\s*\} catch \{/);
+  assert.match(profileRoute, /typeof value === "string" \? value\.trim\(\) : ""/);
+  assert.doesNotMatch(profileRoute, /\(await request\.json\(\)\) as/);
+});
