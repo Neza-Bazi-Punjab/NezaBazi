@@ -182,3 +182,49 @@ body {
     transition: none;
   }
 }
+
+/* Installed-app launch screen (src/components/AppSplash.tsx). Hidden on the
+   ordinary website; in the installed app it covers the page for ~0.55 s,
+   then fades out in 0.25 s. Pure CSS, so it shows with the first paint. */
+.app-splash {
+  display: none;
+}
+
+@media (display-mode: standalone) {
+  .app-splash {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--color-bronze);
+    color: var(--color-cream);
+    pointer-events: none;
+    animation: app-splash-out 250ms ease-out 550ms forwards;
+  }
+}
+
+.app-splash-mark {
+  width: 7.5rem;
+  height: auto;
+}
+
+/* Already shown in this app session. */
+.app-splash-done .app-splash {
+  display: none;
+}
+
+@keyframes app-splash-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-splash {
+    animation-duration: 1ms;
+  }
+}
