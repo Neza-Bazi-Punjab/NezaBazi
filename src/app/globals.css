@@ -184,9 +184,12 @@ body {
 }
 
 /* Installed-app launch screen (src/components/AppSplash.tsx): hidden on the
-   ordinary website; in the installed app a full-screen bronze with the logo
-   in the middle, held for 0.5 s, then the whole screen fades away evenly
-   over 0.4 s. Pure CSS, so it shows with the first paint. */
+   ordinary website; in the installed app a full-screen black with the cream
+   logo in the middle, held for 0.5 s, then the whole screen fades away
+   evenly over 0.4 s. Pure CSS, so it shows with the first paint.
+   Black, not bronze: iPhone shows its own black screen while the app
+   starts (a website cannot change it on iOS 26), so a black splash carries
+   straight on from it with no colour jump. */
 .app-splash {
   display: none;
 }
@@ -200,7 +203,7 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background-color: var(--color-bronze);
+    background-color: #000;
     color: var(--color-cream);
     pointer-events: none;
     animation: app-splash-out 400ms ease-in-out 500ms forwards;
