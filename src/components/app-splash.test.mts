@@ -21,7 +21,7 @@ test("the splash shows only in the installed app, never on the website", () => {
   assert.match(css, /\.app-splash \{\s*display: none;\s*\}/);
   assert.match(
     css,
-    /@media \(display-mode: standalone\) \{\s*\.app-splash \{\s*position: absolute;\s*top: 0;\s*left: 0;\s*width: 100%;\s*height: 100lvh;[\s\S]*?display: flex;/,
+    /@media \(display-mode: standalone\) \{\s*\.app-splash \{\s*position: absolute;\s*top: 0;\s*left: 0;\s*width: 100%;\s*[\s\S]*?height: var\(--app-splash-height, 100lvh\);[\s\S]*?display: flex;/,
   );
   assert.match(css, /pointer-events: none;/);
 });
@@ -46,9 +46,15 @@ test("the splash is not pinned to the screen, so iPhone never recolours the stri
   assert.doesNotMatch(css, /app-splash-edge/);
 });
 
+test("the splash is sized to the screen, so the logo does not move when iPhone corrects the page height", () => {
+  assert.match(splash, /h\.style\.setProperty\("--app-splash-height",screen\.height\+"px"\)/);
+  assert.match(splash, /matchMedia\("\(orientation: portrait\)"\)\.matches/);
+  assert.match(css, /height: var\(--app-splash-height, 100lvh\);/);
+});
+
 test("the splash shows once per app session, not on every page", () => {
   assert.match(splash, /sessionStorage\.getItem\("\$\{SPLASH_SESSION_KEY\}"\)/);
-  assert.match(splash, /classList\.add\("app-splash-done"\)/);
+  assert.match(splash, /h\.classList\.add\("app-splash-done"\)/);
   assert.match(css, /\.app-splash-done \.app-splash \{\s*display: none;/);
 });
 
@@ -56,8 +62,22 @@ test("the splash shows the logo mark and the name in the middle, hidden from scr
   assert.match(splash, /aria-hidden="true"/);
   assert.match(splash, /public\/brand\/logo-mark\.svg/);
   assert.ok(existsSync(new URL("../../public/brand/logo-mark.svg", import.meta.url)));
-  assert.match(splash, /NEZA BAZI/);
-  assert.match(splash, /PUNJAB/);
+  assert.match(splash, /NEZA BAZI \/ PUNJAB/);
+  assert.match(css, /align-items: center;\s*justify-content: center;/);
+});
+
+test("the name is drawn as shapes, so nothing waits for the web font and the logo never jumps", () => {
+  // Live Oswald text would first draw in a fallback font, then swap.
+  assert.match(splash, /public\/brand\/splash-wordmark\.svg/);
+  assert.doesNotMatch(splash, /font-display/);
+  const wordmark = repoFile("public/brand/splash-wordmark.svg");
+  // Fixed size in CSS pixels, so the layout is the same from the first frame.
+  assert.match(wordmark, /viewBox="0 0 172 62" width="172" height="62"/);
+  // Two paths, no <text>: "NEZA BAZI", then "PUNJAB" at 80%.
+  assert.equal(wordmark.match(/<path /g)?.length, 2);
+  assert.doesNotMatch(wordmark, /<text/);
+  assert.match(wordmark, /fill-opacity="0\.8"/);
+  assert.ok(existsSync(new URL("../../scripts/make-splash-wordmark.py", import.meta.url)));
   assert.match(css, /align-items: center;\s*justify-content: center;/);
 });
 

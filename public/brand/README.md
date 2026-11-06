@@ -11,6 +11,12 @@ background.
   **same path**: the wordmark simply falls outside the viewport and is clipped,
   so there is one source of truth for the artwork. Used across the site by
   `LogoMark` in [src/components/Logo.tsx](../../src/components/Logo.tsx).
+- `splash-wordmark.svg` — "NEZA BAZI / PUNJAB" in Oswald, as two paths in
+  CSS pixels (172×62), for the installed app's launch splash
+  (`src/components/AppSplash.tsx`). Drawn as shapes so the splash never shows
+  a fallback font while Oswald loads. Made by
+  `python3 scripts/make-splash-wordmark.py`; rerun it if the name or its
+  styling changes.
 - `logo.png` — raster fallback of the previous artwork, kept for anywhere an
   SVG cannot be used.
 
