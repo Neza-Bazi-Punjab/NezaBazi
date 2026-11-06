@@ -21,9 +21,9 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/",
     scope: "/",
     display: "standalone",
-    /* Black, like the app's logo screen (AppSplash): Android's own launch
-       screen uses it, so the two run together. */
-    background_color: "#000000",
+    /* Cream (the page background), like the app's logo screen (AppSplash):
+       Android's own launch screen uses it, so the two run together. */
+    background_color: "#f7efe4",
     theme_color: "#fdf8ef",
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },

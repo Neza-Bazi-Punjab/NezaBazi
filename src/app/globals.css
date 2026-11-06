@@ -7,7 +7,7 @@
   /* Height of the sticky navbar: its h-16 inner row plus the 1px bottom
      border. Sections that fill the screen subtract this so they end exactly
      at the fold instead of running under the footer. */
-  --nav-height: calc(4rem + 1px);
+  --nav-height: calc(4rem + 1px + env(safe-area-inset-top));
 
   /* Motion tokens — one source of truth for animation timing site-wide */
   --ease-soft: cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -184,27 +184,36 @@ body {
 }
 
 /* Installed-app launch screen (src/components/AppSplash.tsx): hidden on the
-   ordinary website; in the installed app a full-screen black with the cream
-   logo in the middle, held for 0.5 s, then the whole screen fades away
-   evenly over 0.4 s. Pure CSS, so it shows with the first paint.
-   Black, not bronze: iPhone shows its own black screen while the app
-   starts (a website cannot change it on iOS 26), so a black splash carries
-   straight on from it with no colour jump. */
+   ordinary website; in the installed app the bronze logo in the middle of a
+   full-screen cream, held for 0.5 s, then the whole screen fades away
+   evenly over 0.4 s into the page. Pure CSS, so it shows with the first
+   paint.
+   Cream, the page's own background, because of iPhone's strip behind the
+   clock: iOS 26 paints that strip itself, in one solid colour taken from
+   whatever is pinned to the top of the page (else the page background),
+   and only swaps it now and then, never fading it with the page. A black
+   splash always left the strip black or cream at the wrong moment. With
+   the splash the same cream as the page, the strip never has to change.
+   For the same reason it is position: absolute, not fixed: a fixed splash
+   would be "pinned", and iOS would recolour the strip when it went away. */
 .app-splash {
   display: none;
 }
 
 @media (display-mode: standalone) {
   .app-splash {
-    position: fixed;
-    inset: 0;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100lvh;
     z-index: 100;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background-color: #000;
-    color: var(--color-cream);
+    background-color: var(--background);
+    color: var(--color-bronze);
     pointer-events: none;
     animation: app-splash-out 400ms ease-in-out 500ms forwards;
   }

@@ -1,7 +1,8 @@
 /* The brief logo screen the installed app shows as it opens, like a native
-   app: the cream NBP mark and "NEZA BAZI / PUNJAB" in the middle of a
-   full-screen black (matching the black screen iPhone shows while the app
-   starts), for half a second, then the whole screen fades away.
+   app: the bronze NBP mark and "NEZA BAZI / PUNJAB" in the middle of a
+   full-screen cream (the page's own background, so iPhone's strip behind
+   the clock is the same colour all the way through; see globals.css), for
+   half a second, then the whole screen fades into the page.
 
    Only in the installed app (opened from the home-screen icon, on iPhone or
    Android): the CSS in globals.css shows it under
@@ -14,7 +15,8 @@
    skip it.
 
    On Android, Chrome's own launch screen before this uses the manifest's
-   background_color (the same black). */
+   background_color (the same cream). iPhone on iOS 26 shows its own black
+   screen first; a website cannot change that. */
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -40,7 +42,7 @@ export default function AppSplash() {
         <span className="mt-6 block font-display text-3xl font-bold tracking-[0.2em]">
           NEZA BAZI
         </span>
-        <span className="mt-1.5 block pl-[0.45em] font-display text-sm font-semibold tracking-[0.45em] text-cream/80">
+        <span className="mt-1.5 block pl-[0.45em] font-display text-sm font-semibold tracking-[0.45em] text-bronze/80">
           PUNJAB
         </span>
       </div>
