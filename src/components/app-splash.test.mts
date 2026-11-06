@@ -46,6 +46,10 @@ test("the splash is not pinned to the screen, so iPhone never recolours the stri
   assert.doesNotMatch(css, /app-splash-edge/);
 });
 
+test("the logo and name sit a little above the middle of the screen", () => {
+  assert.match(css, /\.app-splash \{\s*position: absolute;[\s\S]*?justify-content: center;[\s\S]*?padding-bottom: 80px;/);
+});
+
 test("the splash is sized to the screen, so the logo does not move when iPhone corrects the page height", () => {
   assert.match(splash, /h\.style\.setProperty\("--app-splash-height",screen\.height\+"px"\)/);
   assert.match(splash, /matchMedia\("\(orientation: portrait\)"\)\.matches/);
