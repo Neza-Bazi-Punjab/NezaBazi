@@ -21,21 +21,40 @@ test("the splash shows only in the installed app, never on the website", () => {
   assert.match(css, /\.app-splash \{\s*display: none;\s*\}/);
   assert.match(
     css,
-    /@media \(display-mode: standalone\) \{\s*\.app-splash \{\s*position: fixed;\s*inset: 0;[\s\S]*?display: flex;/,
+    /@media \(display-mode: standalone\) \{\s*\.app-splash \{\s*position: absolute;\s*top: 0;\s*left: 0;\s*width: 100%;\s*[\s\S]*?height: var\(--app-splash-height, 100lvh\);[\s\S]*?display: flex;/,
   );
   assert.match(css, /pointer-events: none;/);
 });
 
-test("a full-screen black holds for 0.5 s, then the whole screen fades away evenly", () => {
-  // Black, to carry straight on from the black screen iPhone shows at launch.
-  assert.match(css, /\.app-splash \{\s*position: fixed;[\s\S]*?background-color: #000;\s*color: var\(--color-cream\);/);
+test("a full-screen cream holds for 0.5 s, then the whole screen fades away evenly", () => {
+  // The page's own cream, with the logo in bronze, so iPhone's strip behind
+  // the clock (painted by iOS from the page background) never changes colour.
+  assert.match(
+    css,
+    /\.app-splash \{\s*position: absolute;[\s\S]*?background-color: var\(--background\);\s*color: var\(--color-bronze\);/,
+  );
   assert.match(css, /animation: app-splash-out 400ms ease-in-out 500ms forwards;/);
   assert.match(css, /@keyframes app-splash-out \{\s*to \{\s*opacity: 0;\s*visibility: hidden;/);
 });
 
+test("the splash is not pinned to the screen, so iPhone never recolours the strip behind the clock", () => {
+  // A fixed splash would be what iOS takes the strip's colour from, and the
+  // strip would switch colour (late) when it went away.
+  const rule = css.match(/@media \(display-mode: standalone\) \{\s*\.app-splash \{[^}]*\}/)?.[0] ?? "";
+  assert.ok(rule, "standalone splash rule found");
+  assert.doesNotMatch(rule, /position: fixed/);
+  assert.doesNotMatch(css, /app-splash-edge/);
+});
+
+test("the splash is sized to the screen, so the logo does not move when iPhone corrects the page height", () => {
+  assert.match(splash, /h\.style\.setProperty\("--app-splash-height",screen\.height\+"px"\)/);
+  assert.match(splash, /matchMedia\("\(orientation: portrait\)"\)\.matches/);
+  assert.match(css, /height: var\(--app-splash-height, 100lvh\);/);
+});
+
 test("the splash shows once per app session, not on every page", () => {
   assert.match(splash, /sessionStorage\.getItem\("\$\{SPLASH_SESSION_KEY\}"\)/);
-  assert.match(splash, /classList\.add\("app-splash-done"\)/);
+  assert.match(splash, /h\.classList\.add\("app-splash-done"\)/);
   assert.match(css, /\.app-splash-done \.app-splash \{\s*display: none;/);
 });
 
@@ -43,11 +62,26 @@ test("the splash shows the logo mark and the name in the middle, hidden from scr
   assert.match(splash, /aria-hidden="true"/);
   assert.match(splash, /public\/brand\/logo-mark\.svg/);
   assert.ok(existsSync(new URL("../../public/brand/logo-mark.svg", import.meta.url)));
-  assert.match(splash, /NEZA BAZI/);
-  assert.match(splash, /PUNJAB/);
+  assert.match(splash, /NEZA BAZI \/ PUNJAB/);
   assert.match(css, /align-items: center;\s*justify-content: center;/);
 });
 
-test("Android's own launch screen uses the same black as the splash", () => {
-  assert.match(manifest, /background_color: "#000000"/);
+test("the name is drawn as shapes, so nothing waits for the web font and the logo never jumps", () => {
+  // Live Oswald text would first draw in a fallback font, then swap.
+  assert.match(splash, /public\/brand\/splash-wordmark\.svg/);
+  assert.doesNotMatch(splash, /font-display/);
+  const wordmark = repoFile("public/brand/splash-wordmark.svg");
+  // Fixed size in CSS pixels, so the layout is the same from the first frame.
+  assert.match(wordmark, /viewBox="0 0 172 62" width="172" height="62"/);
+  // Two paths, no <text>: "NEZA BAZI", then "PUNJAB" at 80%.
+  assert.equal(wordmark.match(/<path /g)?.length, 2);
+  assert.doesNotMatch(wordmark, /<text/);
+  assert.match(wordmark, /fill-opacity="0\.8"/);
+  assert.ok(existsSync(new URL("../../scripts/make-splash-wordmark.py", import.meta.url)));
+  assert.match(css, /align-items: center;\s*justify-content: center;/);
+});
+
+test("Android's own launch screen uses the same cream as the splash and page", () => {
+  assert.match(manifest, /background_color: "#f7efe4"/);
+  assert.match(css, /--background: #f7efe4;/);
 });
