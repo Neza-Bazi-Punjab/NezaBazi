@@ -1,7 +1,8 @@
 "use client";
 
-/* Check-in desk: look a rider up by the code they present, confirm they
-   arrived, and see how much of their team is still missing. Kept in its own
+/* Check-in desk: look a rider up by the code they present, check their face
+   against their photo, confirm they arrived, and see their team: all four
+   riders with photos, each checked in on their own or the whole team at once. Kept in its own
    component because it is used standing at a table on event eve, on whatever
    device is to hand, not from the main registration tables. */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -38,7 +39,10 @@ type Teammate = {
   id: string;
   full_name: string;
   is_leader: boolean;
+  confirmation_code: string;
   checked_in_at: string | null;
+  /* Short-lived signed URL; null when the rider has no photo we can find. */
+  headshot_url: string | null;
 };
 
 type TeamEmergencyContact = {
@@ -69,6 +73,8 @@ type LookupResponse = {
   /* One contact for the whole team, read from `teams` — a team rider's row
      carries no emergency contact of its own. */
   teamEmergency?: TeamEmergencyContact | null;
+  /* The looked-up rider's own photo, if they uploaded one. */
+  headshotUrl?: string | null;
   matches?: RiderMatch[];
   error?: string;
 };
@@ -101,6 +107,52 @@ const Detail = ({
   </div>
 );
 
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+
+/* The rider's photo, or their initials when there is none (or it fails to
+   load), so a card never shows a broken image. */
+function Headshot({
+  url,
+  name,
+  className,
+}: {
+  url: string | null;
+  name: string;
+  className: string;
+}) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+
+  if (!url || failedUrl === url) {
+    return (
+      <div
+        aria-label={`No photo for ${name}`}
+        className={`flex items-center justify-center bg-bronze/15 font-display font-bold text-bronze-dark ${className}`}
+      >
+        {initials(name)}
+      </div>
+    );
+  }
+
+  return (
+    // Signed Supabase Storage URL; next/image would need the bucket host
+    // allow-listed in next.config.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt={name}
+      onError={() => setFailedUrl(url)}
+      referrerPolicy="no-referrer"
+      className={`object-cover ${className}`}
+    />
+  );
+}
+
 export default function CheckInPanel() {
   /* The two switches at the top of the tab: the desk, or the overview. */
   const [view, setView] = useState<"desk" | "status">("desk");
@@ -111,6 +163,11 @@ export default function CheckInPanel() {
   const [teammates, setTeammates] = useState<Teammate[]>([]);
   const [teamEmergency, setTeamEmergency] =
     useState<TeamEmergencyContact | null>(null);
+  const [headshotUrl, setHeadshotUrl] = useState<string | null>(null);
+  /* Which team action is saving: a rider's code, or "team" for all at once. */
+  const [teamSaving, setTeamSaving] = useState<string | null>(null);
+  /* "Check in whole team" asks once before it acts. */
+  const [confirmTeam, setConfirmTeam] = useState(false);
   /* Every rider (name, email, phone, team, code, check-in status), filtered
      on this device as you type, so results are instant. Refreshed from the
      server every few seconds and straight after each check-in, so a rider
@@ -217,6 +274,16 @@ export default function CheckInPanel() {
     setRider(null);
     setEntries([]);
     setTeammates([]);
+    setHeadshotUrl(null);
+    setConfirmTeam(false);
+  };
+
+  const applyCard = (result: LookupResponse & { rider: Rider }) => {
+    setRider(result.rider);
+    setEntries(result.entries ?? [result.rider]);
+    setTeammates(result.teammates ?? []);
+    setTeamEmergency(result.teamEmergency ?? null);
+    setHeadshotUrl(result.headshotUrl ?? null);
   };
 
   const loadRiderByCode = async (lookupCode: string) => {
@@ -236,10 +303,7 @@ export default function CheckInPanel() {
         return;
       }
 
-      setRider(result.rider);
-      setEntries(result.entries ?? [result.rider]);
-      setTeammates(result.teammates ?? []);
-      setTeamEmergency(result.teamEmergency ?? null);
+      applyCard({ ...result, rider: result.rider });
     } catch {
       setError("Could not reach the server. Check the connection and retry.");
     } finally {
@@ -407,11 +471,119 @@ export default function CheckInPanel() {
     }
   };
 
+  /* After a team change: reload the open card in place, keeping the message,
+     so the desk sees the team fill up without the card closing. */
+  const refreshCard = async () => {
+    if (!rider) {
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/admin/check-in", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: rider.confirmation_code }),
+      });
+      const result = (await response.json()) as LookupResponse;
+
+      if (response.ok && result.rider) {
+        applyCard({ ...result, rider: result.rider });
+      }
+    } catch {
+      // The card stays as it was; the next action or refresh will catch up.
+    }
+  };
+
+  /* One teammate, from the team grid: check in or undo, card stays open. */
+  const setTeammateCheckedIn = async (teammate: Teammate, checkedIn: boolean) => {
+    setTeamSaving(teammate.confirmation_code);
+    setError(null);
+    setNotice(null);
+    setConfirmTeam(false);
+
+    try {
+      const response = await fetch("/api/admin/check-in", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: teammate.confirmation_code, checkedIn }),
+      });
+      const result = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        setError(result.error ?? `Could not update ${teammate.full_name}.`);
+        return;
+      }
+
+      setNotice(
+        checkedIn
+          ? `${teammate.full_name} is checked in.`
+          : `Check-in for ${teammate.full_name} was undone.`
+      );
+      await refreshCard();
+      void loadRoster();
+    } catch {
+      setError("Could not reach the server. Check the connection and retry.");
+    } finally {
+      setTeamSaving(null);
+    }
+  };
+
+  /* Everyone on the team who has not arrived yet, in one go. */
+  const checkInWholeTeam = async () => {
+    const teamId = entries.find((entry) => entry.source === "team")?.team_id;
+
+    if (!teamId) {
+      return;
+    }
+
+    setTeamSaving("team");
+    setError(null);
+    setNotice(null);
+
+    try {
+      const response = await fetch("/api/admin/check-in", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ teamId, checkedIn: true }),
+      });
+      const result = (await response.json()) as {
+        error?: string;
+        changed?: number;
+        failed?: string[];
+      };
+
+      if (!response.ok) {
+        setError(result.error ?? "Could not check in this team.");
+      } else if (result.failed && result.failed.length > 0) {
+        setError(
+          `Checked in ${result.changed ?? 0}, but could not check in ${result.failed.join(", ")}. Try them one by one.`
+        );
+      } else {
+        setNotice(
+          result.changed === 0
+            ? "Everyone on this team was already checked in."
+            : `${result.changed} ${result.changed === 1 ? "rider" : "riders"} checked in. The whole team is here.`
+        );
+      }
+
+      setConfirmTeam(false);
+      await refreshCard();
+      void loadRoster();
+    } catch {
+      setError("Could not reach the server. Check the connection and retry.");
+    } finally {
+      setTeamSaving(null);
+    }
+  };
+
   const checkedInCount = teammates.filter(
     (teammate) => teammate.checked_in_at
   ).length;
   const soloEntry = entries.find((entry) => entry.source === "solo") ?? null;
   const hasTeamEntry = entries.some((entry) => entry.source === "team");
+  const teamName = entries.find((entry) => entry.source === "team")?.team_name ?? "Team";
+  const waitingTeammates = teammates.filter((teammate) => !teammate.checked_in_at);
+  const teamBusy = teamSaving !== null || saving;
 
   return (
     <div className="space-y-6">
@@ -591,24 +763,34 @@ export default function CheckInPanel() {
 
           {rider && (
             <article className="space-y-6 rounded-lg border border-bronze/20 bg-sand p-6">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h3 className="font-display text-2xl font-bold uppercase tracking-wide text-bronze-dark">
-                    {rider.full_name}
-                  </h3>
-                  <div className="mt-1.5 flex flex-wrap gap-2">
-                    {entries.map((entry) => (
-                      <span
-                        key={`${entry.source}:${entry.id}`}
-                        className="rounded border border-bronze/30 bg-cream px-2.5 py-1 font-display text-xs font-semibold uppercase tracking-[0.12em] text-brown"
-                      >
-                        {entry.source === "solo"
-                          ? "Solo Rider"
-                          : `${entry.team_name ?? "Team"}${
-                              entry.is_leader ? " — Team Leader" : ""
-                            }`}
-                      </span>
-                    ))}
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex items-start gap-4">
+                  <Headshot
+                    url={headshotUrl}
+                    name={rider.full_name}
+                    className="h-24 w-24 shrink-0 rounded-xl border-2 border-bronze/40 text-2xl sm:h-28 sm:w-28"
+                  />
+                  <div className="min-w-0">
+                    <h3 className="font-display text-2xl font-bold uppercase tracking-wide text-bronze-dark">
+                      {rider.full_name}
+                    </h3>
+                    <div className="mt-1.5 flex flex-wrap gap-2">
+                      {entries.map((entry) => (
+                        <span
+                          key={`${entry.source}:${entry.id}`}
+                          className="rounded border border-bronze/30 bg-cream px-2.5 py-1 font-display text-xs font-semibold uppercase tracking-[0.12em] text-brown"
+                        >
+                          {entry.source === "solo"
+                            ? "Solo Rider"
+                            : `${entry.team_name ?? "Team"}${
+                                entry.is_leader ? " — Team Leader" : ""
+                              }`}
+                        </span>
+                      ))}
+                    </div>
+                    {!headshotUrl && (
+                      <p className="mt-2 text-xs text-brown/60">No photo on file.</p>
+                    )}
                   </div>
                 </div>
                 <p className="font-mono text-lg font-bold tracking-[0.15em] text-bronze-deep">
@@ -672,39 +854,136 @@ export default function CheckInPanel() {
               </div>
 
               {hasTeamEntry && teammates.length > 0 && (
-                <div className="rounded-lg border border-bronze/20 bg-cream p-4">
-                  <p className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
-                    Team check-in — {checkedInCount} of {teammates.length} arrived
-                  </p>
-                  <ul className="mt-3 space-y-2">
-                    {teammates.map((teammate) => (
-                      <li
-                        key={teammate.id}
-                        className="flex items-center justify-between gap-3 text-sm"
+                <section
+                  aria-label={`${teamName} check-in`}
+                  className={`rounded-lg border p-4 ${
+                    waitingTeammates.length === 0
+                      ? "border-green-700/30 bg-green-50/60"
+                      : "border-bronze/20 bg-cream"
+                  }`}
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-display text-base font-bold uppercase tracking-wide text-bronze-dark">
+                        {teamName}
+                      </p>
+                      <p
+                        className={`font-display text-xs font-semibold uppercase tracking-[0.12em] ${
+                          waitingTeammates.length === 0 ? "text-green-800" : "text-ink"
+                        }`}
                       >
-                        <span className="text-brown/85">
-                          {teammate.full_name}
-                          {teammate.is_leader ? " (Team Leader)" : ""}
-                        </span>
-                        <span
-                          className={
-                            teammate.checked_in_at
-                              ? "font-display text-xs font-semibold uppercase tracking-[0.12em] text-green-800"
-                              : "font-display text-xs font-semibold uppercase tracking-[0.12em] text-brown/60"
-                          }
+                        {waitingTeammates.length === 0
+                          ? `All ${teammates.length} checked in`
+                          : `${checkedInCount} of ${teammates.length} checked in`}
+                      </p>
+                    </div>
+
+                    {waitingTeammates.length > 0 && !confirmTeam && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmTeam(true)}
+                        disabled={teamBusy}
+                        className="rounded-lg bg-bronze-deep px-5 py-2.5 font-display text-xs font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze disabled:opacity-50"
+                      >
+                        Check in whole team ({waitingTeammates.length})
+                      </button>
+                    )}
+                  </div>
+
+                  {confirmTeam && waitingTeammates.length > 0 && (
+                    <div className="mt-3 rounded-lg border border-bronze/30 bg-sand p-3">
+                      <p className="text-sm text-brown">
+                        Check in {waitingTeammates.map((teammate) => teammate.full_name).join(", ")}?
+                        Only do this when they are all here in person.
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={checkInWholeTeam}
+                          disabled={teamBusy}
+                          className="rounded-lg bg-bronze-deep px-5 py-2 font-display text-xs font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze disabled:opacity-50"
                         >
-                          {teammate.checked_in_at ? "Checked in" : "Waiting"}
-                        </span>
-                      </li>
-                    ))}
+                          {teamSaving === "team" ? "Working…" : `Yes, check in ${waitingTeammates.length}`}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmTeam(false)}
+                          disabled={teamSaving === "team"}
+                          className="rounded-lg border border-bronze/40 px-5 py-2 font-display text-xs font-semibold uppercase tracking-[0.15em] text-brown transition-colors hover:bg-cream disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <ul className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    {teammates.map((teammate) => {
+                      const isThisRider = teammate.confirmation_code === rider.confirmation_code;
+
+                      return (
+                        <li
+                          key={teammate.id}
+                          className={`flex flex-col rounded-lg border bg-sand p-2.5 ${
+                            isThisRider ? "border-bronze ring-2 ring-bronze/40" : "border-bronze/20"
+                          }`}
+                        >
+                          <Headshot
+                            url={teammate.headshot_url}
+                            name={teammate.full_name}
+                            className="aspect-square w-full rounded-md text-3xl"
+                          />
+                          <p className="mt-2 font-display text-sm font-bold uppercase leading-tight tracking-wide text-bronze-dark">
+                            {teammate.full_name}
+                          </p>
+                          <p className="text-xs text-brown/70">
+                            {[teammate.is_leader ? "Team Leader" : null, isThisRider ? "This rider" : null]
+                              .filter(Boolean)
+                              .join(" · ") || "\u00a0"}
+                          </p>
+                          {/* Pinned to the bottom so the buttons line up when a
+                              long name wraps onto two lines. */}
+                          <div className="mt-auto flex flex-col pt-2">
+                            <span
+                              className={`self-start rounded-full px-2.5 py-0.5 font-display text-[0.7rem] font-semibold uppercase tracking-[0.12em] ${
+                                teammate.checked_in_at
+                                  ? "bg-green-100 text-green-900"
+                                  : "bg-amber-100 text-amber-900"
+                              }`}
+                            >
+                              {teammate.checked_in_at ? "Checked in" : "Waiting"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setTeammateCheckedIn(teammate, teammate.checked_in_at === null)
+                              }
+                              disabled={teamBusy}
+                              className={`mt-2.5 rounded-md px-3 py-2 font-display text-[0.7rem] font-semibold uppercase tracking-[0.12em] transition-colors disabled:opacity-50 ${
+                                teammate.checked_in_at
+                                  ? "border border-bronze/40 text-brown hover:bg-cream"
+                                  : "bg-bronze-deep text-cream hover:bg-bronze"
+                              }`}
+                            >
+                              {teamSaving === teammate.confirmation_code
+                                ? "Working…"
+                                : teammate.checked_in_at
+                                  ? "Undo"
+                                  : "Check in"}
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
-                  {checkedInCount < teammates.length && (
+
+                  {waitingTeammates.length > 0 && (
                     <p className="mt-3 text-sm leading-6 text-brown/80">
-                      All {teammates.length} riders must check in before this team
-                      enters the brackets.
+                      All {teammates.length} riders must check in before this team enters the
+                      brackets. Check them in one by one as they arrive, or all at once.
                     </p>
                   )}
-                </div>
+                </section>
               )}
 
               <div className="flex flex-col gap-3 sm:flex-row">
@@ -712,7 +991,7 @@ export default function CheckInPanel() {
                   <button
                     type="button"
                     onClick={() => setCheckedIn(false)}
-                    disabled={saving}
+                    disabled={teamBusy}
                     className="rounded-lg border border-bronze/40 px-6 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown transition-colors hover:bg-cream disabled:opacity-50"
                   >
                     {saving ? "Working…" : "Undo Check-in"}
@@ -721,7 +1000,7 @@ export default function CheckInPanel() {
                   <button
                     type="button"
                     onClick={() => setCheckedIn(true)}
-                    disabled={saving}
+                    disabled={teamBusy}
                     className="rounded-lg bg-bronze-deep px-8 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze disabled:opacity-50"
                   >
                     {saving ? "Working…" : "Confirm Check-in"}

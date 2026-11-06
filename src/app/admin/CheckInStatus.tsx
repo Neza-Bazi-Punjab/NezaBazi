@@ -3,9 +3,10 @@
 /* "Who's checked in": the overview half of the Check-in tab. Built from the
    same rider list the desk's instant search uses (kept fresh by CheckInPanel:
    every few seconds and after each check-in), so every desk sees the same
-   picture. Teams come first, incomplete ones on top, because a team is drawn
-   into a round only when all four riders have checked in. Selecting a rider
-   opens their card on the desk. */
+   picture. Two lists, Teams and Solo riders, one at a time. Each team shows
+   how many of its four riders are in, incomplete ones on top, because a team
+   is drawn into a round only when all four riders have checked in. Selecting a
+   rider opens their card on the desk. */
 import { useMemo, useState } from "react";
 import { searchRiders } from "@/lib/check-in-search";
 
@@ -26,6 +27,7 @@ export type RosterRider = {
 const TEAM_SIZE = 4;
 
 type SoloFilter = "all" | "in" | "out";
+type TeamFilter = "all" | "incomplete" | "ready";
 
 const formatTime = (value: string) => new Date(value).toLocaleString();
 
@@ -72,7 +74,9 @@ export default function CheckInStatus({
   onSelect: (code: string) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [list, setList] = useState<"teams" | "solo">("teams");
   const [soloFilter, setSoloFilter] = useState<SoloFilter>("all");
+  const [teamFilter, setTeamFilter] = useState<TeamFilter>("all");
 
   const riders = useMemo(
     () => (roster === null ? [] : query.trim() === "" ? roster : searchRiders(roster, query)),
@@ -129,6 +133,10 @@ export default function CheckInStatus({
       );
   }, [roster, riders]);
 
+  const shownTeams = teams.filter(
+    (team) => teamFilter === "all" || (teamFilter === "ready" ? team.ready : !team.ready)
+  );
+
   const soloRiders = riders.filter(
     (rider) =>
       rider.entries.includes("solo") &&
@@ -170,142 +178,188 @@ export default function CheckInStatus({
         />
       </div>
 
-      <section aria-labelledby="check-in-teams" className="space-y-3">
-        <h3
-          id="check-in-teams"
-          className="font-display text-lg font-bold uppercase tracking-wide text-bronze-dark"
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Which list">
+        <button
+          type="button"
+          aria-pressed={list === "teams"}
+          onClick={() => setList("teams")}
+          className={switchClass(list === "teams")}
         >
-          Teams
-        </h3>
-        <p className="text-sm text-brown/75">
-          A team rides only when all four riders have checked in. Incomplete teams are listed
-          first.
-        </p>
+          Teams · {totals.teamsReady} of {totals.teams} complete
+        </button>
+        <button
+          type="button"
+          aria-pressed={list === "solo"}
+          onClick={() => setList("solo")}
+          className={switchClass(list === "solo")}
+        >
+          Solo riders · {totals.soloIn} of {totals.solo} in
+        </button>
+      </div>
 
-        {teams.length === 0 ? (
-          <p className="text-brown/70">{query ? "No teams match." : "No teams registered."}</p>
-        ) : (
-          <ul className="grid gap-3 md:grid-cols-2">
-            {teams.map((team) => {
-              const waiting = team.members.filter((rider) => !rider.checked_in_at);
-
-              return (
-                <li
-                  key={team.teamId}
-                  className={`rounded-lg border p-4 ${
-                    team.ready ? "border-green-700/30 bg-green-50/60" : "border-bronze/20 bg-sand"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="font-display text-base font-bold uppercase tracking-wide text-bronze-dark">
-                      {team.name}
-                    </p>
-                    <span
-                      className={`shrink-0 rounded-full px-2.5 py-0.5 font-display text-[0.7rem] font-semibold uppercase tracking-[0.12em] ${
-                        team.ready ? "bg-green-100 text-green-900" : "bg-amber-100 text-amber-900"
-                      }`}
-                    >
-                      {team.ready ? "4/4 ready" : `${team.arrived}/${TEAM_SIZE}`}
-                    </span>
-                  </div>
-
-                  {!team.ready && (
-                    <p className="mt-1 text-sm text-brown/80">
-                      {team.members.length < TEAM_SIZE
-                        ? `Only ${team.members.length} of ${TEAM_SIZE} riders registered. `
-                        : ""}
-                      {waiting.length > 0 &&
-                        `Waiting for ${waiting.map((rider) => rider.full_name).join(", ")}.`}
-                    </p>
-                  )}
-
-                  <ul className="mt-3 space-y-1.5">
-                    {team.members.map((rider) => (
-                      <li key={rider.confirmation_code}>
-                        <button
-                          type="button"
-                          onClick={() => onSelect(rider.confirmation_code)}
-                          className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-cream"
-                        >
-                          <span className="min-w-0 truncate text-ink">
-                            {rider.full_name}
-                            {rider.is_leader && (
-                              <span className="ml-2 text-xs text-brown/70">Leader</span>
-                            )}
-                          </span>
-                          <StatusTag checkedInAt={rider.checked_in_at} />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-
-      <section aria-labelledby="check-in-solo" className="space-y-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h3
-            id="check-in-solo"
-            className="font-display text-lg font-bold uppercase tracking-wide text-bronze-dark"
-          >
-            Solo riders
-          </h3>
-          <div className="flex gap-2" role="group" aria-label="Show solo riders">
-            {(
-              [
-                ["all", "All"],
-                ["in", "Checked in"],
-                ["out", "Not checked in"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={soloFilter === value}
-                onClick={() => setSoloFilter(value)}
-                className={switchClass(soloFilter === value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {soloRiders.length === 0 ? (
-          <p className="text-brown/70">No solo riders to show.</p>
-        ) : (
-          <ul className="divide-y divide-bronze/10 overflow-hidden rounded-lg border border-bronze/20 bg-sand">
-            {soloRiders.map((rider) => (
-              <li key={rider.confirmation_code}>
+      {list === "teams" ? (
+        <section aria-labelledby="check-in-teams" className="space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h3
+              id="check-in-teams"
+              className="font-display text-lg font-bold uppercase tracking-wide text-bronze-dark"
+            >
+              Teams
+            </h3>
+            <div className="flex gap-2" role="group" aria-label="Show teams">
+              {(
+                [
+                  ["all", "All"],
+                  ["incomplete", "Still waiting"],
+                  ["ready", "All 4 in"],
+                ] as const
+              ).map(([value, label]) => (
                 <button
+                  key={value}
                   type="button"
-                  onClick={() => onSelect(rider.confirmation_code)}
-                  className="flex w-full flex-col gap-1 px-4 py-3 text-left transition-colors hover:bg-cream sm:flex-row sm:items-center sm:justify-between"
+                  aria-pressed={teamFilter === value}
+                  onClick={() => setTeamFilter(value)}
+                  className={switchClass(teamFilter === value)}
                 >
-                  <span className="flex min-w-0 flex-wrap items-center gap-2">
-                    <StatusTag checkedInAt={rider.checked_in_at} />
-                    <span className="font-display text-sm font-bold uppercase tracking-[0.1em] text-bronze-dark">
-                      {rider.full_name}
-                    </span>
-                    {rider.entries.includes("team") && rider.team_name && (
-                      <span className="text-xs text-brown/70">also on {rider.team_name}</span>
-                    )}
-                  </span>
-                  <span className="flex items-center gap-3 text-sm text-brown/75">
-                    {rider.checked_in_at && <span>{formatTime(rider.checked_in_at)}</span>}
-                    <span className="font-mono tracking-[0.1em] text-bronze-deep">
-                      {rider.confirmation_code}
-                    </span>
-                  </span>
+                  {label}
                 </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+              ))}
+            </div>
+          </div>
+          <p className="text-sm text-brown/75">
+            A team rides only when all four riders have checked in. Teams still waiting are listed
+            first.
+          </p>
+
+          {shownTeams.length === 0 ? (
+            <p className="text-brown/70">
+              {query || teamFilter !== "all" ? "No teams to show." : "No teams registered."}
+            </p>
+          ) : (
+            <ul className="grid gap-3 md:grid-cols-2">
+              {shownTeams.map((team) => {
+                const waiting = team.members.filter((rider) => !rider.checked_in_at);
+
+                return (
+                  <li
+                    key={team.teamId}
+                    className={`rounded-lg border p-4 ${
+                      team.ready ? "border-green-700/30 bg-green-50/60" : "border-bronze/20 bg-sand"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="font-display text-base font-bold uppercase tracking-wide text-bronze-dark">
+                        {team.name}
+                      </p>
+                      <span
+                        className={`shrink-0 rounded-full px-2.5 py-0.5 font-display text-[0.7rem] font-semibold uppercase tracking-[0.12em] ${
+                          team.ready ? "bg-green-100 text-green-900" : "bg-amber-100 text-amber-900"
+                        }`}
+                      >
+                        {team.ready
+                          ? `All ${TEAM_SIZE} checked in`
+                          : `${team.arrived} of ${TEAM_SIZE} checked in`}
+                      </span>
+                    </div>
+
+                    {!team.ready && (
+                      <p className="mt-1 text-sm text-brown/80">
+                        {team.members.length < TEAM_SIZE
+                          ? `Only ${team.members.length} of ${TEAM_SIZE} riders registered. `
+                          : ""}
+                        {waiting.length > 0 &&
+                          `Waiting for ${waiting.map((rider) => rider.full_name).join(", ")}.`}
+                      </p>
+                    )}
+
+                    <ul className="mt-3 space-y-1.5">
+                      {team.members.map((rider) => (
+                        <li key={rider.confirmation_code}>
+                          <button
+                            type="button"
+                            onClick={() => onSelect(rider.confirmation_code)}
+                            className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-cream"
+                          >
+                            <span className="min-w-0 truncate text-ink">
+                              {rider.full_name}
+                              {rider.is_leader && (
+                                <span className="ml-2 text-xs text-brown/70">Leader</span>
+                              )}
+                            </span>
+                            <StatusTag checkedInAt={rider.checked_in_at} />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      ) : (
+        <section aria-labelledby="check-in-solo" className="space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h3
+              id="check-in-solo"
+              className="font-display text-lg font-bold uppercase tracking-wide text-bronze-dark"
+            >
+              Solo riders
+            </h3>
+            <div className="flex gap-2" role="group" aria-label="Show solo riders">
+              {(
+                [
+                  ["all", "All"],
+                  ["in", "Checked in"],
+                  ["out", "Not checked in"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={soloFilter === value}
+                  onClick={() => setSoloFilter(value)}
+                  className={switchClass(soloFilter === value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {soloRiders.length === 0 ? (
+            <p className="text-brown/70">No solo riders to show.</p>
+          ) : (
+            <ul className="divide-y divide-bronze/10 overflow-hidden rounded-lg border border-bronze/20 bg-sand">
+              {soloRiders.map((rider) => (
+                <li key={rider.confirmation_code}>
+                  <button
+                    type="button"
+                    onClick={() => onSelect(rider.confirmation_code)}
+                    className="flex w-full flex-col gap-1 px-4 py-3 text-left transition-colors hover:bg-cream sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <span className="flex min-w-0 flex-wrap items-center gap-2">
+                      <StatusTag checkedInAt={rider.checked_in_at} />
+                      <span className="font-display text-sm font-bold uppercase tracking-[0.1em] text-bronze-dark">
+                        {rider.full_name}
+                      </span>
+                      {rider.entries.includes("team") && rider.team_name && (
+                        <span className="text-xs text-brown/70">also on {rider.team_name}</span>
+                      )}
+                    </span>
+                    <span className="flex items-center gap-3 text-sm text-brown/75">
+                      {rider.checked_in_at && <span>{formatTime(rider.checked_in_at)}</span>}
+                      <span className="font-mono tracking-[0.1em] text-bronze-deep">
+                        {rider.confirmation_code}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
     </div>
   );
 }
