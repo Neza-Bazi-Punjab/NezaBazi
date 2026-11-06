@@ -1,34 +1,60 @@
 "use client";
 
-/* "Add to Home Screen" on the home page, iPhone only for now (Android comes
-   in a later change, with a web app manifest and Chrome's own install popup).
+/* "Add to Home Screen" on the home page, for iPhones and Android phones.
 
-   Apple gives websites no way to open the add-to-home-screen popup, so the
-   button opens a short panel with the three taps it takes in Safari. The
-   icon and the name under it ("Neza Bazi") come from src/app/apple-icon.png
-   and `appleWebApp.title` in src/app/layout.tsx.
+   iPhone: Apple gives websites no way to open the add-to-home-screen popup,
+   so the button opens a short panel with the three taps it takes in Safari.
 
-   Who sees it: only an iPhone with a touch screen, never a laptop or an
-   iPad; never inside the installed app (opened from the home-screen icon);
-   and never again on a phone where the × was pressed. Every check needs the
-   browser, so nothing is drawn on the server or before the page has loaded:
-   desktop visitors never see it flash. */
+   Android: when Chrome decides the site can be installed (it needs the web
+   app manifest, src/app/manifest.ts, and its icons), it hands the page a
+   `beforeinstallprompt` event. The button keeps that event and, when tapped,
+   shows Chrome's own "Install app" popup: one tap and it is done. If Chrome
+   never offers it (another browser, or the popup was already used), the
+   button opens a panel with the menu steps instead.
+
+   The icon and the name under it ("Neza Bazi") come from the manifest and,
+   on iPhone, src/app/apple-icon.png and `appleWebApp.title` in layout.tsx.
+
+   Who sees it: only a phone with a touch screen (never a laptop, desktop,
+   iPad or Android tablet); never inside the installed app (opened from the
+   home-screen icon); and never again on a phone where the × was pressed.
+   Every check needs the browser, so nothing is drawn on the server or before
+   the page has loaded: desktop visitors never see it flash. */
 import { useEffect, useRef, useState } from "react";
-import { AddSquareIcon, CloseIcon, ShareIcon } from "@/components/icons";
+import {
+  AddSquareIcon,
+  CloseIcon,
+  MoreVerticalIcon,
+  ShareIcon,
+} from "@/components/icons";
 
 export const DISMISS_KEY = "nbp-add-to-home-screen-dismissed";
 
-type Phone = { inAppBrowser: boolean };
+type Platform = "ios" | "android";
+type Phone = { platform: Platform; inAppBrowser: boolean };
+
+/* Chrome's install offer. Not in TypeScript's DOM types yet. */
+type InstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+};
 
 /* Instagram, Facebook and similar apps open links in their own browser,
    which cannot add to the home screen; the panel then says to open the page
-   in Safari first. */
-const IN_APP_BROWSER = /Instagram|FBAN|FBAV|FB_IAB|Line\/|Snapchat|TikTok|musical_ly|LinkedInApp/i;
+   in Safari or Chrome first. `; wv)` marks any Android in-app web view. */
+const IN_APP_BROWSER =
+  /Instagram|FBAN|FBAV|FB_IAB|Line\/|Snapchat|TikTok|musical_ly|LinkedInApp|; wv\)/i;
 
-const detectIphone = (): Phone | null => {
+const detectPhone = (): Phone | null => {
   const { userAgent } = navigator;
+  const platform: Platform | null = /iPhone|iPod/.test(userAgent)
+    ? "ios"
+    : // Android phones say "Mobile"; Android tablets do not.
+      /Android/.test(userAgent) && /Mobile/.test(userAgent)
+      ? "android"
+      : null;
 
-  if (!/iPhone|iPod/.test(userAgent)) {
+  if (!platform) {
     return null;
   }
 
@@ -52,17 +78,47 @@ const detectIphone = (): Phone | null => {
     // Storage blocked (private mode, settings): show the button anyway.
   }
 
-  return { inAppBrowser: IN_APP_BROWSER.test(userAgent) };
+  return { platform, inAppBrowser: IN_APP_BROWSER.test(userAgent) };
 };
+
+/* Chrome can offer the install before React has finished loading the page,
+   so the offer is caught as soon as this file loads and kept here. Chrome's
+   own small "Add to Home screen" bar is held back (preventDefault) only on an
+   Android phone that will show our button instead. */
+let savedInstallPrompt: InstallPromptEvent | null = null;
+const installPromptListeners = new Set<(event: InstallPromptEvent | null) => void>();
+
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (event) => {
+    if (detectPhone()?.platform !== "android") {
+      return;
+    }
+
+    event.preventDefault();
+    savedInstallPrompt = event as InstallPromptEvent;
+    installPromptListeners.forEach((listener) => listener(savedInstallPrompt));
+  });
+}
 
 export default function AddToHomeScreen({ className = "" }: { className?: string }) {
   const [phone, setPhone] = useState<Phone | null>(null);
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     // Read once, after the page has loaded: these checks need the browser.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPhone(detectIphone());
+    setPhone(detectPhone());
+    setInstallPrompt(savedInstallPrompt);
+
+    const onInstalled = () => setPhone(null);
+    installPromptListeners.add(setInstallPrompt);
+    window.addEventListener("appinstalled", onInstalled);
+
+    return () => {
+      installPromptListeners.delete(setInstallPrompt);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
   }, []);
 
   if (!phone) {
@@ -80,22 +136,51 @@ export default function AddToHomeScreen({ className = "" }: { className?: string
     setPhone(null);
   };
 
-  const steps = [
-    ...(phone.inAppBrowser
-      ? [
-          {
-            key: "safari",
-            icon: null,
-            text: (
-              <>
-                This app&apos;s browser can&apos;t do it. Tap <strong>⋯</strong> (top or
-                bottom corner) and choose <strong>Open in Safari</strong> or{" "}
-                <strong>Open in browser</strong>, then follow the steps below.
-              </>
-            ),
-          },
-        ]
-      : []),
+  const openSteps = async () => {
+    // Android with Chrome's offer in hand: show Chrome's own popup. The offer
+    // works once, so afterwards the button falls back to the steps panel.
+    if (phone.platform === "android" && installPrompt) {
+      const offer = installPrompt;
+      savedInstallPrompt = null;
+      setInstallPrompt(null);
+
+      try {
+        await offer.prompt();
+        const { outcome } = await offer.userChoice;
+
+        if (outcome === "accepted") {
+          setPhone(null);
+        }
+
+        return;
+      } catch {
+        // Chrome refused the popup; show the steps instead.
+      }
+    }
+
+    dialogRef.current?.showModal();
+  };
+
+  const openInBrowserStep = {
+    key: "browser",
+    icon: null,
+    text:
+      phone.platform === "ios" ? (
+        <>
+          This app&apos;s browser can&apos;t do it. Tap <strong>⋯</strong> (top or
+          bottom corner) and choose <strong>Open in Safari</strong> or{" "}
+          <strong>Open in browser</strong>, then follow the steps below.
+        </>
+      ) : (
+        <>
+          This app&apos;s browser can&apos;t do it. Tap <strong>⋮</strong> (top
+          corner) and choose <strong>Open in Chrome</strong> or{" "}
+          <strong>Open in browser</strong>, then follow the steps below.
+        </>
+      ),
+  };
+
+  const iosSteps = [
     {
       key: "share",
       icon: <ShareIcon className="h-6 w-6" />,
@@ -128,12 +213,48 @@ export default function AddToHomeScreen({ className = "" }: { className?: string
     },
   ];
 
+  const androidSteps = [
+    {
+      key: "menu",
+      icon: <MoreVerticalIcon className="h-6 w-6" />,
+      text: (
+        <>
+          Tap the <strong>⋮</strong> menu at the top right of Chrome.
+        </>
+      ),
+    },
+    {
+      key: "add",
+      icon: <AddSquareIcon className="h-6 w-6" />,
+      text: (
+        <>
+          Tap <strong>Add to Home screen</strong> or <strong>Install app</strong>.
+        </>
+      ),
+    },
+    {
+      key: "confirm",
+      icon: null,
+      text: (
+        <>
+          Tap <strong>Install</strong> or <strong>Add</strong>. The Neza Bazi icon
+          appears on your home screen.
+        </>
+      ),
+    },
+  ];
+
+  const steps = [
+    ...(phone.inAppBrowser ? [openInBrowserStep] : []),
+    ...(phone.platform === "ios" ? iosSteps : androidSteps),
+  ];
+
   return (
     <div className={className}>
       <div className="inline-flex items-stretch overflow-hidden rounded-lg border border-brown/40 text-brown">
         <button
           type="button"
-          onClick={() => dialogRef.current?.showModal()}
+          onClick={openSteps}
           className="inline-flex items-center gap-2.5 px-5 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] transition-colors hover:text-bronze focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-bronze"
         >
           <AddSquareIcon className="h-5 w-5" />
@@ -199,8 +320,9 @@ export default function AddToHomeScreen({ className = "" }: { className?: string
           </ol>
 
           <p className="mt-5 text-xs leading-5 text-brown/75">
-            Best in Safari. On iOS 16.4 or later, Chrome and other browsers have
-            Add to Home Screen in their Share menu too.
+            {phone.platform === "ios"
+              ? "Best in Safari. On iOS 16.4 or later, Chrome and other browsers have Add to Home Screen in their Share menu too."
+              : "Best in Chrome. In Samsung Internet, tap ≡ at the bottom, then Add page to → Home screen."}
           </p>
         </div>
       </dialog>

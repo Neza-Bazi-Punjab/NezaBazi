@@ -1,24 +1,37 @@
 import type { MetadataRoute } from "next";
 import { site } from "@/lib/site";
 
-/* Web app manifest. On an iPhone, `display: "standalone"` is what makes the
-   icon added through Add to Home Screen open the site full screen, like an
-   app, instead of as a Safari tab (iOS 18 ignores the plain meta tag), and
-   lets src/components/AddToHomeScreen.tsx hide its button once installed.
-   The installed app keeps its own sign-in, separate from Safari's.
-
-   Android (Chrome's own "Install app" popup) is the next step: it also needs
-   192×192 and 512×512 icons here, which are added with that change. */
+/* Web app manifest: what a phone uses when the site is added to its home
+   screen (src/components/AddToHomeScreen.tsx).
+   - iPhone: `display: "standalone"` makes the icon open the site full screen,
+     like an app, instead of as a Safari tab (iOS 18 ignores the plain meta
+     tag). The iPhone icon itself is src/app/apple-icon.png.
+   - Android: Chrome offers "Install app" only when the manifest has a name,
+     start URL, standalone display and 192×192 + 512×512 icons. The maskable
+     icon keeps the mark inside the middle of the tile, so Android can cut it
+     to a circle or rounded square without clipping the logo.
+   Icons are made by scripts/make-app-icons.mjs from public/brand/logo-mark.svg.
+   The installed app keeps its own sign-in, separate from the browser's. */
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: site.title,
     short_name: "Neza Bazi",
     description: site.description,
+    id: "/",
     start_url: "/",
     scope: "/",
     display: "standalone",
     background_color: "#fdf8ef",
     theme_color: "#fdf8ef",
-    icons: [{ src: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
+    icons: [
+      { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      {
+        src: "/icons/icon-maskable-512.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "maskable",
+      },
+    ],
   };
 }

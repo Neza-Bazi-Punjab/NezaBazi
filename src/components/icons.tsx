@@ -226,3 +226,14 @@ export function AddSquareIcon(props: IconProps) {
     </svg>
   );
 }
+
+/* Chrome's ⋮ menu button on Android. */
+export function MoreVerticalIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <circle cx="12" cy="5.5" r="1.3" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.3" fill="currentColor" />
+      <circle cx="12" cy="18.5" r="1.3" fill="currentColor" />
+    </svg>
+  );
+}
