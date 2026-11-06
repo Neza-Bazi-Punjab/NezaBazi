@@ -183,6 +183,25 @@ body {
   }
 }
 
+/* Floating "Add to Home Screen" button (src/components/AddToHomeScreen.tsx):
+   pops in shortly after the page loads. */
+.a2hs {
+  animation: a2hs-in 300ms var(--ease-soft) 600ms both;
+}
+
+@keyframes a2hs-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.9);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .a2hs {
+    animation: none;
+  }
+}
+
 /* Installed-app launch screen (src/components/AppSplash.tsx): hidden on the
    ordinary website; in the installed app the bronze logo in the middle of a
    full-screen cream, held for 0.5 s, then the whole screen fades away

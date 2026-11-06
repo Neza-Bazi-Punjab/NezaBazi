@@ -1,6 +1,9 @@
 "use client";
 
-/* "Add to Home Screen" on the home page, for iPhones and Android phones.
+/* "Add to Home Screen" for iPhones and Android phones: a round bronze
+   button floating at the bottom right of the home page, with an "Add the
+   app" label beside it the whole time. It pops in just after the page loads
+   (globals.css, .a2hs).
 
    iPhone: Apple gives websites no way to open the add-to-home-screen popup,
    so the button opens a short panel with the three taps it takes in Safari.
@@ -16,8 +19,22 @@
    on iPhone, src/app/apple-icon.png and `appleWebApp.title` in layout.tsx.
 
    Who sees it: only a phone with a touch screen (never a laptop, desktop,
-   iPad or Android tablet); never inside the installed app (opened from the
-   home-screen icon); and never again on a phone where the × was pressed.
+   iPad or Android tablet), and never inside the installed app (opened from
+   the home-screen icon). It stays there the whole time, also after it is
+   tapped; its × hides it until the browser is closed (sessionStorage), and
+   it is back on the next visit.
+
+   Already installed? Inside the app the page knows (display-mode:
+   standalone). In the browser:
+   - Android: Chrome can say so (getInstalledRelatedApps, with
+     related_applications in the manifest); it also tells the page the
+     moment it is installed (appinstalled); and the installed app shares
+     the browser's storage, so opening it once marks the phone (INSTALLED_KEY).
+     Any of these hides the button.
+   - iPhone: Safari and the home-screen app are kept fully apart (separate
+     storage), and Apple gives websites no way to tell, so Safari keeps
+     showing it; only the × hides it, for that visit.
+
    Every check needs the browser, so nothing is drawn on the server or before
    the page has loaded: desktop visitors never see it flash. */
 import { useEffect, useRef, useState } from "react";
@@ -29,6 +46,25 @@ import {
 } from "@/components/icons";
 
 export const DISMISS_KEY = "nbp-add-to-home-screen-dismissed";
+export const INSTALLED_KEY = "nbp-app-installed";
+
+const isInstalledApp = () =>
+  window.matchMedia("(display-mode: standalone)").matches ||
+  (navigator as Navigator & { standalone?: boolean }).standalone === true;
+
+/* Chrome on Android: is this site installed as an app on the phone? Needs
+   related_applications in the manifest. Not in TypeScript's DOM types yet. */
+const chromeSaysInstalled = async () => {
+  const nav = navigator as Navigator & {
+    getInstalledRelatedApps?: () => Promise<unknown[]>;
+  };
+
+  try {
+    return ((await nav.getInstalledRelatedApps?.()) ?? []).length > 0;
+  } catch {
+    return false;
+  }
+};
 
 type Platform = "ios" | "android";
 type Phone = { platform: Platform; inAppBrowser: boolean };
@@ -62,16 +98,15 @@ const detectPhone = (): Phone | null => {
     return null;
   }
 
-  const installed =
-    window.matchMedia("(display-mode: standalone)").matches ||
-    (navigator as Navigator & { standalone?: boolean }).standalone === true;
-
-  if (installed) {
+  if (isInstalledApp()) {
     return null;
   }
 
   try {
-    if (window.localStorage.getItem(DISMISS_KEY) === "1") {
+    if (
+      window.sessionStorage.getItem(DISMISS_KEY) === "1" ||
+      window.localStorage.getItem(INSTALLED_KEY) === "1"
+    ) {
       return null;
     }
   } catch {
@@ -100,22 +135,45 @@ if (typeof window !== "undefined") {
   });
 }
 
-export default function AddToHomeScreen({ className = "" }: { className?: string }) {
+export default function AddToHomeScreen() {
   const [phone, setPhone] = useState<Phone | null>(null);
+  const [showButton, setShowButton] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
+    // Opened as the installed app: remember it. On Android the browser
+    // shares this storage, so Chrome stops showing the button too.
+    if (isInstalledApp()) {
+      try {
+        window.localStorage.setItem(INSTALLED_KEY, "1");
+      } catch {
+        // Not remembered; Chrome's own check below still works.
+      }
+    }
+
     // Read once, after the page has loaded: these checks need the browser.
+    const found = detectPhone();
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPhone(detectPhone());
+    setPhone(found);
+    setShowButton(found !== null);
     setInstallPrompt(savedInstallPrompt);
 
-    const onInstalled = () => setPhone(null);
+    let active = true;
+    if (found?.platform === "android") {
+      void chromeSaysInstalled().then((installed) => {
+        if (installed && active) {
+          setShowButton(false);
+        }
+      });
+    }
+
+    const onInstalled = () => setShowButton(false);
     installPromptListeners.add(setInstallPrompt);
     window.addEventListener("appinstalled", onInstalled);
 
     return () => {
+      active = false;
       installPromptListeners.delete(setInstallPrompt);
       window.removeEventListener("appinstalled", onInstalled);
     };
@@ -125,15 +183,16 @@ export default function AddToHomeScreen({ className = "" }: { className?: string
     return null;
   }
 
-  const dismiss = () => {
+  /* The ×: hidden for the rest of this visit (until the browser is closed);
+     back on the next one. */
+  const hideForNow = () => {
     try {
-      window.localStorage.setItem(DISMISS_KEY, "1");
+      window.sessionStorage.setItem(DISMISS_KEY, "1");
     } catch {
-      // Not remembered on this phone; it is still hidden until the next visit.
+      // Not remembered; it is still hidden until the page is reloaded.
     }
 
-    dialogRef.current?.close();
-    setPhone(null);
+    setShowButton(false);
   };
 
   const openSteps = async () => {
@@ -183,12 +242,21 @@ export default function AddToHomeScreen({ className = "" }: { className?: string
   const iosSteps = [
     {
       key: "share",
-      icon: <ShareIcon className="h-6 w-6" />,
+      // Older Safari shows Share in the bottom bar; Safari on iOS 26 keeps
+      // it behind ⋯ (bottom right). The page-menu button by the address has
+      // no Share, so the text points past it.
+      icon: (
+        <span className="flex items-center gap-1">
+          <ShareIcon className="h-6 w-6" />
+          <span className="text-[11px] font-semibold text-brown/70">or</span>
+          <MoreVerticalIcon className="h-6 w-6 rotate-90" />
+        </span>
+      ),
       text: (
         <>
           Tap <strong>Share</strong> at the bottom of Safari (the square with an
-          arrow pointing up). On some iPhones it is behind the <strong>⋯</strong>{" "}
-          button.
+          arrow pointing up). Don&apos;t see it? Tap <strong>⋯</strong> at the
+          bottom right, then <strong>Share</strong>.
         </>
       ),
     },
@@ -197,7 +265,8 @@ export default function AddToHomeScreen({ className = "" }: { className?: string
       icon: <AddSquareIcon className="h-6 w-6" />,
       text: (
         <>
-          Scroll down the list and tap <strong>Add to Home Screen</strong>.
+          Tap <strong>Add to Home Screen</strong>. Not in the list? Tap{" "}
+          <strong>View More</strong> or scroll down to find it.
         </>
       ),
     },
@@ -250,25 +319,36 @@ export default function AddToHomeScreen({ className = "" }: { className?: string
   ];
 
   return (
-    <div className={className}>
-      <div className="inline-flex items-stretch overflow-hidden rounded-lg border border-brown/40 text-brown">
-        <button
-          type="button"
-          onClick={openSteps}
-          className="inline-flex items-center gap-2.5 px-5 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] transition-colors hover:text-bronze focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-bronze"
-        >
-          <AddSquareIcon className="h-5 w-5" />
-          Add to Home Screen
-        </button>
-        <button
-          type="button"
-          onClick={dismiss}
-          aria-label="Hide Add to Home Screen"
-          className="border-l border-brown/25 px-3 text-brown/70 transition-colors hover:text-bronze focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-bronze"
-        >
-          <CloseIcon className="h-4 w-4" />
-        </button>
-      </div>
+    <>
+      {showButton && (
+        <div className="a2hs fixed right-4 bottom-[calc(1.25rem+env(safe-area-inset-bottom))] z-40">
+          {/* "Add the app" stays beside the round button the whole time; the
+              label and the circle are one button. */}
+          <button
+            type="button"
+            onClick={openSteps}
+            aria-label="Add Neza Bazi to your Home Screen"
+            className="flex items-center gap-2 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bronze active:scale-95 transition-transform"
+          >
+            <span className="whitespace-nowrap rounded-full bg-cream/95 px-3.5 py-2 font-display text-sm font-semibold uppercase tracking-[0.12em] text-brown shadow-md ring-1 ring-bronze/15">
+              Add the app
+            </span>
+            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-bronze text-cream shadow-lg shadow-bronze-deep/30">
+              <AddSquareIcon className="h-6 w-6" />
+            </span>
+          </button>
+          {/* The ×: a small badge on the round button's corner, with a larger
+              invisible tap area around it. */}
+          <button
+            type="button"
+            onClick={hideForNow}
+            aria-label="Hide Add to Home Screen"
+            className="absolute -top-2 right-10 flex h-6 w-6 items-center justify-center rounded-full bg-cream text-brown shadow ring-1 ring-brown/20 before:absolute before:-inset-2.5 before:content-[''] focus-visible:outline-2 focus-visible:outline-bronze"
+          >
+            <CloseIcon className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
       <dialog
         ref={dialogRef}
@@ -326,6 +406,6 @@ export default function AddToHomeScreen({ className = "" }: { className?: string
           </p>
         </div>
       </dialog>
-    </div>
+    </>
   );
 }
