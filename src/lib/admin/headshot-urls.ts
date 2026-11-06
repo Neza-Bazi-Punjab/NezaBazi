@@ -74,10 +74,75 @@ export const getHeadshotUrl = async (
   return url;
 };
 
-/* The account behind an email address, found through a solo entry made under
-   it (identity is the email address). A team rider other than the leader has
-   no profile id of their own, so this is the only way to their photo short of
-   scanning every Auth user; without a solo entry the photo is skipped. */
+/* Auth accounts by email address, for team riders who made their own
+   account (the email in each team rider's code email invites them to) but
+   hold no solo entry. Only one Auth listing call is needed at this event's
+   size (about 150 accounts, one page of 1000), and it is cached briefly so a
+   desk reloading a team card does not list every account each time. Only
+   accounts whose email address has been confirmed count: otherwise anyone
+   could sign up under a teammate's address, skip the confirmation link, and
+   have their own photo shown under that teammate's name. */
+const AUTH_EMAIL_CACHE_MS = 60 * 1000;
+const AUTH_USERS_PER_PAGE = 1000;
+let authEmailCache: { byEmail: Map<string, string>; expiresAt: number } | null = null;
+let authEmailRequest: Promise<Map<string, string>> | null = null;
+
+const loadConfirmedAuthEmails = async (
+  client: ServiceRoleClient
+): Promise<Map<string, string>> => {
+  if (authEmailCache && authEmailCache.expiresAt > Date.now()) {
+    return authEmailCache.byEmail;
+  }
+
+  /* A team card looks up up to four riders at once; share one listing. */
+  if (authEmailRequest) {
+    return authEmailRequest;
+  }
+
+  authEmailRequest = (async () => {
+    const byEmail = new Map<string, string>();
+
+    try {
+      const { data, error } = await client.auth.admin.listUsers({
+        page: 1,
+        perPage: AUTH_USERS_PER_PAGE,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      for (const user of data?.users ?? []) {
+        const address = user.email?.trim().toLowerCase();
+
+        if (address && user.email_confirmed_at && !byEmail.has(address)) {
+          byEmail.set(address, user.id);
+        }
+      }
+
+      authEmailCache = { byEmail, expiresAt: Date.now() + AUTH_EMAIL_CACHE_MS };
+    } catch (error) {
+      // A failed listing only means initials instead of a photo; not cached,
+      // so the next card tries again.
+      console.error("[headshots] auth account lookup failed", error);
+    }
+
+    return byEmail;
+  })();
+
+  try {
+    return await authEmailRequest;
+  } finally {
+    authEmailRequest = null;
+  }
+};
+
+/* The account behind an email address (identity is the email address). A team
+   rider other than the leader has no profile id of their own on the row, so
+   this is how their photo is found: first through a solo entry made under the
+   email, then through an Auth account with that confirmed email. The photo
+   itself is still only signed if it sits in that account's own folder
+   (getHeadshotUrl). No match means no photo, and the desk shows initials. */
 export const findProfileIdByEmail = async (
   client: ServiceRoleClient,
   email: string | null | undefined
@@ -95,10 +160,14 @@ export const findProfileIdByEmail = async (
     .not("profile_id", "is", null)
     .limit(1);
 
-  if (error || !data || data.length === 0) {
-    return null;
+  if (!error && data && data.length > 0) {
+    const profileId = (data[0] as { profile_id: string | null }).profile_id;
+
+    if (typeof profileId === "string") {
+      return profileId;
+    }
   }
 
-  const profileId = (data[0] as { profile_id: string | null }).profile_id;
-  return typeof profileId === "string" ? profileId : null;
+  const accounts = await loadConfirmedAuthEmails(client);
+  return accounts.get(address.toLowerCase()) ?? null;
 };

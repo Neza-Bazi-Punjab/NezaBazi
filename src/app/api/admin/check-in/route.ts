@@ -407,7 +407,7 @@ export async function POST(request: Request) {
     }
 
     // The leader registered the team, so the team's account is theirs; anyone
-    // else is found through a solo entry under their email, if they made one.
+    // else is found by email: a solo entry, or their own confirmed account.
     teammates = await Promise.all(
       (teamRows ?? []).map(async ({ email, ...teammate }) => {
         let headshot_url: string | null = null;

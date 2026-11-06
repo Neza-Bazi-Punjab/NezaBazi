@@ -57,6 +57,7 @@ export const buildRegistrationCodeEmail = ({
     ? [
         "Need to check your details, change them, or upload your headshot?",
         `Sign in at ${site.url}/login with this email address, or create an account with it if you do not have one yet. Either way your entry links up automatically.`,
+        `Then add your photo under My Account (${site.url}/account). Officials see it at the check-in desk, which makes checking you in quicker.`,
         "",
         `Not expecting this email? Someone may have entered your address by mistake — let us know at ${site.email}.`,
         "",
@@ -116,7 +117,9 @@ export const buildRegistrationCodeEmail = ({
                 <strong>Need to check your details, change them, or upload your
                 headshot?</strong> Sign in with this email address, or create an
                 account with it if you do not have one yet. Either way your entry
-                links up automatically.
+                links up automatically. Then add your photo under
+                <strong>My Account</strong>: officials see it at the check-in
+                desk, which makes checking you in quicker.
               </p>
 
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 30px;">
