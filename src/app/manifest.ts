@@ -21,7 +21,9 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/",
     scope: "/",
     display: "standalone",
-    background_color: "#fdf8ef",
+    /* Bronze, like the app icon: Android's own launch screen uses it, and it
+       runs straight into the app's logo screen (AppSplash). */
+    background_color: "#b45817",
     theme_color: "#fdf8ef",
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },

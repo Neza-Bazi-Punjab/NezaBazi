@@ -5,6 +5,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import Footer from "@/components/Footer";
 import Navbar from "@/components/Navbar";
+import AppSplash from "@/components/AppSplash";
 import SiteChrome from "@/components/SiteChrome";
 import { site } from "@/lib/site";
 
@@ -48,6 +49,8 @@ export default function RootLayout({
       className={`${oswald.variable} ${inter.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
+        {/* Installed app only: a brief logo screen as it opens. */}
+        <AppSplash />
         <SiteChrome>
           <Navbar />
         </SiteChrome>
