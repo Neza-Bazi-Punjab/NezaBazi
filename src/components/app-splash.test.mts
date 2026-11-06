@@ -46,3 +46,10 @@ test("Android's own launch screen uses the same bronze as the splash", () => {
   assert.match(manifest, /background_color: "#b45817"/);
   assert.match(css, /background-color: var\(--color-bronze\);/);
 });
+
+test("the bronze background is removed in one step, not faded", () => {
+  // iPhone keeps the strip behind the clock bronze during a fade, so only the
+  // logo and name fade; the background switches off all at once.
+  assert.match(css, /animation: app-splash-out 1ms step-end 700ms forwards;/);
+  assert.match(css, /\.app-splash > \* \{\s*animation: app-splash-fade 200ms ease-out 450ms forwards;/);
+});
