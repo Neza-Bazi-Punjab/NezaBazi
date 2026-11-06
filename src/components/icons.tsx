@@ -205,3 +205,24 @@ export function EyeOffIcon(props: IconProps) {
     </svg>
   );
 }
+
+/* Apple's Share symbol (a box with an arrow out of the top), drawn to match
+   what an iPhone shows so the Add to Home Screen steps are easy to follow. */
+export function ShareIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M12 3v12m-4-8 4-4 4 4" />
+      <path d="M8 10H6.5A1.5 1.5 0 0 0 5 11.5v8A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-8a1.5 1.5 0 0 0-1.5-1.5H16" />
+    </svg>
+  );
+}
+
+/* The plus-in-a-square next to "Add to Home Screen" in the iPhone Share menu. */
+export function AddSquareIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <rect x="4" y="4" width="16" height="16" rx="3" />
+      <path d="M12 8.5v7m-3.5-3.5h7" />
+    </svg>
+  );
+}
