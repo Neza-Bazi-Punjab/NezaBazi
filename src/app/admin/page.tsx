@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { DISPLAY_MODE_CHOICES } from "@/components/scoring/format";
 import { isPaperPlaceholderEmail } from "@/lib/paper-registration";
+import { createServiceRoleClient } from "@/lib/admin/server";
 import { isSoloSampleOn } from "@/lib/scoring/rehearsal";
 import { site } from "@/lib/site";
 import { AdminAccessMessage, getAdminAccess } from "./admin-access";
@@ -84,6 +85,7 @@ type TeamRow = { id: string; leader_profile_id: string | null; created_at: strin
 type AuditRow = {
   id: string;
   created_at: string;
+  actor_id: string | null;
   actor_name: string | null;
   action: string;
   target_table: string | null;
@@ -212,6 +214,34 @@ function DetailRow({ term, children }: { term: string; children: React.ReactNode
 /* /admin: the dashboard's home. Registrations, check-in, what is live, what
    the screens show and the latest activity, at a glance, with a way into each
    section. Every number here is read live from the database. */
+/* Each audit entry keeps the name its author had at the time. Like the Audit
+   log page, show the account's current name instead, so a renamed admin
+   shows up under their new name; the saved name is the fallback. */
+const currentActorNames = async (entries: AuditRow[]) => {
+  const names = new Map<string, string>();
+  const ids = [...new Set(entries.map((entry) => entry.actor_id).filter(Boolean))] as string[];
+
+  if (ids.length === 0) {
+    return names;
+  }
+
+  const auth = createServiceRoleClient().auth.admin;
+  await Promise.all(
+    ids.map(async (id) => {
+      const { data, error } = await auth.getUserById(id);
+      const fullName = data?.user?.user_metadata?.full_name;
+
+      if (error) {
+        console.error("Unable to look up audit actor", error);
+      } else if (typeof fullName === "string" && fullName.trim()) {
+        names.set(id, fullName.trim());
+      }
+    })
+  );
+
+  return names;
+};
+
 export default async function AdminOverviewPage() {
   const access = await getAdminAccess();
 
@@ -235,7 +265,7 @@ export default async function AdminOverviewPage() {
       .maybeSingle(),
     supabase
       .from("admin_audit_log")
-      .select("id, created_at, actor_name, action, target_table, details")
+      .select("id, created_at, actor_id, actor_name, action, target_table, details")
       .order("created_at", { ascending: false })
       .limit(RECENT_ACTIVITY),
     isSoloSampleOn(),
@@ -245,6 +275,7 @@ export default async function AdminOverviewPage() {
   const memberRows = (members.data ?? []) as MemberRow[];
   const teamRows = (teams.data ?? []) as TeamRow[];
   const activity = (audit.error ? [] : audit.data ?? []) as AuditRow[];
+  const actorNames = await currentActorNames(activity);
 
   // One rider per confirmation code: a rider in both events counts once.
   const riders = new Map<string, boolean>();
@@ -462,7 +493,7 @@ export default async function AdminOverviewPage() {
                               <span className="ml-1.5 text-xs text-brown/60">{dayOnly.format(when)}</span>
                             )}
                           </td>
-                          <td className="px-3 py-2 text-ink">{entry.actor_name || "—"}</td>
+                          <td className="px-3 py-2 text-ink">{(entry.actor_id && actorNames.get(entry.actor_id)) || entry.actor_name || "—"}</td>
                           <td className="px-3 py-2 text-ink">{formatAction(entry.action)}</td>
                           <td className="px-3 py-2 text-ink">{describeDetails(entry)}</td>
                         </tr>
