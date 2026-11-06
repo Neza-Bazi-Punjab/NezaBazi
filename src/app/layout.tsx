@@ -25,7 +25,10 @@ export const metadata: Metadata = {
     template: `%s | ${site.name}`,
   },
   description: site.description,
-  appleWebApp: { title: "Neza Bazi" },
+  /* "Add to Home Screen" on an iPhone opens the site full screen, like an
+     app, rather than as a Safari tab (src/components/AddToHomeScreen.tsx).
+     The app keeps its own sign-in, separate from Safari's. */
+  appleWebApp: { capable: true, title: "Neza Bazi", statusBarStyle: "default" },
   openGraph: {
     title: site.title,
     description: site.description,

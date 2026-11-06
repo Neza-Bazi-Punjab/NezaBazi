@@ -1,4 +1,5 @@
 import Image from "next/image";
+import AddToHomeScreen from "@/components/AddToHomeScreen";
 import BrushDivider from "@/components/BrushDivider";
 import ButtonLink from "@/components/Button";
 import FlagRow from "@/components/FlagRow";
@@ -76,6 +77,9 @@ export default function Home() {
                 Event Details
               </ButtonLink>
             </div>
+
+            {/* iPhones only; draws nothing on desktop or once installed. */}
+            <AddToHomeScreen className="mt-4" />
           </div>
 
           {/* Rider photo dissolves into the parchment at every viewport — no
