@@ -45,8 +45,12 @@ try {
   const pending = new Map();
   socket.addEventListener("message", ({ data }) => {
     const message = JSON.parse(data);
-    pending.get(message.id)?.(message);
+    // Only replies to our own numbered requests; Chrome's other messages
+    // (events) have no id and are ignored.
+    if (!Number.isInteger(message.id) || !pending.has(message.id)) return;
+    const settle = pending.get(message.id);
     pending.delete(message.id);
+    if (typeof settle === "function") settle(message);
   });
   const send = (method, params = {}) =>
     new Promise((resolve, reject) => {
