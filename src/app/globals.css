@@ -213,6 +213,9 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    /* Logo and name sit a little above the middle (40px up), where the
+       eye expects a launch logo. */
+    padding-bottom: 80px;
     background-color: var(--background);
     color: var(--color-bronze);
     pointer-events: none;
