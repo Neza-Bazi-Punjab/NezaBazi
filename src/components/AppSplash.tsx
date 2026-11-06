@@ -1,6 +1,7 @@
 /* The brief logo screen the installed app shows as it opens, like a native
    app: the cream NBP mark and "NEZA BAZI / PUNJAB" in the middle of a
-   full-screen bronze, for half a second, then the whole screen fades away.
+   full-screen black (matching the black screen iPhone shows while the app
+   starts), for half a second, then the whole screen fades away.
 
    Only in the installed app (opened from the home-screen icon, on iPhone or
    Android): the CSS in globals.css shows it under
@@ -13,7 +14,7 @@
    skip it.
 
    On Android, Chrome's own launch screen before this uses the manifest's
-   background_color (the same bronze). */
+   background_color (the same black). */
 import { readFileSync } from "node:fs";
 import path from "node:path";
 

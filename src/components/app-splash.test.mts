@@ -26,8 +26,9 @@ test("the splash shows only in the installed app, never on the website", () => {
   assert.match(css, /pointer-events: none;/);
 });
 
-test("a full-screen bronze holds for 0.5 s, then the whole screen fades away evenly", () => {
-  assert.match(css, /background-color: var\(--color-bronze\);/);
+test("a full-screen black holds for 0.5 s, then the whole screen fades away evenly", () => {
+  // Black, to carry straight on from the black screen iPhone shows at launch.
+  assert.match(css, /\.app-splash \{\s*position: fixed;[\s\S]*?background-color: #000;\s*color: var\(--color-cream\);/);
   assert.match(css, /animation: app-splash-out 400ms ease-in-out 500ms forwards;/);
   assert.match(css, /@keyframes app-splash-out \{\s*to \{\s*opacity: 0;\s*visibility: hidden;/);
 });
@@ -47,6 +48,6 @@ test("the splash shows the logo mark and the name in the middle, hidden from scr
   assert.match(css, /align-items: center;\s*justify-content: center;/);
 });
 
-test("Android's own launch screen uses the same bronze as the splash", () => {
-  assert.match(manifest, /background_color: "#b45817"/);
+test("Android's own launch screen uses the same black as the splash", () => {
+  assert.match(manifest, /background_color: "#000000"/);
 });
