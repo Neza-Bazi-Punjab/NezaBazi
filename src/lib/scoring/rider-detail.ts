@@ -95,9 +95,8 @@ const selectWithParents = async <T>(
 
 /* A team rider has no profile id of their own on the row. The leader is the
    account that registered the team, so `teams.leader_profile_id` is theirs.
-   Anyone else is found only if they also hold a solo entry under the same
-   email (identity is the email address); otherwise the photo is skipped
-   rather than scanning every Auth user. */
+   Anyone else is found by email (identity is the email address): a solo
+   entry under it, or their own confirmed account. Otherwise no photo. */
 const findMemberProfileId = async (
   client: ServiceRoleClient,
   member: MemberRow,

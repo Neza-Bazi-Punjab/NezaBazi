@@ -372,6 +372,20 @@ test("the desk shows rider photos through the same signed-URL helper as commenta
   assert.match(checkInRoute, /map\(async \(\{ email, \.\.\.teammate \}\)/);
   assert.match(checkInRoute, /return \{ \.\.\.teammate, headshot_url \};/);
 
+  // A teammate without a solo entry is still found through their own Auth
+  // account, but only one whose email address is confirmed, so nobody can
+  // sign up under a teammate's address and show their own photo instead.
+  assert.match(headshots, /auth\.admin\.listUsers\(/);
+  assert.match(headshots, /user\.email_confirmed_at/);
+  const lookup = headshots.slice(headshots.indexOf("export const findProfileIdByEmail"));
+  assert.ok(
+    lookup.indexOf('from("solo_registrations")') < lookup.indexOf("loadConfirmedAuthEmails(client)"),
+    "the solo-entry lookup runs before the Auth account lookup"
+  );
+
+  // The team code email tells riders where to add the photo and why.
+  assert.match(codeEmail, /add your photo under My Account/);
+
   // A missing or broken photo falls back to initials, never a broken image.
   assert.match(panel, /onError=\{\(\) => setFailedUrl\(url\)\}/);
   assert.match(panel, /initials\(name\)/);
