@@ -71,7 +71,7 @@ test("the panel lists the Safari steps, with an extra one for in-app browsers", 
 test("the home-screen icon opens the site full screen, named Neza Bazi", () => {
   assert.match(
     layout,
-    /appleWebApp: \{\s*capable: true,\s*title: "Neza Bazi",\s*statusBarStyle: "default",/
+    /appleWebApp: \{ capable: true, title: "Neza Bazi", statusBarStyle: "default" \}/
   );
 });
 

@@ -183,61 +183,27 @@ body {
   }
 }
 
-/* Installed-app launch screen (src/components/AppSplash.tsx). Hidden on the
-   ordinary website; in the installed app it covers the page as it opens.
-   Pure CSS, so it shows with the first paint.
-
-   Why two layers: iPhone colours the strip behind the clock from the
-   full-screen layer at the top of the screen (within a few pixels of it),
-   and only re-checks when such a layer disappears, then fades the strip
-   over ~0.1 s. (Tested on iOS 26.5: changing the layer's colour, or a band
-   inside it, does nothing; removing a layer does.) If the
-   splash simply vanished, the strip would lag bronze over the page. So:
-   - .app-splash-edge (touching the top, bronze) disappears at 0.40 s.
-     The splash below starts 8px lower, so iPhone now picks the navbar and
-     turns the strip sand while the bronze screen is still showing;
-   - 0.45 s: the logo and name fade out over 0.2 s;
-   - 0.70 s: .app-splash disappears in one step and the page shows, with
-     the strip already matching it. */
-.app-splash,
-.app-splash-edge {
+/* Installed-app launch screen (src/components/AppSplash.tsx): hidden on the
+   ordinary website; in the installed app a full-screen bronze with the logo
+   in the middle, held for 0.5 s, then the whole screen fades away evenly
+   over 0.4 s. Pure CSS, so it shows with the first paint. */
+.app-splash {
   display: none;
 }
 
 @media (display-mode: standalone) {
-  .app-splash,
-  .app-splash-edge {
+  .app-splash {
     position: fixed;
     inset: 0;
     z-index: 100;
-    background-color: var(--color-bronze);
-    pointer-events: none;
-  }
-
-  .app-splash-edge {
-    display: block;
-    animation: app-splash-out 1ms step-end 400ms forwards;
-  }
-
-  .app-splash {
-    top: 8px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    background-color: var(--color-bronze);
     color: var(--color-cream);
-    animation: app-splash-out 1ms step-end 700ms forwards;
-  }
-
-  .app-splash-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    /* Centred on the whole screen, not just the page under the status bar
-       (the shift is set by the script in AppSplash.tsx), to line up with
-       the iPhone launch images. */
-    transform: translateY(var(--app-splash-shift, 0px));
-    animation: app-splash-fade 200ms ease-out 450ms forwards;
+    pointer-events: none;
+    animation: app-splash-out 400ms ease-in-out 500ms forwards;
   }
 }
 
@@ -247,26 +213,13 @@ body {
 }
 
 /* Already shown in this app session. */
-.app-splash-done .app-splash,
-.app-splash-done .app-splash-edge {
+.app-splash-done .app-splash {
   display: none;
-}
-
-@keyframes app-splash-fade {
-  to {
-    opacity: 0;
-  }
 }
 
 @keyframes app-splash-out {
   to {
     opacity: 0;
     visibility: hidden;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .app-splash-content {
-    animation: none;
   }
 }
