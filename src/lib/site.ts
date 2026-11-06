@@ -17,8 +17,7 @@ export const site = {
   email: "nezabaazipunjab@gmail.com",
   instagram: "https://www.instagram.com/nezabazipanjab/",
   socialHandle: "@nezabazipanjab",
-  // TODO: replace with the real channel URL once it exists.
-  youtube: "#" as string,
+  youtube: "https://youtube.com/@nezabazipunjab",
   // TODO: set to the rules explainer video (any YouTube URL). While empty,
   // the Rulebook page shows a "video coming soon" note instead of the player.
   rulesVideoUrl: "" as string,

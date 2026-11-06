@@ -403,7 +403,12 @@ export default function EventPage() {
                 <span className="font-display text-sm font-bold uppercase tracking-[0.15em] text-ink">
                   {`YouTube: `}
                 </span>
-                <a href={site.youtube} className="text-bronze underline">
+                <a
+                  href={site.youtube}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-bronze underline"
+                >
                   {site.name}
                 </a>
               </li>

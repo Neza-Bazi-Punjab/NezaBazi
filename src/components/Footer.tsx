@@ -83,6 +83,8 @@ export default function Footer() {
             <li>
               <a
                 href={site.youtube}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="flex items-center gap-2.5 hover:text-cream"
               >
                 <YoutubeIcon className="h-4 w-4 shrink-0" /> YouTube
