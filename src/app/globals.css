@@ -184,8 +184,14 @@ body {
 }
 
 /* Installed-app launch screen (src/components/AppSplash.tsx). Hidden on the
-   ordinary website; in the installed app it covers the page for ~0.55 s,
-   then fades out in 0.25 s. Pure CSS, so it shows with the first paint. */
+   ordinary website; in the installed app it covers the page as it opens.
+   Pure CSS, so it shows with the first paint.
+
+   Exit: the logo and name fade out (0.45 s hold, 0.2 s fade), then the
+   bronze background is removed in one step at 0.7 s. The background must
+   not fade: iPhone colours the strip behind the clock to match the top of
+   the page and does not update it mid-fade, so a fading background left
+   that strip bronze over the half-faded page. */
 .app-splash {
   display: none;
 }
@@ -202,7 +208,11 @@ body {
     background-color: var(--color-bronze);
     color: var(--color-cream);
     pointer-events: none;
-    animation: app-splash-out 250ms ease-out 550ms forwards;
+    animation: app-splash-out 1ms step-end 700ms forwards;
+  }
+
+  .app-splash > * {
+    animation: app-splash-fade 200ms ease-out 450ms forwards;
   }
 }
 
@@ -216,6 +226,12 @@ body {
   display: none;
 }
 
+@keyframes app-splash-fade {
+  to {
+    opacity: 0;
+  }
+}
+
 @keyframes app-splash-out {
   to {
     opacity: 0;
@@ -224,7 +240,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .app-splash {
-    animation-duration: 1ms;
+  .app-splash > * {
+    animation: none;
   }
 }
