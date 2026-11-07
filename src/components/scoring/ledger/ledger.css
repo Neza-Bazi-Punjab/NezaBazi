@@ -1,0 +1,38 @@
+/* The judges' and commentary panels ("Live Scoring 6e"): cream paper, brown
+   rules, condensed type with mono labels. Colours are the design's own. */
+.ledger {
+  --ledger-page: #f3e8d6;
+  --ledger-panel: #faf4ea;
+  --ledger-side: #f7eee0;
+  --ledger-ink: #2e1d0e;
+  --ledger-rule: #5a3517;
+  --ledger-muted: #7a5a3a;
+  --ledger-faint: #b89c76;
+  --ledger-hair: #e4d2b4;
+  --ledger-chip: #cdb894;
+  --ledger-bronze: #b45817;
+  --ledger-green: #3d7a2e;
+  --ledger-red: #b0301c;
+  --ledger-carry: #c0301c;
+  --ledger-miss: #8a7f6d;
+  --ledger-pick: #ead9bb;
+  --ledger-hl: #eadcc4;
+  --ledger-paper: #fbf5ec;
+
+  background: var(--ledger-page);
+  color: var(--ledger-ink);
+  font-family: var(--font-plex-condensed), "IBM Plex Sans Condensed", "Arial Narrow", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger .mono {
+  font-family: var(--font-plex-mono), "IBM Plex Mono", ui-monospace, monospace;
+}
+
+.ledger button:focus-visible,
+.ledger a:focus-visible,
+.ledger input:focus-visible,
+.ledger textarea:focus-visible {
+  outline: 3px solid var(--ledger-bronze);
+  outline-offset: 2px;
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { rosterFor } from "@/components/scoring/format";
+import { callUpRoster } from "@/components/scoring/format";
 import { MessageBar, OverlayFrame, useOverlayState } from "../overlay-parts";
 
 /* Full-frame "Pool B — get ready" roster, shown only while the display mode
@@ -28,7 +28,7 @@ export default function PoolCallOverlay() {
     return <OverlayFrame name="pool-call" />;
   }
 
-  const entries = rosterFor(state.pool_rosters, called);
+  const entries = callUpRoster(state, called);
   const hasMembers = entries.some((entry) => (entry.members?.length ?? 0) > 0);
   const dense = entries.length > 12 || (hasMembers && entries.length > 6);
   const next = state.next_pool_label;

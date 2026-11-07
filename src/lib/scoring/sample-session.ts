@@ -12,12 +12,15 @@
 // every read is assembled here in the same shapes as server.ts builds from
 // the database.
 //
-// It never touches the database and never returns real data: the riders,
-// results and the commentators' background facts below are invented, seeded
-// from the rehearsal data in vmix-sample.ts. The only imports are the scoring
-// types, the sample data, the pure engine and the pure pool helpers from
-// server.ts (the same ones vmix-sample.ts uses); no database client is
-// created or called anywhere in this file.
+// It never touches the database and never returns real data: the 30 riders
+// and the commentators' background facts below are invented. A session starts
+// at the top of Qualification (Pools A, B and C of ten, three attempts,
+// ridden round by round) with nobody ridden yet, and the engine builds each
+// Aarhi round from the riders who carried, through to the Final
+// (SampleProgression in sample-engine.ts), so a practice runs the whole day.
+// The only imports are the scoring types, the pure engine and the pure pool
+// helpers from server.ts; no database client is created or called anywhere
+// in this file.
 //
 // Sessions live in this server process's memory (on globalThis, so every
 // route shares one store and a dev-server hot reload keeps it), bounded by
@@ -31,6 +34,8 @@ import "server-only";
 import {
   createSampleEngine,
   computeSampleLeaderboard,
+  overridesFor,
+  sampleCalledPoolAfter,
   type SampleEngine,
   type SampleSeed,
 } from "@/lib/scoring/sample-engine";
@@ -46,7 +51,6 @@ import {
   type CommentaryState,
   type JudgeState,
   type LeaderboardRow,
-  type LiveState,
   type LiveUpdateRequest,
   type PublicLiveState,
   type RiderDetail,
@@ -54,59 +58,149 @@ import {
   type ScoringRound,
   type ScoringRun,
 } from "@/lib/scoring/types";
-import {
-  sampleAllRuns,
-  samplePublicLiveState as rehearsalLiveState,
-  sampleRounds,
-} from "@/lib/scoring/vmix-sample";
 
 export { SampleRefusal } from "@/lib/scoring/sample-engine";
 
 /* Seed --------------------------------------------------------------------------- */
 
-const MINUTE = 60_000;
+/* Commentators' background facts for the sample riders. Invented, like the
+   riders themselves: nothing here is a real person. */
+type SampleFacts = Pick<
+  RiderDetail,
+  "father_name" | "mother_name" | "age" | "years_experience" | "horse_breed" | "horse_age"
+>;
 
-/* The rehearsal data is stamped on event day; training shifts it so the last
-   seeded result happened two minutes before the session started, and every
-   result recorded in training is newer than all of it. */
-const shiftIso = (value: string, offset: number) =>
-  new Date(Date.parse(value) + offset).toISOString();
+type TrainingRider = {
+  name: string;
+  horse: string;
+  location: string;
+  facts: SampleFacts;
+};
 
+const rider = (
+  name: string,
+  horse: string,
+  location: string,
+  father_name: string,
+  mother_name: string,
+  age: number,
+  years_experience: number,
+  horse_breed: string,
+  horse_age: number
+): TrainingRider => ({
+  name,
+  horse,
+  location: `${location}, Punjab, India`,
+  facts: { father_name, mother_name, age, years_experience, horse_breed, horse_age },
+});
+
+/* Ten per pool, in start order: Pool A, then B, then C. */
+export const TRAINING_RIDERS: readonly TrainingRider[] = [
+  rider("Harpreet Singh Sandhu", "Toofan", "Ladhewali, Jalandhar", "Gurmail Singh Sandhu", "Baljit Kaur", 27, 9, "Marwari", 8),
+  rider("Gurjeet Singh Brar", "Badal", "Kotkapura, Faridkot", "Jagdev Singh Brar", "Surinder Kaur", 31, 12, "Kathiawari", 10),
+  rider("Manpreet Kaur Gill", "Sultan", "Jagraon, Ludhiana", "Jagtar Singh Gill", "Paramjit Kaur", 24, 6, "Thoroughbred cross", 7),
+  rider("Jaswinder Singh Dhillon", "Heera", "Patti, Tarn Taran", "Harbhajan Singh Dhillon", "Gurmeet Kaur", 35, 15, "Marwari", 11),
+  rider("Amandeep Singh Randhawa", "Chetak", "Batala, Gurdaspur", "Kuldip Singh Randhawa", "Rajwinder Kaur", 22, 4, "Kathiawari", 6),
+  rider("Kulwant Singh Virk", "Raja", "Nabha, Patiala", "Mohinder Singh Virk", "Charanjit Kaur", 29, 10, "Indian Thoroughbred", 9),
+  rider("Balraj Singh Sidhu", "Moti", "Dharamkot, Moga", "Darshan Singh Sidhu", "Manjit Kaur", 26, 7, "Marwari", 8),
+  rider("Navjot Singh Grewal", "Shera", "Samrala, Ludhiana", "Avtar Singh Grewal", "Kulwinder Kaur", 33, 13, "Sindhi", 12),
+  rider("Gurpreet Singh Bains", "Kesari", "Mehal Kalan, Barnala", "Nirmal Singh Bains", "Harjit Kaur", 34, 14, "Marwari", 10),
+  rider("Ravinder Singh Johal", "Bijli", "Nakodar, Jalandhar", "Sarwan Singh Johal", "Amarjit Kaur", 28, 8, "Kathiawari", 7),
+  rider("Sukhwinder Singh Sekhon", "Arjun", "Malerkotla, Sangrur", "Joginder Singh Sekhon", "Narinder Kaur", 30, 11, "Marwari", 9),
+  rider("Lakhwinder Singh Aulakh", "Pawan", "Ajnala, Amritsar", "Bachittar Singh Aulakh", "Jasvir Kaur", 25, 5, "Indian Thoroughbred", 6),
+  rider("Parminder Singh Bal", "Noor", "Phagwara, Kapurthala", "Gurdev Singh Bal", "Ranjit Kaur", 36, 16, "Kathiawari", 12),
+  rider("Daljit Singh Kang", "Sikandar", "Banga, Nawanshahr", "Piara Singh Kang", "Satwant Kaur", 27, 7, "Marwari", 8),
+  rider("Tejinder Singh Sahota", "Chandni", "Garhshankar, Hoshiarpur", "Karnail Singh Sahota", "Davinder Kaur", 23, 4, "Marwari", 6),
+  rider("Hardeep Singh Mann", "Rustam", "Dhuri, Sangrur", "Mukhtiar Singh Mann", "Balwinder Kaur", 32, 12, "Sindhi", 11),
+  rider("Simranjit Kaur Bajwa", "Heer", "Qadian, Gurdaspur", "Charanjit Singh Bajwa", "Harpreet Kaur", 21, 5, "Kathiawari", 7),
+  rider("Arshdeep Singh Cheema", "Shahbaz", "Rayya, Amritsar", "Lakhbir Singh Cheema", "Sukhwinder Kaur", 25, 9, "Nukra", 8),
+  rider("Taranjit Singh Pannu", "Kesar", "Khadoor Sahib, Tarn Taran", "Joginder Singh Pannu", "Narinder Kaur", 30, 13, "Marwari", 11),
+  rider("Lovepreet Singh Kahlon", "Sher", "Dera Baba Nanak, Gurdaspur", "Darshan Singh Kahlon", "Rajinder Kaur", 20, 4, "Thoroughbred cross", 6),
+  rider("Inderjit Singh Toor", "Babbar", "Jandiala Guru, Amritsar", "Major Singh Toor", "Parminder Kaur", 37, 18, "Marwari", 13),
+  rider("Kirandeep Kaur Dhaliwal", "Noori", "Rampura Phul, Bathinda", "Tarsem Singh Dhaliwal", "Baljit Kaur", 23, 6, "Kathiawari", 7),
+  rider("Jasmeet Singh Bhullar", "Shamsher", "Zira, Ferozepur", "Gurnam Singh Bhullar", "Amarjit Kaur", 28, 11, "Nukra", 10),
+  rider("Sukhpreet Singh Chahal", "Hawa", "Samana, Patiala", "Avtar Singh Chahal", "Kamaljit Kaur", 26, 8, "Marwari", 9),
+  rider("Gurwinder Singh Hundal", "Raftar", "Baba Bakala, Amritsar", "Balkar Singh Hundal", "Gurmeet Kaur", 33, 15, "Indian Thoroughbred", 10),
+  rider("Rajbir Singh Dhindsa", "Toofani", "Sunam, Sangrur", "Surjit Singh Dhindsa", "Manjit Kaur", 29, 10, "Marwari", 8),
+  rider("Harjot Singh Sangha", "Moti Lal", "Moga, Moga", "Kashmir Singh Sangha", "Paramjit Kaur", 24, 7, "Kathiawari", 7),
+  rider("Bikramjit Singh Ghuman", "Sardar", "Fatehgarh Churian, Gurdaspur", "Jaswant Singh Ghuman", "Surjit Kaur", 31, 12, "Sindhi", 12),
+  rider("Prabhjot Kaur Mangat", "Rani", "Raikot, Ludhiana", "Harnek Singh Mangat", "Kuldeep Kaur", 22, 5, "Marwari", 6),
+  rider("Satnam Singh Deol", "Pahalwan", "Sri Hargobindpur, Gurdaspur", "Gurbachan Singh Deol", "Jagir Kaur", 35, 17, "Nukra", 11),
+];
+
+const POOL_SIZE = 10;
+/* Three or fewer riders through: the next round is the Final. */
+const FINAL_AT = 3;
+
+const trainingId = (prefix: string, index: number) =>
+  `5a3b1e00-0000-4000-${prefix}-${String(index).padStart(12, "0")}`;
+
+export const TRAINING_QUALIFICATION_ROUND_ID = trainingId("7001", 1);
+
+/* The top of the day: Qualification live, three attempts, Pools A, B and C of
+   ten laid out round by round (Round 1 for A, B, C, then Round 2, then
+   Round 3, as the database lays it out: 20261107100000), nobody ridden and
+   nobody on course — the judge starts with "Call next pool". */
 const buildSeed = (): SampleSeed => {
-  const rounds = sampleRounds();
-  const runs = sampleAllRuns().map((run) => ({ ...run }));
-  const live: LiveState = rehearsalLiveState().live ?? {
-    current_round_id: null,
-    current_run_id: null,
-    called_pool_label: null,
-    display_mode: "scoreboard",
-    message: null,
-    updated_at: new Date().toISOString(),
+  const createdAt = new Date(Date.now() - 60 * 60_000).toISOString();
+  const qualification: ScoringRound = {
+    id: TRAINING_QUALIFICATION_ROUND_ID,
+    event_type: "single",
+    name: "Qualification",
+    round_number: 0,
+    attempts_per_rider: 3,
+    target_points: null,
+    status: "live",
+    sort_order: 1,
+    pool_size: POOL_SIZE,
+    podium: null,
+    created_at: createdAt,
+    updated_at: createdAt,
   };
-  const latest = Math.max(
-    Date.parse(live.updated_at),
-    ...runs.map((run) => (run.scored_at ? Date.parse(run.scored_at) : 0))
-  );
-  const offset = Date.now() - 2 * MINUTE - latest;
+  const runs: ScoringRun[] = [];
 
-  return structuredClone({
-    rounds: rounds.map((round) => ({
-      ...round,
-      created_at: shiftIso(round.created_at, offset),
-      updated_at: shiftIso(round.updated_at, offset),
-    })),
-    runs: runs.map((run) => ({
-      ...run,
-      created_at: shiftIso(run.created_at, offset),
-      updated_at: shiftIso(run.updated_at, offset),
-      scored_at: run.scored_at ? shiftIso(run.scored_at, offset) : null,
-    })),
+  for (let attempt = 1; attempt <= qualification.attempts_per_rider; attempt += 1) {
+    TRAINING_RIDERS.forEach((entry, index) => {
+      const registrationId = trainingId("7002", index + 1);
+
+      runs.push({
+        id: trainingId("7003", runs.length + 1),
+        round_id: qualification.id,
+        run_order: runs.length + 1,
+        attempt_number: attempt,
+        pool_label: String.fromCharCode(65 + Math.floor(index / POOL_SIZE)),
+        entrant_key: `solo:${registrationId}`,
+        solo_registration_id: registrationId,
+        team_member_id: null,
+        team_id: null,
+        rider_name: entry.name,
+        horse_name: entry.horse,
+        team_name: null,
+        rider_location: entry.location,
+        status: "pending",
+        result: null,
+        points: null,
+        scored_by: null,
+        scored_at: null,
+        created_at: createdAt,
+        updated_at: createdAt,
+      });
+    });
+  }
+
+  return {
+    rounds: [qualification],
+    runs,
     live: {
-      ...live,
+      current_round_id: qualification.id,
+      current_run_id: null,
+      called_pool_label: null,
+      display_mode: "scoreboard",
       message: "Training mode — sample riders, not real results",
-      updated_at: shiftIso(live.updated_at, offset),
+      updated_at: createdAt,
     },
-  });
+    progression: { poolSize: POOL_SIZE, finalAt: FINAL_AT },
+  };
 };
 
 /* Sessions ----------------------------------------------------------------------- */
@@ -122,7 +216,27 @@ export const TRAINING_IDLE_MS = 6 * 60 * 60 * 1000;
 
 const globalStore = globalThis as typeof globalThis & {
   __nezaBaziTrainingSessions?: TrainingStore<SampleEngine>;
+  __nezaBaziTrainingVersion?: string;
 };
+
+/* The store outlives a hot reload (it sits on globalThis), and with it the
+   seed and the engine it was built with. In development, when the sample
+   riders or the engine's rules change on disk, start a fresh store so
+   practice runs on the new code. Compared by content, not by identity: the
+   dev server can evaluate this module once per route bundle, and those must
+   keep sharing one store. In production nothing changes while the process
+   runs, so this never fires. */
+const storeVersion = () =>
+  process.env.NODE_ENV === "production"
+    ? "production"
+    : [String(createSampleEngine), String(sampleCalledPoolAfter), String(buildSeed), JSON.stringify(TRAINING_RIDERS)].join("\n");
+
+const version = storeVersion();
+
+if (globalStore.__nezaBaziTrainingVersion !== version) {
+  globalStore.__nezaBaziTrainingSessions = undefined;
+  globalStore.__nezaBaziTrainingVersion = version;
+}
 
 const sessions = (): TrainingStore<SampleEngine> =>
   (globalStore.__nezaBaziTrainingSessions ??= createTrainingStore(
@@ -151,8 +265,10 @@ export const setLive = (key: string, payload: LiveUpdateRequest) =>
 export const callPool = (key: string, roundId: string, poolLabel: string) =>
   session(key).callPool(roundId, poolLabel);
 
-/* Back to the start for this session only: the rehearsal state,
-   mid-qualification. */
+export const takeOut = (key: string, roundId: string, entrantKey: string, out: boolean) =>
+  session(key).takeOut(roundId, entrantKey, out);
+
+/* Back to the start for this session only: the top of Qualification. */
 export const reset = (key: string) => {
   sessions().reset(key);
 };
@@ -203,10 +319,12 @@ export const assembleSnapshot = (all: SampleSeed): Assembled => {
       up_next: runs
         .filter((run) => run.status === "pending" && run.run_order > after)
         .slice(0, UP_NEXT_LIMIT),
-      leaderboard: currentRound ? computeSampleLeaderboard(currentRound, runs) : [],
+      leaderboard: currentRound
+        ? computeSampleLeaderboard(currentRound, runs, overridesFor(all.overrides, currentRound.id))
+        : [],
       pools,
       pool_rosters: buildPoolRosters(runs),
-      next_pool_label: nextPoolLabel(pools, live.called_pool_label),
+      next_pool_label: nextPoolLabel(runs, live.called_pool_label, live.current_run_id),
       rounds,
     },
   };
@@ -225,34 +343,9 @@ export const sampleJudgeState = (key: string): JudgeState => {
   return { ...state, runs };
 };
 
-/* Commentators' background facts for the sample riders. Invented, like the
-   riders themselves: nothing here is a real person. */
-type SampleFacts = Pick<
-  RiderDetail,
-  "father_name" | "mother_name" | "age" | "years_experience" | "horse_breed" | "horse_age"
-> & { is_leader?: boolean };
-
-const SAMPLE_FACTS: Record<string, SampleFacts> = {
-  // Qualification (Single)
-  "Harpreet Singh Sandhu": { father_name: "Gurmail Singh Sandhu", mother_name: "Baljit Kaur", age: 27, years_experience: 9, horse_breed: "Marwari", horse_age: 8 },
-  "Gurjeet Singh Brar": { father_name: "Jagdev Singh Brar", mother_name: "Surinder Kaur", age: 31, years_experience: 12, horse_breed: "Kathiawari", horse_age: 10 },
-  "Manpreet Kaur Gill": { father_name: "Jagtar Singh Gill", mother_name: "Paramjit Kaur", age: 24, years_experience: 6, horse_breed: "Thoroughbred cross", horse_age: 7 },
-  "Jaswinder Singh Dhillon": { father_name: "Harbhajan Singh Dhillon", mother_name: "Gurmeet Kaur", age: 35, years_experience: 15, horse_breed: "Marwari", horse_age: 11 },
-  "Amandeep Singh Randhawa": { father_name: "Kuldip Singh Randhawa", mother_name: "Rajwinder Kaur", age: 22, years_experience: 4, horse_breed: "Kathiawari", horse_age: 6 },
-  "Kulwant Singh Virk": { father_name: "Mohinder Singh Virk", mother_name: "Charanjit Kaur", age: 29, years_experience: 10, horse_breed: "Indian Thoroughbred", horse_age: 9 },
-  "Balraj Singh Sidhu": { father_name: "Darshan Singh Sidhu", mother_name: "Manjit Kaur", age: 26, years_experience: 7, horse_breed: "Marwari", horse_age: 8 },
-  "Navjot Singh Grewal": { father_name: "Avtar Singh Grewal", mother_name: "Kulwinder Kaur", age: 33, years_experience: 13, horse_breed: "Sindhi", horse_age: 12 },
-  // Section 1: Sher-e-Punjab
-  "Gurpreet Singh Bains": { father_name: "Nirmal Singh Bains", mother_name: "Harjit Kaur", age: 34, years_experience: 14, horse_breed: "Marwari", horse_age: 10, is_leader: true },
-  "Ravinder Singh Johal": { father_name: "Sarwan Singh Johal", mother_name: "Amarjit Kaur", age: 28, years_experience: 8, horse_breed: "Kathiawari", horse_age: 7 },
-  "Sukhwinder Singh Sekhon": { father_name: "Joginder Singh Sekhon", mother_name: "Narinder Kaur", age: 30, years_experience: 11, horse_breed: "Marwari", horse_age: 9 },
-  "Lakhwinder Singh Aulakh": { father_name: "Bachittar Singh Aulakh", mother_name: "Jasvir Kaur", age: 25, years_experience: 5, horse_breed: "Indian Thoroughbred", horse_age: 6 },
-  // Section 1: Doaba Riders
-  "Parminder Singh Bal": { father_name: "Gurdev Singh Bal", mother_name: "Ranjit Kaur", age: 36, years_experience: 16, horse_breed: "Kathiawari", horse_age: 12, is_leader: true },
-  "Daljit Singh Kang": { father_name: "Piara Singh Kang", mother_name: "Satwant Kaur", age: 27, years_experience: 7, horse_breed: "Marwari", horse_age: 8 },
-  "Tejinder Singh Sahota": { father_name: "Karnail Singh Sahota", mother_name: "Davinder Kaur", age: 23, years_experience: 4, horse_breed: "Marwari", horse_age: 6 },
-  "Hardeep Singh Mann": { father_name: "Mukhtiar Singh Mann", mother_name: "Balwinder Kaur", age: 32, years_experience: 12, horse_breed: "Sindhi", horse_age: 11 },
-};
+const SAMPLE_FACTS: Record<string, SampleFacts & { is_leader?: boolean }> = Object.fromEntries(
+  TRAINING_RIDERS.map((entry) => [entry.name, entry.facts])
+);
 
 /* loadRiderDetails over the session: the run's own snapshot plus the facts
    above, and every run this rider has in the session as `today`. */
@@ -302,14 +395,15 @@ const riderDetail = (run: ScoringRun, all: SampleSeed): RiderDetail => {
 
 /* GET /api/commentary/state?sample=1. */
 export const sampleCommentaryState = (key: string): CommentaryState => {
-  const { state, all } = assemble(key);
+  const { state, all, runs } = assemble(key);
   const nextRuns = state.up_next.slice(0, UP_NEXT_RIDERS);
   const leaderboards: Record<string, LeaderboardRow[]> = {};
 
   for (const round of all.rounds) {
     leaderboards[round.id] = computeSampleLeaderboard(
       round,
-      all.runs.filter((run) => run.round_id === round.id)
+      all.runs.filter((run) => run.round_id === round.id),
+      overridesFor(all.overrides, round.id)
     );
   }
 
@@ -318,5 +412,6 @@ export const sampleCommentaryState = (key: string): CommentaryState => {
     current_rider: state.current_run ? riderDetail(state.current_run, all) : null,
     up_next_riders: nextRuns.map((run) => ({ ...run, rider: riderDetail(run, all) })),
     leaderboards_by_round: leaderboards,
+    runs,
   };
 };

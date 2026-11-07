@@ -1,10 +1,8 @@
 // Writes from the judges' panel and the wording of their confirm prompts.
 // Kept apart from the panel's JSX so the rules are easy to read in one place.
-import { DISPLAY_MODE_CHOICES } from "@/components/scoring/format";
 import {
   RESULT_LABELS,
   RESULT_POINTS,
-  type DisplayMode,
   type JudgeState,
   type RunResult,
   type ScoringRound,
@@ -26,18 +24,21 @@ export type JudgeAction =
   | { kind: "clear"; run: ScoringRun; returnToRun: boolean }
   | { kind: "void"; run: ScoringRun }
   | { kind: "restore"; run: ScoringRun }
-  | { kind: "call"; roundId: string; pool: string }
+  /* `attempt`: the round (Round 1 / 2 / 3) the pool is called for, when
+     riders have more than one attempt; only the wording uses it. */
+  | { kind: "call"; roundId: string; pool: string; attempt?: number | null }
   | { kind: "current"; run: ScoringRun }
   | { kind: "round"; round: ScoringRound }
-  | { kind: "scoreboard" }
-  /* The Screens sheet: what /live and the overlays show, and the message. */
-  | { kind: "display"; mode: DisplayMode }
-  | { kind: "message"; message: string | null }
+  /* The Skipped box: a skipped (or passed-over) ride goes on course now. */
+  | { kind: "ride_now"; run: ScoringRun }
+  /* Take out for the rest of the round, or Bring back. */
+  | { kind: "take_out"; roundId: string; entrantKey: string; name: string; out: boolean }
   /* Training mode only: the caller's practice session back to the start. */
   | { kind: "reset"; scope: TrainingScope };
 
-const modeLabel = (mode: DisplayMode) =>
-  DISPLAY_MODE_CHOICES.find((choice) => choice.mode === mode)?.label ?? mode;
+/* "Round 2 · Pool A", or "Pool A" when riders have one attempt. */
+const callName = (action: { pool: string; attempt?: number | null }) =>
+  action.attempt ? `Round ${action.attempt} · Pool ${action.pool}` : `Pool ${action.pool}`;
 
 const resultWithPoints = (result: RunResult) =>
   `${RESULT_LABELS[result]} ${RESULT_POINTS[result]}`;
@@ -73,8 +74,8 @@ export const describeAction = (
       };
     case "void":
       return {
-        question: `Skip ${action.run.rider_name}'s run (run ${action.run.run_order})? It will not be scored.`,
-        confirm: "Skip run",
+        question: `Skip ${action.run.rider_name} for now? They wait in the Skipped box until you press Ride now.`,
+        confirm: "Skip",
       };
     case "restore":
       return {
@@ -83,7 +84,7 @@ export const describeAction = (
       };
     case "call":
       return {
-        question: `Call Pool ${action.pool} to the start? Every screen shows the Pool ${action.pool} roster until the first result.`,
+        question: `Call ${callName(action)} to the start? Every screen shows the Pool ${action.pool} roster until the first result.`,
         confirm: `Call Pool ${action.pool}`,
       };
     case "current":
@@ -96,20 +97,21 @@ export const describeAction = (
         question: `Make "${action.round.name}" the live round? Nobody is on course until you call a pool or pick a rider.`,
         confirm: "Switch round",
       };
-    case "scoreboard":
+    case "ride_now":
       return {
-        question: "Return every screen to the scoreboard now?",
-        confirm: "Show scoreboard",
+        question: `Put ${action.run.rider_name} on course now?`,
+        confirm: "Ride now",
       };
-    case "display":
-      return {
-        question: `Switch every screen to "${modeLabel(action.mode)}"?`,
-        confirm: "Switch screens",
-      };
-    case "message":
-      return action.message
-        ? { question: `Show "${action.message}" on every screen?`, confirm: "Show message" }
-        : { question: "Remove the message from every screen?", confirm: "Clear message" };
+    case "take_out":
+      return action.out
+        ? {
+            question: `Take ${action.name} out? They will not ride again in this round and show as Out.`,
+            confirm: "Take out",
+          }
+        : {
+            question: `Bring ${action.name} back? Their rides in this round go back on the list.`,
+            confirm: "Bring back",
+          };
     case "reset":
       return {
         question: TRAINING_RESET_QUESTION[action.scope],
@@ -125,21 +127,19 @@ export const successMessage = (action: JudgeAction) => {
     case "clear":
       return `Result cleared for ${action.run.rider_name}.`;
     case "void":
-      return `Run skipped for ${action.run.rider_name}.`;
+      return `${action.run.rider_name} skipped — in the Skipped box.`;
     case "restore":
       return `Run restored for ${action.run.rider_name}.`;
     case "call":
-      return `Pool ${action.pool} called.`;
+      return `${callName(action)} called.`;
     case "current":
       return `${action.run.rider_name} is on course.`;
     case "round":
       return `"${action.round.name}" is now the live round.`;
-    case "scoreboard":
-      return "Screens are back on the scoreboard.";
-    case "display":
-      return `Screens now show: ${modeLabel(action.mode)}.`;
-    case "message":
-      return action.message ? "Message is on the screens." : "Message cleared.";
+    case "ride_now":
+      return `${action.run.rider_name} is on course.`;
+    case "take_out":
+      return action.out ? `${action.name} taken out.` : `${action.name} brought back.`;
     case "reset":
       return "Training data reset.";
   }
@@ -197,7 +197,8 @@ export const stateFromResponse = (payload: unknown): JudgeState | null =>
 export const withTrainingFlag = (url: string) =>
   `${url}${url.includes("?") ? "&" : "?"}sample=1`;
 
-/* Sends one action — always a single request, so an action either happens
+/* Sends one action — a single request (Ride now on a skipped ride is the one
+   exception, see below), so an action either happens
    completely or not at all. Returns the newest JudgeState the server reported
    (null if a response lacked one — the caller then refetches). With
    `training`, every request goes to the training session instead. */
@@ -252,17 +253,24 @@ export const sendAction = async (
       return stateFromResponse(
         await post("/api/judge/live", { current_round_id: action.round.id })
       );
-    case "scoreboard":
+    case "ride_now":
+      // A skipped ride is restored first, then put on course: the one action
+      // that takes two requests. If the second fails, the ride simply waits
+      // in the Skipped box again.
+      if (action.run.status === "void") {
+        await post("/api/judge/status", { run_id: action.run.id, status: "pending" });
+      }
+
       return stateFromResponse(
-        await post("/api/judge/live", { display_mode: "scoreboard" })
+        await post("/api/judge/live", { current_run_id: action.run.id })
       );
-    case "display":
+    case "take_out":
       return stateFromResponse(
-        await post("/api/judge/live", { display_mode: action.mode })
-      );
-    case "message":
-      return stateFromResponse(
-        await post("/api/judge/live", { message: action.message })
+        await post("/api/judge/take-out", {
+          round_id: action.roundId,
+          entrant_key: action.entrantKey,
+          out: action.out,
+        })
       );
     case "reset":
       // Only ever the training session: the route answers 404 to anything else.

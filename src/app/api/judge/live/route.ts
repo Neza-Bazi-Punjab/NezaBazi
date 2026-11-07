@@ -1,5 +1,7 @@
 // POST /api/judge/live — move the live pointer or change what the screens
-// show. Judges and administrators only.
+// show. Judges and administrators only; what the screens show
+// (display_mode, message) is for administrators — the stream team and the
+// admin page control the screens, not the judges' panel.
 //
 // A partial update: only the keys present (current_round_id, current_run_id,
 // called_pool_label, display_mode, message) are applied, and the database
@@ -16,8 +18,23 @@ import {
 import { resolveSampleAccess, sampleWriteResponse } from "@/lib/scoring/sample-mode";
 import { setLive, sampleJudgeState } from "@/lib/scoring/sample-session";
 import { buildJudgeStateAfterWrite } from "@/lib/scoring/server";
-import type { LiveState } from "@/lib/scoring/types";
+import type { LiveState, LiveUpdateRequest } from "@/lib/scoring/types";
 import { parseLiveUpdateRequest } from "@/lib/scoring/validation";
+
+const JUDGE_SCREENS_REFUSAL =
+  "The screens are controlled by the stream team, not the judges' panel.";
+
+const changesScreens = (value: LiveUpdateRequest) =>
+  Object.prototype.hasOwnProperty.call(value, "display_mode") ||
+  Object.prototype.hasOwnProperty.call(value, "message");
+
+/* Training is the judges' panel only, so it never changes the screens. */
+const parseJudgeLiveUpdate = (raw: unknown) => {
+  const parsed = parseLiveUpdateRequest(raw);
+  return parsed.ok && changesScreens(parsed.value)
+    ? { ok: false as const, error: JUDGE_SCREENS_REFUSAL }
+    : parsed;
+};
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +52,7 @@ export async function POST(request: Request) {
   }
 
   if (training.kind === "training") {
-    return sampleWriteResponse(request, parseLiveUpdateRequest, (value) => ({
+    return sampleWriteResponse(request, parseJudgeLiveUpdate, (value) => ({
       live: setLive(training.session, value),
       state: sampleJudgeState(training.session),
     }));
@@ -57,6 +74,10 @@ export async function POST(request: Request) {
 
   if (!parsed.ok) {
     return jsonError(parsed.error, 400);
+  }
+
+  if (access.role !== "admin" && changesScreens(parsed.value)) {
+    return jsonError(JUDGE_SCREENS_REFUSAL, 403);
   }
 
   const serviceSupabase = createServiceRoleClient();

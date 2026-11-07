@@ -37,6 +37,7 @@ test("every expected route exists", () => {
     "src/app/api/judge/score/route.ts",
     "src/app/api/judge/state/route.ts",
     "src/app/api/judge/status/route.ts",
+    "src/app/api/judge/take-out/route.ts",
   ]);
   assert.deepEqual(commentaryRoutes, ["src/app/api/commentary/state/route.ts"]);
   assert.deepEqual(adminRoutes, [

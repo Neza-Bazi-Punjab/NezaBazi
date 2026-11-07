@@ -1,284 +1,148 @@
 "use client";
 
-/* The commentators' panel: a laptop or tablet in landscape at the commentary
-   table. Who is on course (with everything an announcer needs to introduce
-   them), who is next, and how the pool and round stand. Read-only. */
+/* The commentators' panel ("Live Scoring 6e", screen 7b): a laptop or tablet
+   in landscape at the commentary table. Who is on course with everything an
+   announcer needs to introduce them, how their pool stands, how far the round
+   has got, and who and which pool come next. Read-only. Below 1280px the
+   three columns stack into one. */
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import ConnectionBadge from "@/components/scoring/ConnectionBadge";
-import LeaderboardTable from "@/components/scoring/LeaderboardTable";
-import NotConfiguredNotice from "@/components/scoring/NotConfiguredNotice";
-import PoolRoster from "@/components/scoring/PoolRoster";
-import ResultBadge from "@/components/scoring/ResultBadge";
-import { useResultFlash } from "@/components/scoring/ResultFlash";
+import { useMemo } from "react";
 import {
-  attemptTextIfMany,
-  eventTypeName,
+  DISPLAY_MODE_CHOICES,
   normalizeCommentaryState,
-  nowAndNextPools,
-  nowNextText,
   poolName,
-  rosterFor,
-  roundProgress,
-  runSubtitle,
+  standingsFor,
 } from "@/components/scoring/format";
+import {
+  LEDGER_ROOT,
+  PoolList,
+  RoundChips,
+  StatusBar,
+  TopStrip,
+} from "@/components/scoring/ledger/Ledger";
+import {
+  attemptMarks,
+  blockPosition,
+  nextPoolBlock,
+  poolSummaries,
+  ridingPoolBlock,
+  roundChips,
+  type AttemptMark,
+} from "@/lib/scoring/blocks";
 import {
   RESULT_LABELS,
   RESULT_POINTS,
-  shortLocation,
   type CommentaryState,
-  type DisplayMode,
-  type LeaderboardRow,
   type RiderDetail,
-  type ScoringRound,
+  type RunResult,
   type ScoringRun,
 } from "@/lib/scoring/types";
 import { plural } from "@/lib/scoring/format";
 import { TRAINING_BANNER, TRAINING_LABEL, type TrainingScope } from "@/lib/scoring/training";
 import { useLiveState } from "@/lib/scoring/use-live-state";
-import "@/components/scoring/scoring.css";
 
 const COMMENTARY_STATE_URL = "/api/commentary/state";
 
-const DISPLAY_MODE_TEXT: Record<DisplayMode, string> = {
-  scoreboard: "Scoreboard",
-  leaderboard: "Leaderboard",
-  rider: "Rider",
-  pool_call: "Pool call-up",
-  message: "Message only",
-  blank: "Hidden",
+const label = "mono text-[11px] uppercase text-[var(--ledger-muted)]";
+const sectionTitle = "border-t-[3px] border-[var(--ledger-rule)] pt-2 text-[16px] font-bold uppercase";
+
+/* Result colours on this screen: carried green, struck ink, miss faded. */
+const RESULT_COLOUR: Record<RunResult, string> = {
+  carry: "text-[var(--ledger-green)]",
+  strike: "text-[var(--ledger-ink)]",
+  miss: "text-[#a08a70]",
 };
 
-const label = "font-display text-xs font-semibold uppercase tracking-[0.2em] text-cream/65";
-
-/* Keeps a signed headshot URL steady while the same rider is on course, so a
-   refetch (which signs a fresh URL) does not reload the photo every few
-   seconds. Swaps to the newest URL if the kept one stops loading. */
-function useSteadyUrl(identity: string | null, url: string | null) {
-  const [kept, setKept] = useState<{ identity: string | null; url: string | null }>({
-    identity,
-    url,
-  });
-
-  if (kept.identity !== identity || (kept.url === null && url !== null)) {
-    setKept({ identity, url });
+/* 14:31 in the browser's time zone. */
+const shortTime = (iso: string | null) => {
+  if (!iso) {
+    return "";
   }
 
-  const refresh = () => setKept({ identity, url });
-  return [kept.identity === identity ? kept.url : url, refresh] as const;
-}
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "" : date.toTimeString().slice(0, 5);
+};
 
-function Fact({ term, children, large = false }: { term: string; children: React.ReactNode; large?: boolean }) {
-  return (
-    <div className="flex items-baseline gap-4">
-      <dt className={`${label} w-24 shrink-0`}>{term}</dt>
-      <dd className={`min-w-0 break-words ${large ? "text-2xl lg:text-3xl" : "text-xl lg:text-2xl"}`}>
-        {children}
-      </dd>
-    </div>
+/* One big cell along the bottom of the rider column: Round 1 / 4 / Carried. */
+type TodayCell = { key: string; label: string; big: string; text: string; colour: string };
+
+const markCell = (mark: AttemptMark, attempt: number): TodayCell => {
+  const base = { key: String(attempt), label: `Round ${attempt}` };
+
+  switch (mark.kind) {
+    case "result":
+      return {
+        ...base,
+        big: String(RESULT_POINTS[mark.result]),
+        text: RESULT_LABELS[mark.result],
+        colour: RESULT_COLOUR[mark.result],
+      };
+    case "on_course":
+      return { ...base, big: "●", text: "On course", colour: "text-[var(--ledger-bronze)]" };
+    case "not_needed":
+      return { ...base, big: "—", text: "Not needed", colour: "text-[var(--ledger-faint)]" };
+    case "to_ride":
+      return { ...base, big: "–", text: "To ride", colour: "text-[var(--ledger-faint)]" };
+    case "none":
+      return { ...base, big: "—", text: "", colour: "text-[var(--ledger-faint)]" };
+  }
+};
+
+/* One-attempt rounds (the Aarhi rounds, the Final, Section): the rider's
+   last three runs of the day instead, leaving out attempts not needed. */
+const todayCells = (rider: RiderDetail | null): TodayCell[] => {
+  const ridden = (rider?.today ?? []).filter((entry) => entry.status !== "void");
+  const manyIn = new Set(
+    (rider?.today ?? []).filter((entry) => entry.attempt_number > 1).map((entry) => entry.round_name)
   );
-}
 
-const horseLine = (rider: RiderDetail | null, run: ScoringRun) =>
-  [
-    rider?.horse_name ?? run.horse_name,
-    rider?.horse_breed,
-    rider?.horse_age !== null && rider?.horse_age !== undefined ? plural(rider.horse_age, "yr") : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  return ridden.slice(-3).map((entry, index) => {
+    const name = manyIn.has(entry.round_name)
+      ? `${entry.round_name} · R${entry.attempt_number}`
+      : entry.round_name;
 
-function OnCourse({
-  run,
-  rider,
-  round,
-  leaderboard,
-}: {
-  run: ScoringRun;
-  rider: RiderDetail | null;
-  round: ScoringRound | null;
-  leaderboard: LeaderboardRow[];
-}) {
-  const [headshot, refreshHeadshot] = useSteadyUrl(run.id, rider?.headshot_url ?? null);
-  const row = leaderboard.find((entry) => entry.entrant_key === run.entrant_key) ?? null;
-  const poolSize = row?.pool_label
-    ? leaderboard.filter((entry) => entry.pool_label === row.pool_label).length
-    : 0;
-  const horse = horseLine(rider, run);
-  const location = rider?.location ?? run.rider_location;
-  const team = rider?.team_name ?? run.team_name;
+    if (entry.status === "scored" && entry.result) {
+      return {
+        key: `${index}`,
+        label: name,
+        big: String(RESULT_POINTS[entry.result]),
+        text: RESULT_LABELS[entry.result],
+        colour: RESULT_COLOUR[entry.result],
+      };
+    }
 
+    return entry.status === "on_course"
+      ? { key: `${index}`, label: name, big: "●", text: "On course", colour: "text-[var(--ledger-bronze)]" }
+      : entry.status === "void"
+        ? { key: `${index}`, label: name, big: "—", text: "Not needed", colour: "text-[var(--ledger-faint)]" }
+        : { key: `${index}`, label: name, big: "–", text: "To ride", colour: "text-[var(--ledger-faint)]" };
+  });
+};
+
+/* A standings cell: filled green for a carry, a bronze dot on course. */
+const standingCell = (mark: AttemptMark) => {
+  if (mark.kind === "result") {
+    return mark.result === "carry"
+      ? { text: String(mark.points), className: "border-[var(--ledger-green)] bg-[var(--ledger-green)] text-[var(--ledger-paper)]" }
+      : { text: String(mark.points), className: "border-[var(--ledger-chip)] bg-[var(--ledger-panel)] text-[var(--ledger-ink)]" };
+  }
+
+  if (mark.kind === "on_course") {
+    return { text: "●", className: "border-[var(--ledger-bronze)] bg-[var(--ledger-panel)] text-[var(--ledger-bronze)]" };
+  }
+
+  return {
+    text: "",
+    className: mark.kind === "not_needed" ? "border-[var(--ledger-hair)]" : "border-[var(--ledger-chip)]",
+  };
+};
+
+function Fact({ term, value }: { term: string; value: string }) {
   return (
-    <div key={run.id} className="nbp-rise-in">
-      <p className={label}>
-        {[
-          "On course now",
-          poolName(run.pool_label),
-          attemptTextIfMany(run, round),
-          `Run ${run.run_order}`,
-        ]
-          .filter(Boolean)
-          .join(" · ")}
-      </p>
-
-      <div className="mt-3 flex flex-col-reverse gap-6 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0 flex-1">
-          <h1 className="break-words font-display text-5xl font-bold uppercase leading-[1.02] tracking-wide md:text-6xl xl:text-7xl">
-            {rider?.full_name ?? run.rider_name}
-          </h1>
-
-          <dl className="mt-6 space-y-3">
-            {rider?.father_name && (
-              <Fact term="Father" large>
-                {rider.father_name}
-              </Fact>
-            )}
-            {rider?.mother_name && (
-              <Fact term="Mother" large>
-                {rider.mother_name}
-              </Fact>
-            )}
-            {location && <Fact term="From">{location}</Fact>}
-            {rider?.age !== null && rider?.age !== undefined && (
-              <Fact term="Age">{rider.age}</Fact>
-            )}
-            {horse && <Fact term="Horse">{horse}</Fact>}
-            {rider?.years_experience !== null && rider?.years_experience !== undefined && (
-              <Fact term="Riding">
-                {plural(rider.years_experience, "year")}
-              </Fact>
-            )}
-            {team && (
-              <Fact term="Team">
-                {team}
-                {rider?.is_leader && (
-                  <span className="ml-3 rounded-full bg-bronze px-3 py-0.5 align-middle font-display text-sm font-semibold uppercase tracking-[0.12em]">
-                    Team leader
-                  </span>
-                )}
-              </Fact>
-            )}
-          </dl>
-
-          {!rider && (
-            <p className="mt-4 text-cream/60">
-              Full rider details are not available for this run.
-            </p>
-          )}
-        </div>
-
-        {headshot && (
-          // Signed Supabase Storage URL; next/image would need the bucket host
-          // allow-listed in next.config, which this panel does not own.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={headshot}
-            alt={`${rider?.full_name ?? run.rider_name}`}
-            onError={refreshHeadshot}
-            referrerPolicy="no-referrer"
-            className="h-44 w-44 shrink-0 rounded-2xl border-2 border-bronze object-cover lg:h-56 lg:w-56"
-          />
-        )}
-      </div>
-
-      <div className="mt-8 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
-        <div>
-          <p className={label}>Today</p>
-          {rider && rider.today.length > 0 ? (
-            <ul className="mt-2 flex flex-wrap gap-2">
-              {rider.today.map((entry, index) => (
-                <li
-                  key={`${entry.round_name}-${entry.attempt_number}-${index}`}
-                  className="flex items-center gap-2 rounded-xl border border-cream/15 bg-white/5 px-3 py-2"
-                >
-                  <span className="text-sm text-cream/75">
-                    {entry.round_name}
-                    {entry.attempt_number > 1 || (round?.attempts_per_rider ?? 1) > 1
-                      ? ` · ${entry.attempt_number}`
-                      : ""}
-                  </span>
-                  <ResultBadge result={entry.result} status={entry.status} tone="dark" size="sm" />
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-2 text-cream/70">First run of the day.</p>
-          )}
-        </div>
-
-        <div className="flex flex-wrap gap-6 lg:justify-end">
-          <div>
-            <p className={label}>Total today</p>
-            <p className="font-display text-4xl font-bold tabular-nums">
-              {rider?.total_points_today ?? row?.points ?? 0}
-              <span className="ml-1 text-lg text-cream/70">pts</span>
-            </p>
-          </div>
-          {row && (
-            <div>
-              <p className={label}>Rank</p>
-              <p className="font-display text-4xl font-bold tabular-nums">
-                {row.rank}
-                <span className="ml-1 text-lg text-cream/70">of {leaderboard.length}</span>
-              </p>
-            </div>
-          )}
-          {row?.pool_label && (
-            <div>
-              <p className={label}>Pool {row.pool_label} rank</p>
-              <p className="font-display text-4xl font-bold tabular-nums">
-                {row.pool_rank}
-                <span className="ml-1 text-lg text-cream/70">of {poolSize}</span>
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
+    <div className="grid grid-cols-[120px_minmax(0,1fr)] border-b border-[var(--ledger-hair)] py-1.5">
+      <span className="mono pt-[3px] text-[12px] uppercase text-[var(--ledger-muted)]">{term}</span>
+      <span className="break-words text-[18px]">{value}</span>
     </div>
-  );
-}
-
-function UpNextRider({
-  run,
-  rider,
-  index,
-}: {
-  run: ScoringRun;
-  rider: RiderDetail | null;
-  index: number;
-}) {
-  const parents = [
-    rider?.father_name ? `Father: ${rider.father_name}` : null,
-    rider?.mother_name ? `Mother: ${rider.mother_name}` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  const details = [
-    runSubtitle(run),
-    shortLocation(rider?.location ?? run.rider_location),
-    rider?.years_experience !== null && rider?.years_experience !== undefined
-      ? `${plural(rider.years_experience, "yr")} riding`
-      : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
-  return (
-    <li className="flex gap-3 border-t border-cream/10 py-3 first:border-t-0">
-      <span className="w-6 shrink-0 font-display text-2xl font-bold text-cream/45">{index + 1}</span>
-      <div className="min-w-0">
-        <p className="break-words font-display text-2xl font-semibold uppercase leading-tight">
-          {rider?.full_name ?? run.rider_name}
-        </p>
-        {parents && <p className="text-base text-cream/85">{parents}</p>}
-        {details && <p className="text-sm text-cream/65">{details}</p>}
-      </div>
-      {run.pool_label && (
-        <span className="ml-auto shrink-0 font-display text-xs font-semibold uppercase tracking-[0.12em] text-cream/55">
-          Pool {run.pool_label}
-        </span>
-      )}
-    </li>
   );
 }
 
@@ -290,67 +154,113 @@ function UpNextRider({
 export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) {
   const training = sample !== undefined;
   const stateUrl = training ? `${COMMENTARY_STATE_URL}?sample=1` : COMMENTARY_STATE_URL;
-  const { data, error, connection, lastUpdated, refetch } =
-    useLiveState<CommentaryState>(stateUrl);
+  const { data, error, connection, refetch } = useLiveState<CommentaryState>(stateUrl);
   const state = useMemo(() => normalizeCommentaryState(data), [data]);
-  const [standingsMode, setStandingsMode] = useState<"pool" | "round">("pool");
-  const [chosenRoundId, setChosenRoundId] = useState<string | null>(null);
-  const flashing = useResultFlash(state?.last_scored_run, state !== null);
 
-  const live = state?.live ?? null;
-  const round = state?.current_round ?? null;
-  const currentRun = state?.current_run ?? null;
-  const leaderboard = state?.leaderboard ?? [];
-  const pools = state?.pools ?? [];
-  const { riding, next } = state
-    ? nowAndNextPools(state)
-    : { riding: null as string | null, next: null as string | null };
-  const nowNext = nowNextText(riding, next);
-  const progress = roundProgress(leaderboard);
-  const poolCall = live?.display_mode === "pool_call" && live.called_pool_label;
-  const standingsPool = currentRun?.pool_label ?? live?.called_pool_label ?? null;
-  const showPoolStandings = standingsMode === "pool" && standingsPool !== null;
+  /* Derived view of the round ------------------------------------------- */
 
-  /* Up next with full rider detail when the server sent it, otherwise the
-     public run snapshot. */
-  const upNext: { run: ScoringRun; rider: RiderDetail | null }[] = (
-    state && state.up_next_riders.length > 0
-      ? state.up_next_riders.map(({ rider, ...run }) => ({ run, rider: rider ?? null }))
-      : (state?.up_next ?? []).map((run) => ({ run, rider: null }))
-  ).slice(0, 3);
-
-  /* Round standings can look back at any round ridden today. */
-  const roundsWithStandings = (state?.rounds ?? []).filter(
-    (option) => option.id === round?.id || (state?.leaderboards_by_round[option.id]?.length ?? 0) > 0
+  const runs = useMemo(
+    () => [...(state?.runs ?? [])].sort((a, b) => a.run_order - b.run_order),
+    [state]
   );
-  const roundId =
-    chosenRoundId && roundsWithStandings.some((option) => option.id === chosenRoundId)
-      ? chosenRoundId
-      : (round?.id ?? roundsWithStandings[0]?.id ?? null);
-  const shownRound = (state?.rounds ?? []).find((option) => option.id === roundId) ?? round;
-  const roundRows =
-    roundId && roundId !== round?.id
-      ? (state?.leaderboards_by_round[roundId] ?? [])
-      : leaderboard;
+  const round = state?.current_round ?? null;
+  const live = state?.live ?? null;
+  const currentRunId = live?.current_run_id ?? null;
+  const currentRun: ScoringRun | null =
+    runs.find((run) => run.id === currentRunId) ??
+    (state?.current_run && state.current_run.id === currentRunId ? state.current_run : null);
+  const rider = currentRun ? (state?.current_rider ?? null) : null;
+  const calledPool = live?.called_pool_label ?? null;
+  const leaderboard = useMemo(() => state?.leaderboard ?? [], [state]);
+  const attempts = round?.attempts_per_rider ?? 1;
+  const manyAttempts = attempts > 1;
 
-  let left: React.ReactNode;
+  const riding = useMemo(
+    () => ridingPoolBlock(runs, calledPool, currentRunId),
+    [runs, calledPool, currentRunId]
+  );
+  const nextBlock = useMemo(
+    () => nextPoolBlock(runs, calledPool, currentRunId),
+    [runs, calledPool, currentRunId]
+  );
+  const chips = useMemo(() => roundChips(runs, riding?.attempt ?? null), [runs, riding]);
+  const advanced = useMemo(
+    () => new Map(leaderboard.map((row) => [row.entrant_key, row.advanced])),
+    [leaderboard]
+  );
+  const poolRows = useMemo(
+    () => poolSummaries(runs, advanced, calledPool, currentRunId),
+    [runs, advanced, calledPool, currentRunId]
+  );
+
+  const counted = runs.filter((run) => run.status !== "void");
+  const done = counted.filter((run) => run.status === "scored").length;
+  const total = counted.length;
+  const percent = total > 0 ? Math.round((done / total) * 100) : 0;
+  const throughCount = leaderboard.filter((row) => row.advanced === true).length;
+  const outCount = leaderboard.filter((row) => row.advanced === false).length;
+
+  const standingsPool = currentRun?.pool_label ?? riding?.pool ?? calledPool ?? null;
+  /* The pool's riders in the order they ride — the same order as the judges'
+     panel and the All pools list — not by score, so commentators can follow
+     along. */
+  const firstRide = new Map<string, number>();
+
+  for (const run of runs) {
+    if (!firstRide.has(run.entrant_key)) {
+      firstRide.set(run.entrant_key, run.run_order);
+    }
+  }
+
+  const standings = standingsFor(leaderboard, standingsPool).sort(
+    (a, b) =>
+      (firstRide.get(a.entrant_key) ?? Number.MAX_SAFE_INTEGER) -
+      (firstRide.get(b.entrant_key) ?? Number.MAX_SAFE_INTEGER)
+  );
+  const upNext = (state?.up_next ?? []).filter((run) => run.id !== currentRun?.id).slice(0, 3);
+  const roundText = (attempt: number | null | undefined) =>
+    manyAttempts && attempt ? `Round ${attempt}` : null;
+  const where = (run: Pick<ScoringRun, "pool_label" | "attempt_number">, short = false) =>
+    [
+      poolName(run.pool_label),
+      manyAttempts ? (short ? `R${run.attempt_number}` : `Round ${run.attempt_number}`) : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+  const whereText =
+    [
+      round?.name,
+      roundText(currentRun?.attempt_number ?? riding?.attempt),
+      poolName(currentRun?.pool_label ?? calledPool),
+    ]
+      .filter(Boolean)
+      .join(" · ") || "No live round";
+
+  const screensText = live
+    ? `Screens: ${DISPLAY_MODE_CHOICES.find((choice) => choice.mode === live.display_mode)?.label ?? live.display_mode}`
+    : null;
+
+  /* Render -------------------------------------------------------------- */
+
+  let body: React.ReactNode;
 
   if (!state) {
-    left = error ? (
-      <div className="space-y-4 rounded-2xl border-2 border-red-400/70 bg-red-950/40 p-6">
+    body = error ? (
+      <div className="max-w-2xl space-y-4 border-[3px] border-[var(--ledger-red)] bg-[var(--ledger-panel)] p-5">
         <p className="text-xl">{error}</p>
         <div className="flex flex-wrap gap-3">
           <button
             type="button"
             onClick={refetch}
-            className="min-h-12 rounded-xl border-2 border-cream/40 px-5 font-display font-semibold uppercase tracking-[0.1em]"
+            className="mono min-h-12 border-2 border-[var(--ledger-ink)] px-5 text-[13px] font-semibold uppercase"
           >
             Retry
           </button>
           {!training && (
             <Link
               href="/login?redirect=/commentary"
-              className="flex min-h-12 items-center rounded-xl border-2 border-cream/40 px-5 font-display font-semibold uppercase tracking-[0.1em]"
+              className="mono flex min-h-12 items-center border-2 border-[var(--ledger-ink)] px-5 text-[13px] font-semibold uppercase"
             >
               Log in again
             </Link>
@@ -358,261 +268,350 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
         </div>
       </div>
     ) : (
-      <p className="py-16 text-center text-xl text-cream/70">Loading…</p>
+      <p className="mono py-16 text-center text-[13px] uppercase text-[var(--ledger-muted)]">Loading…</p>
     );
-  } else if (!state.configured) {
-    left = <NotConfiguredNotice tone="dark" />;
-  } else if (poolCall) {
-    const called = live.called_pool_label as string;
-
-    left = (
-      <section aria-labelledby="pool-call-title" className="nbp-rise-in">
-        <p className={label}>{round?.name ?? "Pool call-up"}</p>
-        <h1
-          id="pool-call-title"
-          className="mt-2 font-display text-5xl font-bold uppercase tracking-wide md:text-6xl"
-        >
-          Pool {called} — get ready
-        </h1>
-        {next && next !== called && (
-          <p className="mt-2 font-display text-2xl font-semibold uppercase tracking-wide text-cream/75">
-            Next: Pool {next}
-          </p>
-        )}
-        <PoolRoster
-          entries={rosterFor(state.pool_rosters, called)}
-          tone="dark"
-          size="xl"
-          className="mt-8"
-        />
-      </section>
-    );
-  } else if (currentRun) {
-    left = (
-      <OnCourse
-        run={currentRun}
-        rider={state.current_rider}
-        round={round}
-        leaderboard={leaderboard}
-      />
+  } else if (!state.configured || !round) {
+    body = (
+      <div className="max-w-2xl border-[3px] border-[var(--ledger-rule)] bg-[var(--ledger-panel)] p-6">
+        <p className="text-[30px] font-bold uppercase">
+          {state.configured ? "No round is live" : "Live scoring is not set up yet"}
+        </p>
+        <p className="mt-3 text-[var(--ledger-muted)]">
+          The panel fills in by itself as soon as a round goes live.
+        </p>
+      </div>
     );
   } else {
-    left = (
-      <div>
-        <p className={label}>On course now</p>
-        <h1 className="mt-3 font-display text-4xl font-bold uppercase">
-          {round ? "Waiting for the next rider" : "No round is live"}
-        </h1>
-        <p className="mt-3 text-xl text-cream/70">
-          {round
-            ? "The panel switches to the rider as soon as the judges put them on course."
-            : "The panel fills in as soon as a round goes live."}
-        </p>
+    const cells: TodayCell[] = currentRun
+      ? manyAttempts
+        ? attemptMarks(runs, currentRun.entrant_key, attempts).map((mark, index) => markCell(mark, index + 1))
+        : todayCells(rider)
+      : [];
+    const horse = [
+      rider?.horse_name ?? currentRun?.horse_name,
+      rider?.horse_breed,
+      rider?.horse_age !== null && rider?.horse_age !== undefined ? plural(rider.horse_age, "yr") : null,
+    ]
+      .filter(Boolean)
+      .join(", ");
+    const team = rider?.team_name ?? currentRun?.team_name ?? null;
+    const facts: [string, string | null][] = [
+      ["Father", rider?.father_name ?? null],
+      ["Mother", rider?.mother_name ?? null],
+      ["Hometown", rider?.location ?? currentRun?.rider_location ?? null],
+      ["Age", rider?.age !== null && rider?.age !== undefined ? plural(rider.age, "year") : null],
+      [
+        "Years riding",
+        rider?.years_experience !== null && rider?.years_experience !== undefined
+          ? String(rider.years_experience)
+          : null,
+      ],
+      ["Team", team ? (rider?.is_leader ? `${team} · Team leader` : team) : null],
+      ["Horse", horse || null],
+    ];
+    const roundComplete = runs.length > 0 && done === total;
+    /* Rider | R1 R2 R3 | Status, or Rider | Pts | Status. */
+    const standingColumns = manyAttempts
+      ? `22px minmax(0,1fr) repeat(${attempts},34px) minmax(0,130px)`
+      : "22px minmax(0,1fr) 48px minmax(0,130px)";
+    const rule = round.event_type === "single"
+      ? "Carried (4) = through"
+      : round.target_points !== null
+        ? `Target ${plural(round.target_points, "point")} = through`
+        : null;
+
+    body = (
+      <div className="grid min-h-0 flex-1 gap-8 xl:grid-cols-[1.15fr_1fr_320px]">
+        {/* Rider on course ------------------------------------------------ */}
+        <section
+          aria-labelledby="rider-name"
+          className="flex min-w-0 flex-col gap-3.5 xl:overflow-y-auto xl:pb-6"
+        >
+          <span className="mono text-[13px] uppercase text-[var(--ledger-bronze)]">
+            {currentRun
+              ? `● On course · Rider ${blockPosition(runs, currentRun).index} of ${blockPosition(runs, currentRun).size}`
+              : "Nobody on course"}
+          </span>
+          <h1
+            id="rider-name"
+            className="break-words text-[48px] font-bold uppercase leading-[0.92] tracking-[-0.02em] sm:text-[60px] xl:text-[72px]"
+          >
+            {currentRun
+              ? (rider?.full_name ?? currentRun.rider_name)
+              : roundComplete
+                ? `${round.name} complete`
+                : "Waiting for the next rider"}
+          </h1>
+
+          {currentRun && (
+            <>
+              <div className="flex flex-col border-t border-[var(--ledger-rule)]">
+                {facts.map(([term, value]) => (
+                  <Fact key={term} term={term} value={value ?? "—"} />
+                ))}
+              </div>
+              {!rider && (
+                <p className="text-[var(--ledger-muted)]">Full rider details are not available for this run.</p>
+              )}
+            </>
+          )}
+
+          {cells.length > 0 && (
+            <div className="mt-auto grid grid-cols-3 border-t-[3px] border-[var(--ledger-rule)]">
+              {cells.map((cell) => (
+                <div key={cell.key} className="flex min-w-0 flex-col gap-0.5 pr-3 pt-2.5">
+                  <span className={`${label} truncate`}>{cell.label}</span>
+                  <span className={`text-[48px] font-bold leading-[0.9] sm:text-[64px] ${cell.colour}`}>
+                    {cell.big}
+                  </span>
+                  <span className={`text-[15px] font-semibold ${cell.colour}`}>{cell.text}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {currentRun && !manyAttempts && cells.length === 0 && (
+            <p className="mt-auto border-t-[3px] border-[var(--ledger-rule)] pt-2.5 text-[var(--ledger-muted)]">
+              First run of the day.
+            </p>
+          )}
+        </section>
+
+        {/* Pool standings and round progress ------------------------------ */}
+        <section
+          aria-labelledby="standings-title"
+          className="flex min-w-0 flex-col gap-3 xl:overflow-y-auto xl:pb-6"
+        >
+          <div className="flex items-baseline justify-between gap-3 border-b-[3px] border-[var(--ledger-rule)] pb-1.5">
+            <h2 id="standings-title" className="text-[22px] font-bold uppercase">
+              {standingsPool ? `Pool ${standingsPool} standings` : "Standings"}
+            </h2>
+            {rule && <span className="mono text-[11px] uppercase text-[var(--ledger-muted)]">{rule}</span>}
+          </div>
+
+          <div
+            className="mono grid gap-2 px-1 text-[10px] uppercase text-[var(--ledger-muted)]"
+            style={{ gridTemplateColumns: standingColumns }}
+          >
+            <span className="text-right">#</span>
+            <span>{standings.some((row) => row.entrant_key.startsWith("team:")) ? "Team" : "Rider"}</span>
+            {manyAttempts
+              ? Array.from({ length: attempts }, (_, index) => <span key={index}>R{index + 1}</span>)
+              : <span>Pts</span>}
+            <span>Status</span>
+          </div>
+
+          <div className="flex flex-col">
+            {standings.length === 0 && (
+              <p className="px-1 py-2 text-[var(--ledger-muted)]">No standings yet.</p>
+            )}
+            {standings.map((row, index) => {
+              const onCourse = currentRun?.entrant_key === row.entrant_key;
+              const [status, colour] =
+                row.advanced === true
+                  ? ["Through", "text-[var(--ledger-green)]"]
+                  : row.advanced === false
+                    ? ["Out", "text-[var(--ledger-red)]"]
+                    : onCourse
+                      ? ["Riding now", "text-[var(--ledger-bronze)]"]
+                      : ["Still riding", "text-[var(--ledger-ink)]"];
+
+              return (
+                <div
+                  key={row.entrant_key}
+                  className={`grid items-center gap-2 border-b border-[var(--ledger-hair)] px-1 py-1.5 ${
+                    onCourse ? "bg-[var(--ledger-hl)]" : ""
+                  }`}
+                  style={{ gridTemplateColumns: standingColumns }}
+                >
+                  {/* Riding order in the pool (standings are listed in it). */}
+                  <span className="mono text-right text-[13px] text-[var(--ledger-muted)]">{index + 1}</span>
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate text-[18px] font-semibold">{row.name}</span>
+                    {row.team_name && row.team_name !== row.name && (
+                      <span className="truncate text-[13px] text-[var(--ledger-muted)]">{row.team_name}</span>
+                    )}
+                  </span>
+                  {manyAttempts ? (
+                    attemptMarks(runs, row.entrant_key, attempts).map((mark, index) => {
+                      const cell = standingCell(mark);
+
+                      return (
+                        <span
+                          key={index}
+                          className={`mono flex h-[34px] items-center justify-center border text-[15px] font-semibold ${cell.className}`}
+                        >
+                          {cell.text}
+                        </span>
+                      );
+                    })
+                  ) : (
+                    <span className="mono flex h-[34px] items-center justify-center border border-[var(--ledger-chip)] bg-[var(--ledger-panel)] text-[15px] font-semibold">
+                      {row.points}
+                    </span>
+                  )}
+                  <span className={`mono text-[12px] font-semibold uppercase ${colour}`}>{status}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-auto flex flex-col gap-1.5 border-t-[3px] border-[var(--ledger-rule)] pt-2.5">
+            <span id="progress-title" className={label}>
+              Round progress
+            </span>
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-[52px] font-bold leading-[0.9] sm:text-[64px]">
+                {done}
+                <span className="text-[var(--ledger-faint)]">/{total}</span>
+              </span>
+              <span className="mono text-right text-[12px] uppercase text-[var(--ledger-rule)]">
+                {throughCount} through
+                <br />
+                {outCount} out
+              </span>
+            </div>
+            <div
+              role="progressbar"
+              aria-labelledby="progress-title"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={percent}
+              className="h-1 bg-[var(--ledger-hair)]"
+            >
+              <div className="h-full bg-[var(--ledger-ink)]" style={{ width: `${percent}%` }} />
+            </div>
+            <RoundChips chips={chips} />
+          </div>
+        </section>
+
+        {/* Next riders, next pool, recent results, all pools -------------- */}
+        <aside className="-mx-4 flex min-w-0 flex-col gap-3 border-t-[3px] border-[var(--ledger-rule)] bg-[var(--ledger-side)] px-4 pb-6 pt-4 xl:-mr-9 xl:ml-0 xl:overflow-y-auto xl:border-l-[3px] xl:border-t-0 xl:pl-6 xl:pr-9 xl:pt-0">
+          <div className="flex flex-col gap-1">
+            <span className={label}>
+              {["Next riders", upNext[0] ? where(upNext[0]) : null].filter(Boolean).join(" · ")}
+            </span>
+            {upNext.length === 0 ? (
+              <span className="text-[28px] font-bold uppercase leading-none">—</span>
+            ) : (
+              <ol className="flex flex-col gap-1">
+                {upNext.map((run, index) => (
+                  <li key={run.id} className="flex flex-col">
+                    <span
+                      className={`break-words font-bold uppercase leading-none ${
+                        index === 0 ? "text-[28px]" : "text-[20px]"
+                      }`}
+                    >
+                      {run.rider_name}
+                    </span>
+                    {index > 0 && upNext[0] && where(run) !== where(upNext[0]) && (
+                      <span className="mono text-[11px] uppercase text-[var(--ledger-muted)]">{where(run)}</span>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+
+          <div className="flex items-baseline justify-between gap-3 border-t border-[var(--ledger-rule)] pt-2.5">
+            <span className={label}>
+              Next pool
+              {roundText(nextBlock?.attempt) && (
+                <>
+                  <br />
+                  {roundText(nextBlock?.attempt)}
+                </>
+              )}
+            </span>
+            <span className="text-[52px] font-bold leading-[0.9]">
+              {nextBlock ? `Pool ${nextBlock.pool}` : "None"}
+            </span>
+          </div>
+
+          <h2 className={sectionTitle}>Recent results</h2>
+          {state.recent_results.length === 0 && (
+            <p className="text-[13px] text-[var(--ledger-muted)]">No results yet in this round.</p>
+          )}
+          <div className="flex flex-col">
+            {state.recent_results.slice(0, 5).map((run) => (
+              <div
+                key={run.id}
+                className="grid grid-cols-[62px_minmax(0,1fr)_auto] items-baseline gap-2 border-b border-[var(--ledger-hair)] py-[3px] text-[13px]"
+              >
+                <span className="mono text-[11px] text-[var(--ledger-muted)]">{shortTime(run.scored_at)}</span>
+                <span className="min-w-0">
+                  <b>{run.rider_name}</b>{" "}
+                  <span className="text-[12px] text-[var(--ledger-muted)]">{where(run, true)}</span>
+                </span>
+                <span className={`font-bold ${run.result ? RESULT_COLOUR[run.result] : ""}`}>
+                  {run.result ? `${RESULT_LABELS[run.result]} ${RESULT_POINTS[run.result]}` : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {poolRows.length > 0 && (
+            <>
+              <h2 className={sectionTitle}>All pools</h2>
+              <PoolList pools={poolRows} rounds={manyAttempts} compact openPool={riding?.pool ?? null} />
+            </>
+          )}
+
+          {/* Practise from home before event day; back again afterwards. */}
+          <p className="mt-auto pt-4">
+            <Link
+              href={training ? "/commentary" : "/commentary/demo"}
+              className="mono inline-flex min-h-11 items-center text-[12px] uppercase text-[var(--ledger-muted)] underline underline-offset-4"
+            >
+              {training ? "Leave practice — open the live panel" : "Practise on sample riders"}
+            </Link>
+          </p>
+        </aside>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-ink text-cream">
+    <div className={`${LEDGER_ROOT} flex min-h-dvh flex-col xl:h-dvh`}>
       {sample && (
         <p
           role="note"
-          className="sticky top-0 z-40 bg-amber-300 px-4 py-2 text-center text-sm font-medium text-ink lg:px-8"
+          aria-label="Training mode"
+          className="bg-[#f2b07a] px-4 py-2 text-[14px] text-[var(--ledger-ink)] xl:px-9"
         >
-          <span className="mr-2 font-display font-bold uppercase tracking-[0.1em]">
-            {TRAINING_LABEL}
-          </span>
+          <span className="mono mr-3 font-semibold uppercase">{TRAINING_LABEL}</span>
           {TRAINING_BANNER[sample]}
         </p>
       )}
-      <header className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-cream/10 px-4 py-3 lg:px-8">
-        <p className="font-display text-sm font-bold uppercase tracking-[0.25em] text-bronze">
-          Commentary
-        </p>
-        <p className="min-w-0 font-display text-lg font-semibold uppercase tracking-wide">
-          {[round?.name, eventTypeName(round?.event_type)].filter(Boolean).join(" · ") ||
-            "No live round"}
-        </p>
-        {nowNext && (
-          <p className="font-display text-lg font-semibold uppercase tracking-wide text-cream/80">
-            {nowNext}
+
+      <main className="flex min-h-0 flex-1 flex-col gap-4 px-4 pt-5 xl:px-9 xl:pt-6">
+        <TopStrip who="Commentary" where={whereText} />
+        {state && error && (
+          <p className="border-2 border-[var(--ledger-red)] bg-[var(--ledger-panel)] px-4 py-2 text-[var(--ledger-red)]">
+            {error}
           </p>
         )}
-        <div className="ml-auto flex items-center gap-3">
-          {live && (
-            <span className="rounded-full border border-cream/25 px-3 py-1 font-display text-xs font-semibold uppercase tracking-[0.12em] text-cream/80">
-              Screens: {DISPLAY_MODE_TEXT[live.display_mode] ?? live.display_mode}
-            </span>
-          )}
-          <ConnectionBadge connection={connection} lastUpdated={lastUpdated} tone="dark" showTime />
-        </div>
-      </header>
+        {body}
+      </main>
 
-      {state && error && (
-        <p className="border-b border-red-400/40 bg-red-950/50 px-4 py-2 text-center lg:px-8">
-          {error}
+      {live?.message && (
+        <p className="border-t-[3px] border-[var(--ledger-rule)] bg-[var(--ledger-pick)] px-4 py-2 text-center text-[20px] font-bold uppercase xl:px-9">
+          {live.message}
         </p>
       )}
 
-      <div className="grid flex-1 gap-6 p-4 lg:grid-cols-3 lg:gap-8 lg:p-8">
-        <main className="space-y-6 lg:col-span-2">
-          {flashing && flashing.result && (
-            <div
-              aria-live="polite"
-              className="nbp-flash flex flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-bronze bg-bronze-deep px-5 py-4"
-            >
-              <p className="min-w-0 break-words font-display text-3xl font-bold uppercase leading-tight">
-                <span className="mr-3 text-base tracking-[0.2em] text-cream/75">Just scored</span>
-                {flashing.rider_name}
-              </p>
-              <span className="font-display text-4xl font-bold uppercase">
-                {RESULT_LABELS[flashing.result]} {RESULT_POINTS[flashing.result]}
-              </span>
-            </div>
-          )}
-          {left}
-        </main>
-
-        <aside className="space-y-8">
-          {state?.configured && round && (
-            <>
-              <section aria-labelledby="up-next-title">
-                <h2 id="up-next-title" className={label}>
-                  Up next
-                </h2>
-                {upNext.length === 0 ? (
-                  <p className="mt-2 text-cream/70">No more riders waiting in this round.</p>
-                ) : (
-                  <ol className="mt-1">
-                    {upNext.map(({ run, rider }, index) => (
-                      <UpNextRider key={run.id} run={run} rider={rider} index={index} />
-                    ))}
-                  </ol>
-                )}
-              </section>
-
-              <section aria-labelledby="standings-title">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h2 id="standings-title" className={label}>
-                    Standings
-                  </h2>
-                  <div role="group" aria-label="Standings view" className="flex gap-1">
-                    {(standingsPool ? (["pool", "round"] as const) : (["round"] as const)).map(
-                      (mode) => {
-                        const active = mode === "pool" ? showPoolStandings : !showPoolStandings;
-
-                        return (
-                          <button
-                            key={mode}
-                            type="button"
-                            aria-pressed={active}
-                            onClick={() => setStandingsMode(mode)}
-                            className={`min-h-11 rounded-lg border px-3 font-display text-sm font-semibold uppercase tracking-[0.1em] ${
-                              active
-                                ? "border-bronze bg-bronze text-cream"
-                                : "border-cream/25 text-cream/80"
-                            }`}
-                          >
-                            {mode === "pool" ? `Pool ${standingsPool}` : "Round"}
-                          </button>
-                        );
-                      }
-                    )}
-                  </div>
-                </div>
-
-                {!showPoolStandings ? (
-                  <div className="mt-3 space-y-3">
-                    {roundsWithStandings.length > 1 && (
-                      <label className="flex items-center gap-3 text-sm text-cream/75">
-                        Round
-                        <select
-                          value={roundId ?? ""}
-                          onChange={(event) => setChosenRoundId(event.target.value || null)}
-                          className="min-h-11 flex-1 rounded-lg border border-cream/25 bg-ink px-3 text-cream"
-                        >
-                          {roundsWithStandings.map((option) => (
-                            <option key={option.id} value={option.id}>
-                              {option.name}
-                              {option.id === round.id ? " (live)" : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    )}
-                    <LeaderboardTable
-                      rows={roundRows}
-                      eventType={shownRound?.event_type ?? round.event_type}
-                      pools={pools}
-                      pool={null}
-                      showPoolTabs={false}
-                      targetPoints={shownRound?.target_points ?? null}
-                      highlightKey={currentRun?.entrant_key ?? null}
-                      tone="dark"
-                      dense
-                      caption={`${shownRound?.name ?? "Round"} standings`}
-                    />
-                  </div>
-                ) : (
-                  <LeaderboardTable
-                    rows={leaderboard}
-                    eventType={round.event_type}
-                    pools={pools}
-                    pool={standingsPool}
-                    showPoolTabs={false}
-                    targetPoints={round.target_points}
-                    highlightKey={currentRun?.entrant_key ?? null}
-                    tone="dark"
-                    dense
-                    caption={`Pool ${standingsPool} standings`}
-                    className="mt-3"
-                  />
-                )}
-              </section>
-
-              <section aria-labelledby="progress-title">
-                <div className="flex items-baseline justify-between">
-                  <h2 id="progress-title" className={label}>
-                    Round progress
-                  </h2>
-                  <p className="tabular-nums text-cream/80">
-                    {progress.scored} of {plural(progress.total, "run")}
-                  </p>
-                </div>
-                <div
-                  role="progressbar"
-                  aria-labelledby="progress-title"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={progress.percent}
-                  className="mt-2 h-3 overflow-hidden rounded-full bg-white/10"
-                >
-                  <div
-                    className="h-full rounded-full bg-bronze transition-[width] duration-500 motion-reduce:transition-none"
-                    style={{ width: `${progress.percent}%` }}
-                  />
-                </div>
-              </section>
-            </>
-          )}
-        </aside>
+      <div className="sticky bottom-0 z-20">
+        <StatusBar
+          role="Commentary"
+          items={[
+            round?.name,
+            poolName(currentRun?.pool_label ?? riding?.pool ?? null),
+            round && total > 0 ? `${done}/${plural(total, "run")}` : null,
+            screensText,
+          ]}
+          connection={connection}
+          liveWord="Live"
+        />
       </div>
-
-      {/* Practice from home before event day; back again afterwards. */}
-      <p className="px-4 pb-6 text-center lg:px-8">
-        <Link
-          href={training ? "/commentary" : "/commentary/demo"}
-          className="inline-flex min-h-11 items-center font-display text-sm font-semibold uppercase tracking-[0.12em] text-cream/60 underline underline-offset-4"
-        >
-          {training ? "Leave practice — open the live panel" : "Practise on sample riders"}
-        </Link>
-      </p>
-
-      {live?.message && (
-        <footer className="border-t-4 border-bronze bg-bronze-deep px-4 py-3 text-center font-display text-2xl font-semibold uppercase tracking-wide lg:px-8">
-          {live.message}
-        </footer>
-      )}
     </div>
   );
 }

@@ -17,6 +17,7 @@ import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
 import { createServiceRoleClient, type ServiceRoleClient } from "@/lib/admin/server";
+import { nextPoolBlock } from "@/lib/scoring/blocks";
 import { loadRiderDetails } from "@/lib/scoring/rider-detail";
 import {
   toPublicLeaderboardRow,
@@ -241,20 +242,16 @@ export const listPools = (runs: ScoringRun[]) =>
     ),
   ].sort(comparePoolLabels);
 
-/* The pool after the called one. Before any pool is called, the first pool is
+/* The pool to call after the riding one. Rounds are ridden round by round
+   across the pools (src/lib/scoring/blocks.ts), so after Round 1 · Pool C the
+   next pool is Round 2 · Pool A, and a pool whose riders have all carried is
+   passed over. Before any pool is called, the first pool with riders to go is
    "next" — that is the one the judge will call first. */
-export const nextPoolLabel = (pools: string[], called: string | null) => {
-  if (pools.length === 0) {
-    return null;
-  }
-
-  if (!called) {
-    return pools[0];
-  }
-
-  const index = pools.indexOf(called);
-  return index >= 0 && index < pools.length - 1 ? pools[index + 1] : null;
-};
+export const nextPoolLabel = (
+  runs: ScoringRun[],
+  called: string | null,
+  currentRunId: string | null
+) => nextPoolBlock(runs, called, currentRunId)?.pool ?? null;
 
 export const emptyPublicLiveState = (configured: boolean): PublicLiveState => ({
   configured,
@@ -392,7 +389,11 @@ export const loadLiveSnapshot = async (client: ScoringDbClient): Promise<LiveSna
       leaderboard,
       pools,
       pool_rosters: buildPoolRosters(runs),
-      next_pool_label: nextPoolLabel(pools, live?.called_pool_label ?? null),
+      next_pool_label: nextPoolLabel(
+        runs,
+        live?.called_pool_label ?? null,
+        live?.current_run_id ?? null
+      ),
       rounds,
     },
   };
@@ -561,7 +562,7 @@ export const buildCommentaryState = async (
   const { state } = snapshot;
 
   if (!state.configured) {
-    return { ...state, current_rider: null, up_next_riders: [], leaderboards_by_round: {} };
+    return { ...state, current_rider: null, up_next_riders: [], leaderboards_by_round: {}, runs: [] };
   }
 
   const { leaderboards, error } = await loadAllLeaderboards(client);
@@ -582,5 +583,6 @@ export const buildCommentaryState = async (
       return rider ? [{ ...run, rider }] : [];
     }),
     leaderboards_by_round: leaderboards,
+    runs: snapshot.runs,
   };
 };

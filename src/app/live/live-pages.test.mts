@@ -300,7 +300,7 @@ test("the judges' panel reconciles from each write and confirms before writing",
   assert.match(panel, /disabled=\{resultsDisabled/);
   assert.match(panel, /role="alertdialog"/);
 
-  for (const endpoint of ["score", "clear", "status", "live", "call-pool"]) {
+  for (const endpoint of ["score", "clear", "status", "live", "call-pool", "take-out"]) {
     assert.match(actions, new RegExp(`"/api/judge/${endpoint}"`));
   }
   // Points are computed by the database; the browser never sends them.
@@ -342,20 +342,21 @@ test("a realtime-triggered refetch carries a cache key shared by every viewer", 
   assert.match(hook, /v=\$\{encodeURIComponent\(key\)\}/);
 });
 
-test("judges and administrators control the screens; modes change what each surface shows", () => {
+test("administrators and the stream control the screens, not judges; modes change what each surface shows", () => {
   const format = read("../../components/scoring/format.ts");
   for (const mode of ["scoreboard", "leaderboard", "rider", "pool_call", "message", "blank"]) {
     assert.match(format, new RegExp(`mode: "${mode}"`));
   }
 
+  // The judges' panel has no screen controls, and the route refuses a judge
+  // (and training, which is the judges' panel) a screen or message change.
   const panel = read("../judge/JudgePanel.tsx");
   const actions = read("../judge/judge-actions.ts");
-  assert.match(panel, /id="screens-title"/);
-  assert.match(panel, /DISPLAY_MODE_CHOICES\.map/);
-  assert.match(panel, /arm\(\{ kind: "display", mode: choice\.mode \}\)/);
-  assert.match(panel, /maxLength=\{200\}/);
-  assert.match(actions, /post\("\/api\/judge\/live", \{ display_mode: action\.mode \}\)/);
-  assert.match(actions, /post\("\/api\/judge\/live", \{ message: action\.message \}\)/);
+  assert.doesNotMatch(panel, /screens-title|DISPLAY_MODE_CHOICES|kind: "display"|kind: "message"|kind: "scoreboard"/);
+  assert.doesNotMatch(actions, /display_mode|message: action/);
+  const route = read("../api/judge/live/route.ts");
+  assert.match(route, /if \(access\.role !== "admin" && changesScreens\(parsed\.value\)\) \{\s+return jsonError\(JUDGE_SCREENS_REFUSAL, 403\);/);
+  assert.match(route, /sampleWriteResponse\(request, parseJudgeLiveUpdate,/);
 
   const admin = read("../admin/scoring/ScoringAdmin.tsx");
   assert.match(admin, /id="screens-heading"/);
@@ -386,13 +387,44 @@ test("a decided round's podium shows on /live, the live round included", () => {
   assert.doesNotMatch(board, /!isCurrentRound && <Podium/);
 });
 
-test("a voided attempt after a carry says why on the judges' panel", () => {
+test("an attempt voided after a carry is not a skipped ride on the judges' panel", () => {
   const panel = read("../judge/JudgePanel.tsx");
   const format = read("../../components/scoring/format.ts");
   assert.match(format, /ALREADY_QUALIFIED_NOTE = "Already qualified — attempt not needed"/);
   assert.match(format, /round\.event_type === "single" && round\.attempts_per_rider > 1/);
-  assert.match(panel, /alreadyQualified\(run\) \? ALREADY_QUALIFIED_NOTE : null/);
-  assert.match(panel, /\{alreadyQualified\(sheetRun\) && \(/);
+  assert.match(panel, /const carried = useMemo\(\(\) => carriedEntrantKeys\(runs, round\), \[runs, round\]\);/);
+  assert.match(panel, /\(run\.status === "void" && !carried\.has\(run\.entrant_key\)\)/);
+});
+
+test("the judges' panel is score, Skip, Take out, Undo last and Call next pool", () => {
+  const panel = read("../judge/JudgePanel.tsx");
+  const actions = read("../judge/judge-actions.ts");
+
+  // Skip on the rider on course; the Skipped box brings them back with Ride now.
+  assert.match(panel, /onClick=\{\(\) => arm\(\{ kind: "void", run: targetRun \}\)\}/);
+  assert.match(panel, /id="skipped-title"/);
+  assert.match(panel, /onClick=\{\(\) => arm\(\{ kind: "ride_now", run \}\)\}/);
+  assert.match(actions, /if \(action\.run\.status === "void"\) \{\s+await post\("\/api\/judge\/status", \{ run_id: action\.run\.id, status: "pending" \}\);\s+\}/);
+
+  // Take out on the rider on course; the Out box has Bring back. Both confirm.
+  assert.match(panel, />\s+Take out\s+</);
+  assert.match(panel, /id="out-title"/);
+  assert.match(panel, />\s+Bring back\s+</);
+  assert.match(actions, /post\("\/api\/judge\/take-out", \{\s+round_id: action\.roundId,\s+entrant_key: action\.entrantKey,\s+out: action\.out,\s+\}\)/);
+  assert.match(actions, /confirm: "Take out"/);
+  assert.match(actions, /confirm: "Bring back"/);
+
+  // Rounds and the start list are the person in control's, on /admin/scoring.
+  assert.doesNotMatch(panel, /StripButton|setDrawerOpen|setRoundsOpen|setRunSheet|startListMatcher/);
+
+  // The database: one transaction each way, judges and administrators only.
+  const sql = read("../../../supabase/migrations/20261107100000_scoring_round_first_order.sql");
+  assert.match(sql, /create or replace function public\.scoring_take_out\(/);
+  assert.match(sql, /grant execute on function public\.scoring_take_out\(uuid, text, boolean, uuid, text, text\)\s+to service_role;/);
+  assert.match(sql, /c_note constant text := 'Taken out on the judges'' panel';/);
+  const route = read("../api/judge/take-out/route.ts");
+  assert.match(route, /verifyRoleRequest\(\["judge", "admin"\]\)/);
+  assert.match(route, /rpc\("scoring_take_out"/);
 });
 
 test("the paper registration page is in the sitemap", () => {
@@ -485,25 +517,16 @@ test("the training panels read and write a practice session and say whose it is"
   assert.match(hook, /typeof window === "undefined" \|\| isSampleUrl\(url\)/);
 });
 
-test("a start-list search box narrows the list on the judges' panel and in /admin/scoring", () => {
-  const judge = read("../judge/JudgePanel.tsx");
+test("a start-list search box narrows the list in /admin/scoring", () => {
   const admin = read("../admin/scoring/ScoringAdmin.tsx");
 
-  for (const [name, source] of [
-    ["JudgePanel", judge],
-    ["ScoringAdmin", admin],
-  ] as const) {
+  for (const [name, source] of [["ScoringAdmin", admin]] as const) {
     assert.match(source, /import \{ startListMatcher \} from "@\/lib\/scoring\/start-list-search";/, name);
     assert.match(source, /id="start-list-search"/, name);
     assert.match(source, /type="search"/, name);
     assert.match(source, /onChange=\{\(event\) => setStartListQuery\(event\.target\.value\)\}/, name);
     assert.match(source, /startListMatcher\(startListQuery, /, name);
   }
-
-  // The judges' drawer lists only matching rows; a tap still opens "Put on course".
-  assert.match(judge, /\{group\.shown\.map\(\(run\) => \{/);
-  assert.match(judge, /onClick=\{\(\) => setRunSheet\(\{ runId: run\.id, mode: "actions" \}\)\}/);
-  assert.match(judge, /onClick=\{\(\) => void perform\(\{ kind: "current", run: sheetRun \}\)\}/);
 
   // The admin start list filters entrants and running-order rows.
   assert.match(admin, /\{group\.shownEntrants\.map\(\(entrant\) => \{/);

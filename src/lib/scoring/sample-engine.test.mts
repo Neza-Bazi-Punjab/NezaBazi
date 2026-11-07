@@ -616,3 +616,238 @@ test("practice sessions: one per key, the least recently used dropped at the cap
   store.get("user:dev");
   assert.deepEqual(store.keys(), ["user:alice", "user:dev"], "Bob and Carol idled out");
 });
+
+/* Training progression ------------------------------------------------------- */
+
+const dayRider = (index: number) => `solo:${id("7002", index + 1)}`;
+
+/* 30 riders, Pools A–C of ten, three attempts laid out round by round. */
+const daySeed = (): SampleSeed => {
+  const qual = round({ id: QUAL, pool_size: 10 });
+  const runs: ScoringRun[] = [];
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    for (let index = 0; index < 30; index += 1) {
+      runs.push(
+        run({
+          id: id("7003", runs.length + 1),
+          round_id: QUAL,
+          run_order: runs.length + 1,
+          attempt_number: attempt,
+          pool_label: "ABC"[Math.floor(index / 10)],
+          entrant_key: dayRider(index),
+          solo_registration_id: id("7002", index + 1),
+          rider_name: `Rider ${index + 1}`,
+        })
+      );
+    }
+  }
+
+  return {
+    rounds: [qual],
+    runs,
+    live: {
+      current_round_id: QUAL,
+      current_run_id: null,
+      called_pool_label: null,
+      display_mode: "scoreboard",
+      message: null,
+      updated_at: iso(-60),
+    },
+    progression: { poolSize: 10, finalAt: 3 },
+  };
+};
+
+const liveRound = (engine: ReturnType<typeof createSampleEngine>) => {
+  const snap = engine.snapshot();
+  return snap.rounds.find((candidate) => candidate.id === snap.live.current_round_id)!;
+};
+
+/* Calls the next pool when nobody is on course and scores whoever is. */
+const rideRound = (
+  engine: ReturnType<typeof createSampleEngine>,
+  decide: (run: ScoringRun) => RunResult
+) => {
+  const roundId = liveRound(engine).id;
+  const order: string[] = [];
+
+  for (let guard = 0; guard < 500; guard += 1) {
+    const snap = engine.snapshot();
+
+    if (snap.live.current_round_id !== roundId) {
+      break;
+    }
+
+    const open = snap.runs
+      .filter((candidate) => candidate.round_id === roundId && candidate.status === "pending")
+      .sort((a, b) => a.run_order - b.run_order);
+    let current = snap.runs.find((candidate) => candidate.id === snap.live.current_run_id);
+
+    if (!current) {
+      if (open.length === 0) {
+        break;
+      }
+
+      engine.callPool(roundId, open[0].pool_label!);
+      current = engine.snapshot().runs.find((candidate) => candidate.id === open[0].id)!;
+    }
+
+    order.push(`${current.attempt_number}${current.pool_label}`);
+    engine.recordResult(current.id, decide(current), false);
+  }
+
+  return order;
+};
+
+test("training runs the whole day: Qualification round by round, then Aarhi rounds to the Final", () => {
+  const engine = createSampleEngine(daySeed(), () => T0);
+  const index = (run: ScoringRun) => Number(run.rider_name.split(" ")[1]) - 1;
+
+  // Qualification: riders 1–14 carry on their third attempt, the rest never.
+  const qualOrder = rideRound(engine, (run) =>
+    index(run) < 14 && run.attempt_number === 3 ? "carry" : "strike"
+  );
+  const blocks = qualOrder.filter((block, at) => block !== qualOrder[at - 1]);
+  assert.deepEqual(blocks, ["1A", "1B", "1C", "2A", "2B", "2C", "3A", "3B", "3C"]);
+
+  let snap = engine.snapshot();
+  assert.equal(snap.rounds.find((candidate) => candidate.id === QUAL)!.status, "complete");
+  let aarhi = liveRound(engine);
+  assert.equal(aarhi.name, "Aarhi Round 1");
+  assert.equal(aarhi.attempts_per_rider, 1);
+  assert.equal(aarhi.status, "live");
+  assert.equal(snap.live.current_run_id, null);
+  const aarhiRuns = snap.runs.filter((candidate) => candidate.round_id === aarhi.id);
+  assert.equal(aarhiRuns.length, 14);
+  assert.deepEqual(
+    aarhiRuns.map((candidate) => candidate.pool_label).join(""),
+    "AAAAAAABBBBBBB"
+  );
+  assert.deepEqual(
+    aarhiRuns.map((candidate) => candidate.entrant_key),
+    Array.from({ length: 14 }, (_, at) => dayRider(at))
+  );
+
+  // Aarhi Round 1: the first 8 carry, a strike or a miss is out.
+  rideRound(engine, (run) => (index(run) < 8 ? "carry" : index(run) % 2 ? "miss" : "strike"));
+  aarhi = liveRound(engine);
+  assert.equal(aarhi.name, "Aarhi Round 2");
+  assert.equal(engine.snapshot().runs.filter((candidate) => candidate.round_id === aarhi.id).length, 8);
+
+  // Aarhi Round 2: nobody carries, so all eight ride again.
+  rideRound(engine, () => "strike");
+  aarhi = liveRound(engine);
+  assert.equal(aarhi.name, "Aarhi Round 3");
+  assert.equal(engine.snapshot().runs.filter((candidate) => candidate.round_id === aarhi.id).length, 8);
+
+  // Aarhi Round 3: three carry, so the next round is the Final.
+  rideRound(engine, (run) => (index(run) < 3 ? "carry" : "miss"));
+  const final = liveRound(engine);
+  assert.equal(final.name, "Final");
+  assert.equal(final.round_number, 4);
+  assert.equal(engine.snapshot().runs.filter((candidate) => candidate.round_id === final.id).length, 3);
+
+  // After the Final nothing more is built.
+  rideRound(engine, (run) => (index(run) === 0 ? "carry" : "strike"));
+  snap = engine.snapshot();
+  assert.equal(snap.rounds.length, 5);
+  assert.equal(snap.live.current_round_id, final.id);
+  assert.equal(snap.rounds.find((candidate) => candidate.id === final.id)!.status, "complete");
+});
+
+test("training rebuilds the next round when an earlier result changes, until it has been ridden", () => {
+  const engine = createSampleEngine(daySeed(), () => T0);
+  rideRound(engine, (run) => (run.rider_name === "Rider 1" ? "carry" : run.rider_name === "Rider 2" ? "carry" : "miss"));
+
+  const first = liveRound(engine);
+  assert.equal(engine.snapshot().runs.filter((candidate) => candidate.round_id === first.id).length, 2);
+
+  // Rider 3's last attempt becomes a carry: Aarhi Round 1 now has three riders.
+  const rider3Last = engine
+    .snapshot()
+    .runs.find((candidate) => candidate.round_id === QUAL && candidate.rider_name === "Rider 3" && candidate.attempt_number === 3)!;
+  engine.recordResult(rider3Last.id, "carry", true);
+  let rebuilt = liveRound(engine);
+  assert.notEqual(rebuilt.id, first.id);
+  assert.equal(rebuilt.name, "Final");
+  assert.equal(engine.snapshot().runs.filter((candidate) => candidate.round_id === rebuilt.id).length, 3);
+
+  // Clearing a Qualification result reopens it and takes the next round down.
+  engine.clearResult(rider3Last.id, true);
+  let snap = engine.snapshot();
+  assert.equal(snap.live.current_round_id, QUAL);
+  assert.equal(snap.rounds.length, 1);
+  engine.recordResult(rider3Last.id, "miss", false);
+  rebuilt = liveRound(engine);
+  assert.equal(rebuilt.name, "Final");
+
+  // Once the Final has a result, changing Qualification leaves it alone.
+  const finalRun = engine.snapshot().runs.find((candidate) => candidate.round_id === rebuilt.id)!;
+  engine.callPool(rebuilt.id, "A");
+  engine.recordResult(finalRun.id, "carry", false);
+  engine.recordResult(rider3Last.id, "carry", true);
+  snap = engine.snapshot();
+  assert.equal(snap.rounds.length, 2);
+  assert.equal(snap.runs.filter((candidate) => candidate.round_id === rebuilt.id).length, 2);
+});
+
+test("without progression a finished round stays as it is", () => {
+  const seed = daySeed();
+  delete seed.progression;
+  const engine = createSampleEngine(seed, () => T0);
+  rideRound(engine, () => "carry");
+  assert.equal(engine.snapshot().rounds.length, 1);
+});
+
+/* Take out and Bring back (scoring_take_out) ------------------------------------ */
+
+test("Take out skips the rider's rides still to come, marks them out and brings the next rider on", () => {
+  const engine = createSampleEngine(daySeed(), () => T0);
+  engine.callPool(QUAL, "A");
+  const asa = dayRider(0);
+
+  engine.takeOut(QUAL, asa, true);
+  let snap = engine.snapshot();
+  const asaRuns = snap.runs.filter((candidate) => candidate.entrant_key === asa);
+  assert.deepEqual(asaRuns.map((candidate) => candidate.status), ["void", "void", "void"]);
+  assert.equal(snap.runs.find((candidate) => candidate.id === snap.live.current_run_id)?.rider_name, "Rider 2");
+  assert.deepEqual(snap.overrides, [
+    { round_id: QUAL, entrant_key: asa, advanced: false, note: "Taken out on the judges' panel" },
+  ]);
+  const row = computeSampleLeaderboard(snap.rounds[0], snap.runs, new Map([[asa, false]])).find(
+    (candidate) => candidate.entrant_key === asa
+  )!;
+  assert.equal(row.advanced, false);
+  assert.equal(row.advanced_overridden, true);
+
+  assert.throws(() => engine.takeOut(QUAL, asa, true), /Rider 1 is already out\./);
+
+  // Bring back: the rides return and the override goes.
+  engine.takeOut(QUAL, asa, false);
+  snap = engine.snapshot();
+  assert.deepEqual(
+    snap.runs.filter((candidate) => candidate.entrant_key === asa).map((candidate) => candidate.status),
+    ["pending", "pending", "pending"]
+  );
+  assert.deepEqual(snap.overrides, []);
+  assert.equal(snap.runs.find((candidate) => candidate.id === snap.live.current_run_id)?.rider_name, "Rider 2");
+  assert.throws(() => engine.takeOut(QUAL, asa, false), /Rider 1 is not taken out\./);
+});
+
+test("Take out is refused after a carry; Bring back never undoes the person in control's Mark Out", () => {
+  const seed = daySeed();
+  seed.overrides = [{ round_id: QUAL, entrant_key: dayRider(2), advanced: false, note: "DQ" }];
+  const engine = createSampleEngine(seed, () => T0);
+  engine.callPool(QUAL, "A");
+  engine.recordResult(engine.snapshot().live.current_run_id!, "carry", false);
+
+  assert.throws(
+    () => engine.takeOut(QUAL, dayRider(0), true),
+    /Rider 1 has already carried in this round\. Ask the person in control\./
+  );
+  assert.throws(
+    () => engine.takeOut(QUAL, dayRider(2), false),
+    /The person in control marked Rider 3 out\. Ask them to bring the rider back\./
+  );
+  assert.throws(() => engine.takeOut(QUAL, `solo:${id("7002", 99)}`, true), /That rider is not in this round\./);
+});

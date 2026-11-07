@@ -25,6 +25,7 @@ import {
   type RunStatusRequest,
   type ScoreRequest,
   type StartListRequest,
+  type TakeOutRequest,
 } from "@/lib/scoring/types";
 
 export const UUID_PATTERN =
@@ -166,6 +167,22 @@ export const parseRunStatusRequest = (body: unknown): Parsed<RunStatusRequest> =
   }
 
   return pass({ run_id: body.run_id, status: body.status });
+};
+
+export const parseTakeOutRequest = (body: unknown): Parsed<TakeOutRequest> => {
+  if (!isRecord(body) || !isUuid(body.round_id)) {
+    return fail("Choose a round.");
+  }
+
+  if (!isEntrantKey(body.entrant_key)) {
+    return fail("Choose a rider.");
+  }
+
+  if (typeof body.out !== "boolean") {
+    return fail("Choose Take out or Bring back.");
+  }
+
+  return pass({ round_id: body.round_id, entrant_key: body.entrant_key, out: body.out });
 };
 
 /* Partial update: only the keys present are forwarded, so the database
