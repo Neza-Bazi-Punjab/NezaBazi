@@ -8,7 +8,11 @@
 import "server-only";
 
 import type { ServiceRoleClient } from "@/lib/admin/server";
-import { findProfileIdByEmail, getHeadshotUrl } from "@/lib/admin/headshot-urls";
+import {
+  findProfileIdByEmail,
+  getHeadshotUrl,
+  getPaperHeadshotUrl,
+} from "@/lib/admin/headshot-urls";
 import type {
   RiderDetail,
   RunResult,
@@ -243,7 +247,10 @@ export const loadRiderDetails = async (
         : member
           ? await findMemberProfileId(client, member, team)
           : null;
-      const headshotUrl = profileId ? await getHeadshotUrl(client, profileId) : null;
+      const headshotUrl =
+        (profileId ? await getHeadshotUrl(client, profileId) : null) ??
+        // A solo rider with no account may have a photo on the registration.
+        (solo ? await getPaperHeadshotUrl(client, solo.id) : null);
       const history = solo
         ? todayFor((today) => today.solo_registration_id === solo.id)
         : todayFor((today) => today.team_member_id === member?.id);

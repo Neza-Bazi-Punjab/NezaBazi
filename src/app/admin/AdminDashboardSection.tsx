@@ -14,6 +14,7 @@ import AdminDashboard, {
   type TeamMember,
 } from "./AdminDashboard";
 import { AdminAccessMessage, getAdminAccess } from "./admin-access";
+import { loadSoloHeadshots, type SoloHeadshot } from "@/lib/admin/headshot-urls";
 
 const getMetadataString = (metadata: object | null | undefined, key: string) => {
   if (!metadata || !(key in metadata)) {
@@ -96,6 +97,17 @@ export default async function AdminDashboardSection({
       : none,
   ]);
 
+  /* Thumbnails for the Photo column. Admins read every headshot, but the
+     signing goes through the service role like every other staff screen. */
+  let soloHeadshots: Record<string, SoloHeadshot> = {};
+
+  if (needs.solo) {
+    soloHeadshots = await loadSoloHeadshots(
+      createServiceRoleClient(),
+      (soloRegistrations ?? []) as SoloRegistration[]
+    );
+  }
+
   // The account list only puts names to the audit log's actors.
   let auditActors: AuditActor[] = [];
 
@@ -134,6 +146,7 @@ export default async function AdminDashboardSection({
             auditLog={(auditLog ?? []) as AuditLogEntry[]}
             auditArchive={(auditArchive ?? []) as ArchivedAuditEntry[]}
             auditActors={auditActors}
+            soloHeadshots={soloHeadshots}
           />
         </div>
       </section>

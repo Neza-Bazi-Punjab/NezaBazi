@@ -10,12 +10,14 @@ const source = readFileSync(
 test("registration tables contain long values and usable edit fields", () => {
   assert.match(source, /const adminTableInputClass =[\s\S]*?min-w-0/);
   assert.match(source, /function AdminTableText[\s\S]*?truncate/);
-  // Two 170px columns each for the parents' names.
-  assert.match(source, /min-w-\[2380px\]/);
+  // Two 170px columns for the parents' names, plus a 64px Photo column on
+  // the solo list.
+  assert.match(source, /min-w-\[2444px\]/);
   assert.match(source, /min-w-\[1880px\]/);
   assert.match(source, /<colgroup>/);
 
   for (const label of [
+    "Photo",
     "Horse Name",
     "Emergency Contact",
     "Emergency Phone",

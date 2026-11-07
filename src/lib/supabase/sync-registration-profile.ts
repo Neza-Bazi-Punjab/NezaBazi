@@ -7,6 +7,7 @@ import {
 } from "@supabase/supabase-js";
 import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
 import { escapeIlikePattern } from "@/lib/supabase/query";
+import { HEADSHOT_BUCKET, PAPER_HEADSHOT_FOLDER, buildHeadshotPath } from "@/lib/headshots";
 
 type RegistrationProfile = {
   userId: string;
@@ -52,15 +53,87 @@ const claimPaperSoloRegistration = async (
     return;
   }
 
-  const { error } = await serviceSupabase
+  // `*` rather than naming headshot_path, so claiming still works on a
+  // database where the paper-photo migration has not been run.
+  const { data: claimed, error } = await serviceSupabase
     .from("solo_registrations")
     .update({ profile_id: userId })
     .is("profile_id", null)
     .eq("registration_source", "paper")
-    .ilike("email", escapeIlikePattern(confirmedEmail));
+    .ilike("email", escapeIlikePattern(confirmedEmail))
+    .select("*");
 
   if (error) {
     console.warn("Could not link a paper registration to the account", error.code);
+    return;
+  }
+
+  for (const row of (claimed ?? []) as Array<Record<string, unknown>>) {
+    await movePaperHeadshotToAccount(serviceSupabase, userId, row);
+  }
+};
+
+/* A photo an administrator took for a rider with no account sits on the
+   registration (`paper/<registration_id>/...`). Once the rider's account has
+   claimed that entry, the photo becomes theirs like any other: copied into
+   their own folder, recorded in their Auth metadata (so their account page,
+   the check-in desk and the commentary panel all find it), and removed from
+   the registration. If the account already has a photo of its own, that one
+   wins and the registration's copy is left where it is. Best effort: on any
+   failure the photo stays on the registration, where it is still shown. */
+const movePaperHeadshotToAccount = async (
+  serviceSupabase: SupabaseClient,
+  userId: string,
+  row: Record<string, unknown>
+) => {
+  const registrationId = typeof row.id === "string" ? row.id : null;
+  const paperPath = typeof row.headshot_path === "string" ? row.headshot_path : null;
+
+  if (!registrationId || !paperPath?.startsWith(`${PAPER_HEADSHOT_FOLDER}/${registrationId}/`)) {
+    return;
+  }
+
+  try {
+    const { data: userData, error: userError } =
+      await serviceSupabase.auth.admin.getUserById(userId);
+
+    if (userError || !userData?.user) {
+      return;
+    }
+
+    const metadata = (userData.user.user_metadata ?? {}) as Record<string, unknown>;
+
+    if (typeof metadata.headshot_path === "string" && metadata.headshot_path !== "") {
+      return;
+    }
+
+    const accountPath = buildHeadshotPath(userId);
+    const { error: copyError } = await serviceSupabase.storage
+      .from(HEADSHOT_BUCKET)
+      .copy(paperPath, accountPath);
+
+    if (copyError) {
+      console.warn("Could not copy a paper headshot to the account", copyError.message);
+      return;
+    }
+
+    const { error: metadataError } = await serviceSupabase.auth.admin.updateUserById(userId, {
+      user_metadata: { ...metadata, headshot_path: accountPath },
+    });
+
+    if (metadataError) {
+      await serviceSupabase.storage.from(HEADSHOT_BUCKET).remove([accountPath]);
+      console.warn("Could not record the moved headshot on the account", metadataError.message);
+      return;
+    }
+
+    await serviceSupabase
+      .from("solo_registrations")
+      .update({ headshot_path: null })
+      .eq("id", registrationId);
+    await serviceSupabase.storage.from(HEADSHOT_BUCKET).remove([paperPath]);
+  } catch (moveError) {
+    console.warn("Could not move a paper headshot to the account", moveError);
   }
 };
 

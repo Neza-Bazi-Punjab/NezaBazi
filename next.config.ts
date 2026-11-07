@@ -13,6 +13,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // `npm run dev` only: let a phone on the same Wi-Fi open the dev server by
+  // the computer's local address (e.g. http://192.168.1.20:3000) to try
+  // phone-only features such as the camera. Ignored by production builds.
+  allowedDevOrigins: ["192.168.*.*", "10.*.*.*", "172.*.*.*"],
   async redirects() {
     return [
       // The About page became the Event page.
@@ -33,6 +37,13 @@ const nextConfig: NextConfig = {
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
           { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
         ],
+      },
+      // Admin pages may use this site's own camera, for taking a rider's
+      // photo from the Solo riders list. Every other page keeps it off. Comes
+      // after the catch-all so it overrides that rule's Permissions-Policy.
+      {
+        source: "/admin/:path*",
+        headers: [{ key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=()" }],
       },
     ];
   },

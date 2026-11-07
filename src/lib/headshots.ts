@@ -150,3 +150,13 @@ export const buildHeadshotPath = (profileId: string) => {
 
   return `${profileId}/${unique}.jpg`;
 };
+
+/* A rider with no account (a paper entry) keeps their photo on the
+   registration, at `paper/<registration_id>/<random>.jpg`. No rider's storage
+   policy matches the `paper` folder, so only the service role writes here.
+   The photo moves to the rider's own folder once they sign up and their
+   account claims the entry. */
+export const PAPER_HEADSHOT_FOLDER = "paper";
+
+export const buildPaperHeadshotPath = (registrationId: string) =>
+  buildHeadshotPath(`${PAPER_HEADSHOT_FOLDER}/${registrationId}`);
