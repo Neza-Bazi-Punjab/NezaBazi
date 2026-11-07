@@ -1,7 +1,8 @@
 // Solo registration form: a regular player's first entry is prefilled from
 // the account (name, age and location editable, so a parent can enter a
-// child; email and phone locked to the account), blank when the account is
-// entering another rider, autosaved to registration_drafts while typing, and
+// child; email and phone locked to the account), with only the account's
+// email and phone (editable) when the account is entering another rider,
+// autosaved to registration_drafts while typing, and
 // submitted straight to solo_registrations under RLS.
 "use client";
 
@@ -90,7 +91,6 @@ export default function RegisterForm({
   initialDraft,
   initialHeadshotPath = null,
   showHeadshot = true,
-  ownContactNote = false,
 }: {
   initialValues?: InitialValues;
   /* Email and phone follow the account on a regular player's first entry. */
@@ -104,9 +104,6 @@ export default function RegisterForm({
   /* False when this rider is not the account holder: the photo box writes
      the account's own photo, which would then belong to the wrong rider. */
   showHeadshot?: boolean;
-  /* True for another rider: the database still refuses an email or phone that
-     is already registered, so each rider needs their own for now. */
-  ownContactNote?: boolean;
   /* The headshot lives on the account rather than the registration, so it is
      not part of the autosaved draft — it is already uploaded and recorded in
      Auth metadata by the time the form is submitted. */
@@ -351,10 +348,10 @@ export default function RegisterForm({
     if (error) {
       setLoading(false);
 
-      // The database still refuses a repeated email or phone (UNIQUE on each)
-      // until a later migration allows riders to share contact details.
+      // Riders may share an email and phone; the database refuses only the
+      // same name again with the same email or the same phone.
       if (error.code === "23505") {
-        setError("This rider is already registered with this email or phone.");
+        setError("This rider is already registered with this name and email or phone.");
       } else {
         setError(error.message);
       }
@@ -457,11 +454,6 @@ export default function RegisterForm({
       </div>
 
       <div>
-        {ownContactNote && (
-          <p className="mb-4 text-sm leading-6 text-brown/85">
-            For now each rider needs their own email address and phone number.
-          </p>
-        )}
         <label className={labelClassName}>Phone Number</label>
         <input
           type="tel"

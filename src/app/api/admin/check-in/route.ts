@@ -15,29 +15,13 @@ import {
   getSoloHeadshotUrl,
   getTeamRiderHeadshotUrl,
 } from "@/lib/admin/headshot-urls";
+import { mergeRidersByCode, type RiderMatch } from "@/lib/check-in-roster";
 import { escapeIlikePattern } from "@/lib/supabase/query";
 
 type LookupRequest = { code?: unknown; query?: unknown; roster?: unknown };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
-
-type RiderMatch = {
-  id: string;
-  source: "solo" | "team";
-  /* Every entry this one code covers — a rider can be both a solo entrant and
-     a team rider. */
-  entries: Array<"solo" | "team">;
-  full_name: string;
-  email: string;
-  phone: string;
-  team_name: string | null;
-  /* The team this rider rides for, so the desk can count a team's riders. */
-  team_id: string | null;
-  is_leader: boolean | null;
-  confirmation_code: string;
-  checked_in_at: string | null;
-};
 
 const MATCH_LIMIT = 25;
 
@@ -81,29 +65,14 @@ const searchRiders = async (
     return { matches: [], error: failure.error.message };
   }
 
-  // Keyed on the code, not the row: a rider with both a solo entry and a team
-  // place shares one code, and must appear once in the results rather than
-  // twice.
-  const byCode = new Map<string, RiderMatch>();
-
-  const addEntry = (code: string, match: RiderMatch) => {
-    const existing = byCode.get(code);
-
-    if (!existing) {
-      byCode.set(code, match);
-      return;
-    }
-
-    existing.entries = [...new Set([...existing.entries, ...match.entries])];
-    // Prefer the team label, which carries the team name.
-    existing.team_name = existing.team_name ?? match.team_name;
-    existing.team_id = existing.team_id ?? match.team_id;
-    existing.is_leader = existing.is_leader ?? match.is_leader;
-  };
+  // One row per code (mergeRidersByCode): the same rider's solo entry and
+  // team place share one code and appear once; two riders sharing an email
+  // or phone have their own codes and appear as two rows.
+  const rows: RiderMatch[] = [];
 
   for (const result of soloResults) {
     for (const row of result.data ?? []) {
-      addEntry(row.confirmation_code, {
+      rows.push({
         id: row.id,
         source: "solo",
         entries: ["solo"],
@@ -129,7 +98,7 @@ const searchRiders = async (
         | null;
       const team = Array.isArray(relation) ? relation[0] ?? null : relation;
 
-      addEntry(row.confirmation_code, {
+      rows.push({
         id: row.id,
         source: "team",
         entries: ["team"],
@@ -145,9 +114,7 @@ const searchRiders = async (
     }
   }
 
-  const matches = [...byCode.values()]
-    .sort((first, second) => first.full_name.localeCompare(second.full_name))
-    .slice(0, MATCH_LIMIT);
+  const matches = mergeRidersByCode(rows).slice(0, MATCH_LIMIT);
 
   return { matches, error: null };
 };
@@ -180,12 +147,11 @@ const listRiders = async (
     return { riders: [], error: failure.message };
   }
 
-  // One row per code, as in searchRiders: a rider with a solo entry and a
-  // team place shares one code and is listed once, with both entries.
-  const byCode = new Map<string, RiderMatch>();
+  // One row per code, as in searchRiders.
+  const rows: RiderMatch[] = [];
 
   for (const row of solo.data ?? []) {
-    byCode.set(row.confirmation_code, {
+    rows.push({
       id: row.id,
       source: "solo",
       entries: ["solo"],
@@ -206,17 +172,8 @@ const listRiders = async (
       | { team_name: string }[]
       | null;
     const teamName = (Array.isArray(relation) ? relation[0] ?? null : relation)?.team_name ?? null;
-    const existing = byCode.get(row.confirmation_code);
 
-    if (existing) {
-      existing.entries = [...new Set([...existing.entries, "team" as const])];
-      existing.team_name = existing.team_name ?? teamName;
-      existing.team_id = existing.team_id ?? row.team_id;
-      existing.is_leader = existing.is_leader ?? row.is_leader;
-      continue;
-    }
-
-    byCode.set(row.confirmation_code, {
+    rows.push({
       id: row.id,
       source: "team",
       entries: ["team"],
@@ -231,12 +188,7 @@ const listRiders = async (
     });
   }
 
-  return {
-    riders: [...byCode.values()].sort((first, second) =>
-      first.full_name.localeCompare(second.full_name)
-    ),
-    error: null,
-  };
+  return { riders: mergeRidersByCode(rows), error: null };
 };
 
 type CheckInRequest = {
@@ -406,10 +358,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: contactError.message }, { status: 400 });
     }
 
-    // The leader registered the team, so the team's account may be theirs;
-    // anyone else is found by email: a solo entry, or their own confirmed
-    // account. Either way only an account with the rider's own email and
-    // name counts.
+    // The rider's own photo on the row first. Then: the leader registered
+    // the team, so the team's account may be theirs; anyone else is found by
+    // email: a solo entry, or their own confirmed account. Either way only an
+    // account with the rider's own email and name counts.
     teammates = await Promise.all(
       (teamRows ?? []).map(async ({ email, ...teammate }) => {
         let headshot_url: string | null = null;
@@ -417,7 +369,7 @@ export async function POST(request: Request) {
         try {
           headshot_url = await getTeamRiderHeadshotUrl(
             serviceSupabase,
-            { email, full_name: teammate.full_name },
+            { id: teammate.id, email, full_name: teammate.full_name },
             teammate.is_leader ? ((teamRow?.leader_profile_id as string | null) ?? null) : null
           );
         } catch {

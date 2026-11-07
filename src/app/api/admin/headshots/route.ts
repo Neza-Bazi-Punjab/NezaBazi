@@ -1,5 +1,6 @@
-// An administrator adds, replaces or removes a solo rider's photo from the
-// Solo riders list.
+// An administrator adds, replaces or removes a rider's photo from the Solo
+// riders list or the Teams list. `kind` says which: "solo" (the default, for
+// a solo registration) or "team" (a team rider's row in team_members).
 //
 // A registration is a rider; its account is whoever entered it, and one
 // account may have entered several riders. So where a photo goes is decided
@@ -13,6 +14,12 @@
 //
 // The registration's own photo is what staff screens show first, so a
 // registration that already has one always has it replaced or removed there.
+//
+// Team riders have no account id on the row, so an administrator's photo for
+// a team rider always goes onto the row (`team_members.headshot_path`, under
+// `paper/<team_member_id>/`). A team rider's own account photo, shown when
+// the row has none, is theirs to change under My Account; it is never
+// removed from here.
 //
 // POST adds a first photo (audited `add_headshot`) or replaces the existing
 // one (`replace_headshot`; the old object is deleted once the new one is
@@ -52,6 +59,21 @@ const fail = (error: string, status: number) => NextResponse.json({ error }, { s
 type ServiceClient = ReturnType<typeof createServiceRoleClient>;
 type Actor = Parameters<typeof insertRequiredAuditLog>[1];
 type Registration = Record<string, unknown>;
+
+/* Which list the photo is for, and the table its row lives in. */
+type RiderKind = "solo" | "team";
+
+const tableFor = (kind: RiderKind) =>
+  kind === "team" ? ("team_members" as const) : ("solo_registrations" as const);
+
+/* Absent means solo, as before team photos existed. Anything else but the
+   two kinds is a malformed request. */
+const readKind = (value: unknown): RiderKind | null =>
+  value === undefined || value === null || value === "solo"
+    ? "solo"
+    : value === "team"
+      ? "team"
+      : null;
 
 /* The account holder, only when this registration is their own. `null` when
    the registration has no account or is a rider the account entered for
@@ -96,9 +118,13 @@ const findOwnHolder = async (
   return { ok: true, holder: own ? { profileId, metadata } : null };
 };
 
-const loadRegistration = async (serviceSupabase: ServiceClient, registrationId: string) =>
+const loadRegistration = async (
+  serviceSupabase: ServiceClient,
+  kind: RiderKind,
+  registrationId: string
+) =>
   serviceSupabase
-    .from("solo_registrations")
+    .from(tableFor(kind))
     // `*` rather than naming headshot_path, so the "needs a database update"
     // message below can be given instead of a query error.
     .select("*")
@@ -113,8 +139,10 @@ const signedUrlFor = async (serviceSupabase: ServiceClient, path: string) => {
   return data?.signedUrl ?? null;
 };
 
-const NEEDS_MIGRATION =
-  "Registration photos need a database update first (supabase/migrations/20261108100000_paper_rider_headshots.sql).";
+const needsMigration = (kind: RiderKind) =>
+  kind === "team"
+    ? "Team rider photos need a database update first (supabase/migrations/20261108120000_shared_contact_details.sql)."
+    : "Registration photos need a database update first (supabase/migrations/20261108100000_paper_rider_headshots.sql).";
 
 export async function POST(request: Request) {
   const verification = await verifyAdminRequest();
@@ -133,8 +161,9 @@ export async function POST(request: Request) {
 
   const registrationId = form.get("registrationId");
   const photo = form.get("photo");
+  const kind = readKind(form.get("kind"));
 
-  if (typeof registrationId !== "string" || !uuidPattern.test(registrationId)) {
+  if (typeof registrationId !== "string" || !uuidPattern.test(registrationId) || !kind) {
     return fail("Invalid registration.", 400);
   }
 
@@ -149,6 +178,7 @@ export async function POST(request: Request) {
   const serviceSupabase = createServiceRoleClient();
   const { data: registration, error: registrationError } = await loadRegistration(
     serviceSupabase,
+    kind,
     registrationId
   );
 
@@ -161,10 +191,11 @@ export async function POST(request: Request) {
   }
 
   // A photo already on the registration is the one shown, so it is the one
-  // replaced, whoever the registration belongs to.
+  // replaced, whoever the registration belongs to. A team rider's photo
+  // always goes onto the row.
   const registrationPath = readPaperHeadshotPath(registrationId, registration.headshot_path);
 
-  if (!registrationPath) {
+  if (kind === "solo" && !registrationPath) {
     const found = await findOwnHolder(serviceSupabase, registration);
 
     if (!found.ok) {
@@ -179,6 +210,7 @@ export async function POST(request: Request) {
   return saveRegistrationHeadshot(
     serviceSupabase,
     verification.actor,
+    kind,
     registration,
     registrationPath,
     photo
@@ -235,10 +267,12 @@ const saveAccountHeadshot = async (
   return NextResponse.json({ url: await signedUrlFor(serviceSupabase, path) });
 };
 
-/* Any other registration keeps its own photo on the row. */
+/* Any other registration, and every team rider, keeps its own photo on the
+   row. */
 const saveRegistrationHeadshot = async (
   serviceSupabase: ServiceClient,
   actor: Actor,
+  kind: RiderKind,
   registration: Registration,
   previousPath: string | null,
   photo: Blob
@@ -246,7 +280,7 @@ const saveRegistrationHeadshot = async (
   const registrationId = registration.id as string;
 
   if (!("headshot_path" in registration)) {
-    return fail(NEEDS_MIGRATION, 409);
+    return fail(needsMigration(kind), 409);
   }
 
   const path = buildPaperHeadshotPath(registrationId);
@@ -254,7 +288,7 @@ const saveRegistrationHeadshot = async (
   try {
     await insertRequiredAuditLog(serviceSupabase, actor, {
       action: previousPath ? "replace_headshot" : "add_headshot",
-      target_table: "solo_registrations",
+      target_table: tableFor(kind),
       target_id: registrationId,
       details: { rider: registration.full_name, stored_on: "registration" },
     });
@@ -273,7 +307,7 @@ const saveRegistrationHeadshot = async (
   // Written only if the row still holds the photo this request saw, so two
   // admins changing the same photo at once can't silently overwrite each other.
   const update = serviceSupabase
-    .from("solo_registrations")
+    .from(tableFor(kind))
     .update({ headshot_path: path })
     .eq("id", registrationId);
   const { data: updated, error: updateError } = await (previousPath
@@ -317,18 +351,21 @@ export async function DELETE(request: Request) {
     return fail("Invalid request.", 400);
   }
 
-  const registrationId =
+  const fields =
     typeof body === "object" && body !== null
-      ? (body as { registrationId?: unknown }).registrationId
-      : undefined;
+      ? (body as { registrationId?: unknown; kind?: unknown })
+      : {};
+  const registrationId = fields.registrationId;
+  const kind = readKind(fields.kind);
 
-  if (typeof registrationId !== "string" || !uuidPattern.test(registrationId)) {
+  if (typeof registrationId !== "string" || !uuidPattern.test(registrationId) || !kind) {
     return fail("Invalid registration.", 400);
   }
 
   const serviceSupabase = createServiceRoleClient();
   const { data: registration, error: registrationError } = await loadRegistration(
     serviceSupabase,
+    kind,
     registrationId
   );
 
@@ -341,7 +378,19 @@ export async function DELETE(request: Request) {
   }
 
   const registrationPath = readPaperHeadshotPath(registrationId, registration.headshot_path);
-  const found = await findOwnHolder(serviceSupabase, registration);
+
+  // A team rider: only the row's own photo can be removed here.
+  if (kind === "team" && !registrationPath) {
+    return fail(
+      "This photo is the rider's own account photo; they can change it under My Account. Add a photo here to show a different one.",
+      409
+    );
+  }
+
+  const found =
+    kind === "solo"
+      ? await findOwnHolder(serviceSupabase, registration)
+      : ({ ok: true, holder: null } as const);
 
   if (!found.ok) {
     return fail("This rider's account couldn't be checked. Try again.", 502);
@@ -357,7 +406,7 @@ export async function DELETE(request: Request) {
   try {
     await insertRequiredAuditLog(serviceSupabase, verification.actor, {
       action: "remove_headshot",
-      target_table: "solo_registrations",
+      target_table: tableFor(kind),
       target_id: registrationId,
       details: {
         rider: registration.full_name,
@@ -370,7 +419,7 @@ export async function DELETE(request: Request) {
 
   if (registrationPath) {
     const { error: updateError } = await serviceSupabase
-      .from("solo_registrations")
+      .from(tableFor(kind))
       .update({ headshot_path: null })
       .eq("id", registrationId)
       .eq("headshot_path", registrationPath);

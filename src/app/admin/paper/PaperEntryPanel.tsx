@@ -4,7 +4,9 @@
    the system on the rider's behalf. The fields come from the same list the
    printed sheet is built from, in the same order, so the eye goes down the
    paper while the hands go down the page. Possible duplicates are looked up
-   while typing; the database refuses a true duplicate regardless. The success
+   while typing, as a warning only: riders may share an email or phone (a
+   family, a club contact), and the database refuses only a true duplicate,
+   the same name with the same email or the same phone. The success
    screen shows the confirmation code(s) large enough to copy onto the form's
    "Office use only" box from across a table. */
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -246,8 +248,8 @@ function DuplicateNotice({ name, phone, email }: { name: string; phone: string; 
   if (status === "error") {
     return (
       <p className="text-sm text-brown/70" role="status">
-        Could not check existing registrations. Saving still refuses a rider who is already
-        registered.
+        Could not check existing registrations. Saving still refuses the same name with the
+        same email or phone.
       </p>
     );
   }

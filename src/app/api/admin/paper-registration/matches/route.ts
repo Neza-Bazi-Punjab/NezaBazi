@@ -1,7 +1,9 @@
 // Possible duplicates for the paper entry panel, checked while the
 // administrator types: a rider who also registered online, or whose form was
 // already keyed in, should be caught before a second entry is made. Advisory
-// only — admin_create_paper_registration enforces uniqueness on its own.
+// only: riders may share an email or phone (a family, a club contact), and
+// admin_create_paper_registration refuses only the same name with the same
+// email or the same phone.
 //
 // GET /api/admin/paper-registration/matches?phone=…&name=…&email=…
 import { NextResponse } from "next/server";
@@ -194,9 +196,15 @@ export async function GET(request: Request) {
   collect("solo", soloResults);
   collect("team", teamResults);
 
-  // A shared phone or email is a far stronger signal than a similar name.
-  const strength = (match: PaperMatch) =>
-    match.matched_on.includes("phone") || match.matched_on.includes("email") ? 0 : 1;
+  // The same name with a shared phone or email is the strongest signal (it is
+  // what saving refuses); a shared contact alone may be a family member.
+  const strength = (match: PaperMatch) => {
+    const sharedContact = match.matched_on.includes("phone") || match.matched_on.includes("email");
+    if (sharedContact && match.matched_on.includes("name")) {
+      return 0;
+    }
+    return sharedContact ? 1 : 2;
+  };
 
   const matches = [...byEntry.values()]
     .sort(

@@ -13,9 +13,10 @@
 import { MAX_EMAIL_LENGTH, isValidEmail } from "./email-address.ts";
 
 /* Riders without an email address are stored under a generated placeholder
-   on this domain, so the NOT NULL, UNIQUE and format constraints on the email
-   columns, and the one-code-per-rider trigger that matches on email, keep
-   working unchanged. The domain must never receive mail: a rider is linked to
+   on this domain, so the NOT NULL and format constraints on the email
+   columns, the same-name duplicate guard and the one-code-per-rider trigger
+   (which matches on name and email) keep working unchanged: a placeholder
+   never matches another rider. The domain must never receive mail: a rider is linked to
    an account by a confirmed email address, and nobody can confirm one here. */
 export const PAPER_EMAIL_DOMAIN = "paper.nezabazipunjab.com";
 export const PAPER_EMAIL_DISPLAY = "No email (paper entry)";
@@ -243,6 +244,10 @@ export const phoneKey = (phone: string) => {
   return digits.length >= 6 ? digits : phone.trim().toLowerCase();
 };
 
+/* How two names are compared for a true duplicate, here and in the database
+   (rider_name_key): lower-cased, trimmed, runs of spaces collapsed. */
+export const riderNameKey = (name: string) => name.trim().replace(/\s+/g, " ").toLowerCase();
+
 const blankToNull = (value: string) => {
   const trimmed = value.trim();
   return trimmed === "" ? null : trimmed;
@@ -454,8 +459,7 @@ export const validatePaperTeam = (
   }
 
   const riders: PaperRiderPayload[] = [];
-  const seenEmails = new Map<string, number>();
-  const seenPhones = new Map<string, number>();
+  const seen: Array<{ name: string; email: string | null; phone: string }> = [];
 
   input.riders.forEach((riderInput, index) => {
     const label = `${riderLabel(index)}: `;
@@ -465,27 +469,24 @@ export const validatePaperTeam = (
       return;
     }
 
-    // Each rider must be a different person, exactly as the online wizard
-    // requires: one email and one phone per rider.
-    if (rider.email !== null) {
-      const earlier = seenEmails.get(rider.email);
-
-      if (earlier !== undefined) {
-        errors[`riders.${index}.email`] = `${label}Same email as ${riderLabel(earlier).toLowerCase()}.`;
-      } else {
-        seenEmails.set(rider.email, index);
-      }
-    }
-
+    // Riders may share an email or a phone (a family, a club contact). The
+    // same name again with the same email or the same phone is the same
+    // rider twice, which the database refuses too.
+    const name = riderNameKey(rider.full_name);
     const phone = phoneKey(rider.phone);
-    const earlierPhone = seenPhones.get(phone);
+    const earlier = seen.findIndex(
+      (other) =>
+        other.name === name &&
+        ((rider.email !== null && other.email === rider.email) || other.phone === phone)
+    );
 
-    if (earlierPhone !== undefined) {
-      errors[`riders.${index}.phone`] = `${label}Same phone number as ${riderLabel(earlierPhone).toLowerCase()}.`;
-    } else {
-      seenPhones.set(phone, index);
+    if (earlier !== -1) {
+      const field = rider.email !== null && seen[earlier].email === rider.email ? "email" : "phone";
+      errors[`riders.${index}.${field}`] =
+        `${label}Same name and ${field === "email" ? "email" : "phone number"} as ${riderLabel(earlier).toLowerCase()}.`;
     }
 
+    seen.push({ name, email: rider.email, phone });
     riders.push(rider);
   });
 

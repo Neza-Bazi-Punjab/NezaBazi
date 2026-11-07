@@ -1,6 +1,7 @@
 "use client";
 
-/* The Photo column on the admin Solo riders list.
+/* The Photo column on the admin Solo riders list and Teams list
+   (RiderHeadshotCell; `kind` says which, so the photo reaches the right row).
 
    A rider with a photo shows a small round thumbnail; clicking it opens the
    photo in a pop-up over the page, with Replace photo and Remove photo. A
@@ -9,8 +10,9 @@
    photo" opens the device camera directly; on a computer it opens the webcam
    in a pop-up. Either way the photo is rotated, downscaled and re-encoded in
    the browser exactly as a rider's own upload is, then stored as that rider's
-   headshot — on the account only for the account holder's own registration,
-   otherwise on the registration itself (see /api/admin/headshots). */
+   headshot — for a solo rider on the account only for the account holder's
+   own registration, otherwise on the registration itself; for a team rider
+   always on their row in team_members (see /api/admin/headshots). */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -19,7 +21,11 @@ import {
   validateHeadshotSource,
 } from "@/lib/headshots";
 
-export type SoloHeadshotState = { url: string | null };
+export type RiderHeadshotState = { url: string | null };
+export type SoloHeadshotState = RiderHeadshotState;
+
+/* Which list the cell sits in: a solo registration or a team rider's row. */
+export type RiderKind = "solo" | "team";
 
 /* Matches the pop-ups' transition length, so they finish fading before they
    leave the page. */
@@ -284,6 +290,7 @@ function PhotoViewer({
   url,
   riderName,
   registrationId,
+  kind,
   onRemoved,
   onReplace,
   close,
@@ -291,6 +298,7 @@ function PhotoViewer({
   url: string;
   riderName: string;
   registrationId: string;
+  kind: RiderKind;
   /* The photo to show next: usually none. */
   onRemoved: (nextUrl: string | null) => void;
   /* Opens the file picker or the camera; called inside the click itself, so
@@ -310,7 +318,7 @@ function PhotoViewer({
       const response = await fetch("/api/admin/headshots", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ registrationId }),
+        body: JSON.stringify({ registrationId, kind }),
       });
       const result = (await response.json().catch(() => ({}))) as {
         url?: string | null;
@@ -404,15 +412,18 @@ function PhotoViewer({
   );
 }
 
-export default function SoloHeadshotCell({
+export default function RiderHeadshotCell({
   registrationId,
+  kind,
   riderName,
   initial,
   onError,
 }: {
+  /* The row's id: solo_registrations.id, or team_members.id for a team rider. */
   registrationId: string;
+  kind: RiderKind;
   riderName: string;
-  initial: SoloHeadshotState | undefined;
+  initial: RiderHeadshotState | undefined;
   /* Shown above the table: a 40px cell has no room for a message. */
   onError: (message: string | null) => void;
 }) {
@@ -484,6 +495,7 @@ export default function SoloHeadshotCell({
 
       const body = new FormData();
       body.append("registrationId", registrationId);
+      body.append("kind", kind);
       body.append("photo", prepared.blob, "headshot.jpg");
 
       // The same request adds a first photo or replaces the one shown.
@@ -617,6 +629,7 @@ export default function SoloHeadshotCell({
               url={url}
               riderName={riderName}
               registrationId={registrationId}
+              kind={kind}
               onRemoved={(nextUrl) => {
                 afterRemove.current = { url: nextUrl };
               }}

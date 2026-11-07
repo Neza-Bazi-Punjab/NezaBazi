@@ -11,9 +11,9 @@ test("registration tables contain long values and usable edit fields", () => {
   assert.match(source, /const adminTableInputClass =[\s\S]*?min-w-0/);
   assert.match(source, /function AdminTableText[\s\S]*?truncate/);
   // Two 170px columns for the parents' names, plus a 64px Photo column on
-  // the solo list.
+  // the solo list and on each team's rider table.
   assert.match(source, /min-w-\[2444px\]/);
-  assert.match(source, /min-w-\[1880px\]/);
+  assert.match(source, /min-w-\[1944px\]/);
   assert.match(source, /<colgroup>/);
 
   for (const label of [

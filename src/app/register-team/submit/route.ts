@@ -4,6 +4,7 @@ import { isValidEmail } from "@/lib/email-address";
 import { buildRegistrationCodeEmail } from "@/lib/email/registration-code";
 import { sendEmail } from "@/lib/email/resend";
 import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
+import { sameRiderMatch } from "@/lib/registration-identity";
 import { escapeIlikePattern } from "@/lib/supabase/query";
 import { createClient } from "@/lib/supabase/server";
 
@@ -33,6 +34,17 @@ type RegisterTeamRequest = {
 };
 
 const PARENT_NAME_MAX_LENGTH = 200;
+
+/* The words of a name in order, anything between: finds "Harpreet  Singh"
+   for "harpreet singh". sameRiderMatch then compares exactly. */
+const looseNamePattern = (name: string) =>
+  name.trim().split(/\s+/).map(escapeIlikePattern).join("%");
+
+const riderIdentity = (rider: { fullName: string; email: string; phone: string }) => ({
+  full_name: rider.fullName,
+  email: rider.email,
+  phone: rider.phone,
+});
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -289,17 +301,21 @@ export async function POST(request: Request) {
     horseAge: rider.horseAge.trim(),
     horseBreed: rider.horseBreed.trim(),
   }));
-  const riderEmails = normalizedRiders.map((rider) => rider.email);
-  const riderPhones = normalizedRiders.map((rider) => rider.phone);
 
-  if (
-    new Set(riderEmails).size !== riderEmails.length ||
-    new Set(riderPhones).size !== riderPhones.length
-  ) {
-    return NextResponse.json(
-      { error: "Each rider must have a unique email address and phone number." },
-      { status: 409 }
-    );
+  // Riders may share an email and a phone (a family, a club contact). The
+  // same name twice with the same email or phone is one rider entered twice.
+  for (let index = 1; index < normalizedRiders.length; index += 1) {
+    const rider = normalizedRiders[index];
+    const twice = normalizedRiders
+      .slice(0, index)
+      .some((earlier) => sameRiderMatch(riderIdentity(rider), riderIdentity(earlier)) !== null);
+
+    if (twice) {
+      return NextResponse.json(
+        { error: `${rider.fullName} is entered twice on this team with the same email or phone.` },
+        { status: 409 }
+      );
+    }
   }
 
   const { data: profile, error: profileError } = await supabase
@@ -330,56 +346,39 @@ export async function POST(request: Request) {
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
-  if (!isAdmin && user.email) {
-    const { data: currentMembership, error: membershipError } = await serviceSupabase
-      .from("team_members")
-      .select("id")
-      .ilike("email", escapeIlikePattern(user.email))
-      .eq("is_leader", false)
-      .limit(1);
+  // A true duplicate is the same name with the same email or phone already on
+  // a team (any team). A rider's own solo entry is fine: under the same name
+  // and email the two entries share one confirmation code. The account's
+  // email on another team's rider is fine too: that may be a family member.
+  // Names are fetched loosely (each word in order) and compared exactly here;
+  // the unique indexes on team_members are the backstop.
+  const existingLookups = await Promise.all(
+    normalizedRiders.map((rider) =>
+      serviceSupabase
+        .from("team_members")
+        .select("full_name, email, phone")
+        .ilike("full_name", looseNamePattern(rider.fullName))
+        .limit(50)
+    )
+  );
+  const lookupError = existingLookups.find((lookup) => lookup.error)?.error;
 
-    if (membershipError) {
-      return NextResponse.json({ error: membershipError.message }, { status: 400 });
-    }
+  if (lookupError) {
+    return NextResponse.json({ error: lookupError.message }, { status: 400 });
+  }
 
-    if ((currentMembership ?? []).length > 0) {
+  for (let index = 0; index < normalizedRiders.length; index += 1) {
+    const rider = normalizedRiders[index];
+    const matched = (existingLookups[index].data ?? [])
+      .map((existing) => sameRiderMatch(riderIdentity(rider), existing))
+      .find((match) => match !== null);
+
+    if (matched) {
       return NextResponse.json(
-        { error: "You are already registered on a team and cannot register another team." },
+        { error: `${rider.fullName} is already registered on a team with this ${matched}.` },
         { status: 409 }
       );
     }
-  }
-
-  const [emailLookups, phoneLookup] = await Promise.all([
-    Promise.all(
-      riderEmails.map((email) =>
-        serviceSupabase
-          .from("team_members")
-          .select("id")
-          .ilike("email", escapeIlikePattern(email))
-          .limit(1)
-      )
-    ),
-    serviceSupabase.from("team_members").select("id").in("phone", riderPhones).limit(1),
-  ]);
-  const emailLookupError = emailLookups.find((lookup) => lookup.error)?.error;
-
-  if (emailLookupError) {
-    return NextResponse.json({ error: emailLookupError.message }, { status: 400 });
-  }
-
-  if (phoneLookup.error) {
-    return NextResponse.json({ error: phoneLookup.error.message }, { status: 400 });
-  }
-
-  if (
-    emailLookups.some((lookup) => (lookup.data ?? []).length > 0) ||
-    (phoneLookup.data ?? []).length > 0
-  ) {
-    return NextResponse.json(
-      { error: "One or more riders are already registered on another team." },
-      { status: 409 }
-    );
   }
 
   let teamId = isAdmin ? undefined : existingTeamId;
@@ -488,7 +487,7 @@ export async function POST(request: Request) {
 
     const message =
       membersError.code === "23505"
-        ? "One or more riders are already registered on another team (duplicate email or phone)."
+        ? "One or more riders are already registered on a team with this name and email or phone."
         : membersError.message;
 
     return NextResponse.json({ error: message }, { status: 400 });

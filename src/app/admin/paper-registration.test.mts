@@ -321,7 +321,7 @@ test("a solo paper form validates like the online form, with email optional", ()
   }
 });
 
-test("a team needs four different riders, leader first", () => {
+test("a team needs four different riders, leader first; riders may share contact details", () => {
   const team = {
     ...emptyTeamInput(),
     team_name: "Majha Riders",
@@ -331,18 +331,20 @@ test("a team needs four different riders, leader first", () => {
       rider(),
       rider({ full_name: "Rider Two", phone: "98765-43211", email: "two@example.com" }),
       rider({ full_name: "Rider Three", phone: "98765 43212" }),
-      rider({ full_name: "Rider Four", phone: "9876543210" }),
+      rider({ full_name: "  harpreet   SINGH ", phone: "9876543210", email: "" }),
     ],
   };
 
+  // The same name with the same phone (by its digits) is the same rider twice.
   const duplicate = validatePaperTeam(team);
   assert.equal(duplicate.ok, false);
 
   if (!duplicate.ok) {
-    assert.match(duplicate.errors["riders.3.phone"], /Same phone number as rider 1 \(team leader\)/);
+    assert.match(duplicate.errors["riders.3.phone"], /Same name and phone number as rider 1 \(team leader\)/);
   }
 
-  team.riders[3] = rider({ full_name: "Rider Four", phone: "98765 43213" });
+  // A different rider on the leader's phone and email is allowed (a family).
+  team.riders[3] = rider({ full_name: "Rider Four" });
   const valid = validatePaperTeam(team);
   assert.equal(valid.ok, true);
 
@@ -350,6 +352,7 @@ test("a team needs four different riders, leader first", () => {
     assert.equal(valid.payload.riders.length, 4);
     assert.equal(valid.payload.riders[0].full_name, "Harpreet Singh");
     assert.equal(valid.payload.riders[1].email, "two@example.com");
+    assert.equal(valid.payload.riders[3].phone, valid.payload.riders[0].phone);
   }
 });
 

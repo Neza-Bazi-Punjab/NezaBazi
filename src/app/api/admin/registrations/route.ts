@@ -294,7 +294,9 @@ const describeMutationError = (
   if (error.code === "23505") {
     return {
       status: 409,
-      message: "Another registration already uses this email address or phone number.",
+      // Riders may share contact details; only the same name again with the
+      // same email or phone is refused (20261108120000).
+      message: "This rider is already registered with this name and email or phone.",
     };
   }
 
@@ -348,9 +350,10 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: reservedEmail }, { status: 400 });
   }
 
-  /* A no-account rider's photo lives with their solo entry, so it goes with
-     it. `*` so this works before the paper-photo migration has been run. */
-  let paperHeadshotPath: string | null = null;
+  /* A registration's own photo (`headshot_path` on the row) goes with it: a
+     solo entry's, or every rider's on a deleted team. `*` so this works
+     before the photo migrations have been run. */
+  const ownHeadshots: Array<{ id: string; path: string }> = [];
 
   if (operation === "delete_solo") {
     const { data: soloRow } = await serviceSupabase
@@ -358,7 +361,27 @@ export async function PATCH(request: Request) {
       .select("*")
       .eq("id", targetId)
       .maybeSingle();
-    paperHeadshotPath = readPaperHeadshotPath(targetId, soloRow?.headshot_path);
+    const path = readPaperHeadshotPath(targetId, soloRow?.headshot_path);
+
+    if (path) {
+      ownHeadshots.push({ id: targetId, path });
+    }
+  }
+
+  if (operation === "delete_team") {
+    const { data: memberRows } = await serviceSupabase
+      .from("team_members")
+      .select("*")
+      .eq("team_id", targetId);
+
+    for (const member of (memberRows ?? []) as Array<Record<string, unknown>>) {
+      const memberId = typeof member.id === "string" ? member.id : "";
+      const path = memberId ? readPaperHeadshotPath(memberId, member.headshot_path) : null;
+
+      if (path) {
+        ownHeadshots.push({ id: memberId, path });
+      }
+    }
   }
 
   const { error } = await serviceSupabase.rpc("admin_mutate_registration", {
@@ -376,16 +399,18 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: message }, { status });
   }
 
-  if (paperHeadshotPath) {
+  if (ownHeadshots.length > 0) {
     const { error: removeError } = await serviceSupabase.storage
       .from(HEADSHOT_BUCKET)
-      .remove([paperHeadshotPath]);
+      .remove(ownHeadshots.map((headshot) => headshot.path));
 
     if (removeError) {
       console.error("Could not remove a deleted entry's photo", removeError.message);
     }
 
-    forgetPaperHeadshotUrl(targetId);
+    for (const headshot of ownHeadshots) {
+      forgetPaperHeadshotUrl(headshot.id);
+    }
   }
 
   return NextResponse.json({ ok: true });

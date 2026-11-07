@@ -220,11 +220,11 @@ const getRegistrationConflictMessage = (error: {
     errorText.includes("unique");
 
   if (isConflict && errorText.includes("email")) {
-    return "this email is already registered to someone else.";
+    return "a rider with this name is already registered with this email.";
   }
 
   if (isConflict && errorText.includes("phone")) {
-    return "this phone number is already registered to someone else.";
+    return "a rider with this name is already registered with this phone number.";
   }
 
   return error.message ?? "the update was rejected.";

@@ -130,7 +130,6 @@ export default async function SoloRegisterPage() {
                   }
                   initialDraft={(draftRow?.data ?? null) as SoloDraftData | null}
                   showHeadshot={!isAdmin && !enteringAnotherRider}
-                  ownContactNote={enteringAnotherRider}
                   initialHeadshotPath={
                     typeof authMetadata?.headshot_path === "string"
                       ? authMetadata.headshot_path
@@ -140,10 +139,10 @@ export default async function SoloRegisterPage() {
                     isAdmin
                       ? undefined
                       : enteringAnotherRider
-                        ? // Another rider starts blank: the database still refuses
-                          // an email or phone already registered (UNIQUE on
-                          // each) until a later migration.
-                          {}
+                        ? // Another rider: only the contact details carry over.
+                          // Riders may share an email and phone (a family, a
+                          // club contact); each still gets their own code.
+                          { email: user.email, phone: authMetadata?.phone }
                         : {
                           full_name: authMetadata?.full_name,
                           age: getMetadataNumber(authMetadata?.age),

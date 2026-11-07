@@ -223,9 +223,10 @@ export const loadRiderDetails = async (
 
       const team = member ? teams.get(member.team_id) : undefined;
       /* A solo rider: the registration's own photo, else the account's for
-         the account holder's own entry. A team rider has no profile id of
-         their own: the leader's account (for the leader) or the accounts found
-         by email, and only one whose email and name are the rider's. */
+         the account holder's own entry. A team rider: the row's own photo
+         first (member.id), then, having no profile id of their own, the
+         leader's account (for the leader) or the accounts found by email,
+         and only one whose email and name are the rider's. */
       const headshotUrl = solo
         ? await getSoloHeadshotUrl(client, solo)
         : member
