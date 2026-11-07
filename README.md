@@ -65,6 +65,8 @@ src/
                         (each its own page: Overview at /admin, solo/, teams/,
                         check-in/, staff/, audit/, with a shared grouped menu in
                         layout.tsx + AdminNav.tsx)
+      loading.tsx       Instant placeholder while an admin page loads, so a menu
+                        click responds before the server does
       scoring/          Rounds, start-list draws, pools, late entrants, overrides,
                         podium and the printable pool sheet
                         (+ the graphics rehearsal feed's Start/Stop card)
@@ -134,7 +136,8 @@ src/
       query.ts            Escapes PostgREST ILIKE wildcards in identity lookups
       sync-registration-profile.ts  Server-only service-role registration sync
   proxy.ts             Next.js 16 request entry point (formerly middleware.ts);
-                       refreshes the Supabase session on every request
+                       refreshes the Supabase session on every request and checks the
+                       token locally (getClaims), with no round trip to Auth
 docs/                  Plain-English notes for teammates
   supabase-changes.md  Every database migration and why
   vmix-data-feed.md    Handout for the graphics team: the feeds, columns, rehearsal
@@ -146,6 +149,8 @@ scripts/
   build-paper-forms.mts  Generates the printable registration PDFs (npm run build:forms)
   vmix-bridge.mjs      Pushes the live feed into a vMix title (stream team, optional)
 supabase/migrations/   Committed SQL migrations (from registration_drafts onward)
+.gitattributes         LF line endings for every text file, on Windows too (the tests
+                       match source files on newlines)
 public/                Static assets: images/, flags/, brand/, documents/
 ```
 

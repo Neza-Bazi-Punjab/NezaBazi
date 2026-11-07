@@ -1,0 +1,11 @@
+# Two people commit from Mac and Windows. Keep every text file LF in the
+# working tree as well as in the repository: the test suite matches source
+# files on literal newlines, and a CRLF checkout fails it.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.pdf binary
+*.zip binary
+*.woff binary
+*.woff2 binary
+*.ttf binary

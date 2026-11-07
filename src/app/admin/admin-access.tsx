@@ -3,8 +3,10 @@
    administrator. Pages only decide what to render with it; every route behind
    them checks the session again. */
 import Link from "next/link";
+import { cache } from "react";
 import PageHeader from "@/components/PageHeader";
 import SectionHeading from "@/components/SectionHeading";
+import { getVerifiedSession } from "@/lib/admin/server";
 import { createClient } from "@/lib/supabase/server";
 
 type ServerSupabase = Awaited<ReturnType<typeof createClient>>;
@@ -14,28 +16,31 @@ export type AdminAccess =
   | { kind: "denied" }
   | { kind: "admin"; userId: string; supabase: ServerSupabase };
 
-export const getAdminAccess = async (): Promise<AdminAccess> => {
+/* Who is asking, checked once per request: the admin layout and the page
+   both call this, and React's cache() hands them the same answer, so one
+   request makes one token check and one `profiles` read. The token is
+   verified locally from its claims (getVerifiedSession), and the role is read
+   under the caller's own session, never from anything the browser sends. */
+export const getAdminAccess = cache(async (): Promise<AdminAccess> => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getVerifiedSession(supabase);
 
-  if (!user) {
+  if (!session) {
     return { kind: "login" };
   }
 
   const { data: profile } = await supabase
     .from("profiles")
     .select("role")
-    .eq("id", user.id)
+    .eq("id", session.userId)
     .maybeSingle();
 
   if (!profile || profile.role !== "admin") {
     return { kind: "denied" };
   }
 
-  return { kind: "admin", userId: user.id, supabase };
-};
+  return { kind: "admin", userId: session.userId, supabase };
+});
 
 const pageButton =
   "block w-full rounded-lg bg-bronze-deep px-6 py-3 text-center font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze";

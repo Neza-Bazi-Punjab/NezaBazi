@@ -169,7 +169,7 @@ The active mode reads "On screen now". Type a **message** (up to 200 characters)
 
 ## 5. Judges at `/judge`
 
-Use a phone. Sign in with your judge account and open `/judge`. The panel keeps the screen awake while it is open, on phones that allow it.
+Use a phone. Sign in with your judge account and open `/judge`. The panel keeps the screen awake while it is open, on phones that allow it. On a phone the result buttons, Cancel and Confirm fill the width, and the **All pools** list below the log is folded up: the pool that is riding is open, and a tap on any other pool's row opens its riders.
 
 **What you see:** the round name, the pool and "Run 12 of 48" at the top, with a connection badge (**Live**, **Updating** or **Offline**). Below that the pool call-up box, the rider on course in very large type, the three result buttons, the last result, and who is next. **Start list**, **Round** and **Screens** buttons sit at the top.
 
@@ -202,7 +202,7 @@ The next rider comes on course by themselves. While a request is being sent the 
 
 ## 6. Commentators at `/commentary`
 
-Use a laptop or a tablet held sideways. Sign in and open `/commentary`. It follows the judges by itself; there is nothing to press except the standings toggle.
+Use a laptop or a tablet held sideways. Sign in and open `/commentary`. It follows the judges by itself; there is nothing to press except the standings toggle. A phone works too: the panel stacks into one column (rider on course, next riders, round progress, recent results, then standings), shows the current pool's standings with a **Show all pools** button for the rest, and keeps every rider's full name.
 
 - **Header:** the round and event, "Now riding: Pool A · Next: Pool B", **Screens:** what the stream is showing (Scoreboard, Leaderboard, Rider, Pool call-up, Message only, or Hidden for Blank), and the connection badge.
 - **On course now** (left, largest type): the rider's name, then **Father** and **Mother** (each shown only when the rider gave it — both are optional), **From** (the full home address as registered), **Age**, **Horse** (name, breed, age), **Riding** (years of experience), **Team** with a "Team leader" tag, and the rider's photo if they uploaded one. Below: every run they have ridden today with its result, **Total today**, and their **Rank** in the round and in their pool.

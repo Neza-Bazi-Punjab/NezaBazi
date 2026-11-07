@@ -269,20 +269,21 @@ export const getPaperHeadshotUrl = async (
 
 export type SoloHeadshot = { url: string | null };
 
-/* Photos for the admin Solo riders list, keyed by registration id. One Auth
-   listing and one batch signing call for the whole list, rather than a lookup
-   per rider. A failure only means no thumbnails, never a broken page. */
-export const loadSoloHeadshots = async (
-  client: ServiceRoleClient,
-  registrations: Array<{
-    id: string;
-    profile_id: string | null;
-    email: string;
-    headshot_path?: string | null;
-  }>
-): Promise<Record<string, SoloHeadshot>> => {
-  const result: Record<string, SoloHeadshot> = {};
+/* What loadAuthUserIndex finds: each account's own photo path (or null), and
+   which account holds each confirmed email address. */
+export type AuthUserIndex = {
+  pathById: Map<string, string | null>;
+  idByConfirmedEmail: Map<string, string>;
+};
 
+/* Every Auth account's own photo path, and which account holds each
+   confirmed email address: what the Solo riders list needs from the Auth
+   server, in one listing. A page starts this alongside its database reads
+   (see AdminDashboardSection) rather than after them. Never rejects: a
+   failed listing comes back as null, which only means no thumbnails. */
+export const loadAuthUserIndex = async (
+  client: ServiceRoleClient
+): Promise<AuthUserIndex | null> => {
   try {
     const { data, error } = await client.auth.admin.listUsers({
       page: 1,
@@ -309,6 +310,37 @@ export const loadSoloHeadshots = async (
       }
     }
 
+    return { pathById, idByConfirmedEmail };
+  } catch (error) {
+    console.error("[headshots] solo list lookup failed", error);
+    return null;
+  }
+};
+
+/* Photos for the admin Solo riders list, keyed by registration id, from the
+   account index above and one batch signing call for the whole list, rather
+   than a lookup per rider. With no index (the listing failed) the list gets
+   no thumbnails at all, as before. A failure only means no thumbnails, never
+   a broken page. */
+export const matchSoloHeadshots = async (
+  index: AuthUserIndex | null,
+  registrations: Array<{
+    id: string;
+    profile_id: string | null;
+    email: string;
+    headshot_path?: string | null;
+  }>,
+  client: ServiceRoleClient
+): Promise<Record<string, SoloHeadshot>> => {
+  const result: Record<string, SoloHeadshot> = {};
+
+  if (!index) {
+    return result;
+  }
+
+  const { pathById, idByConfirmedEmail } = index;
+
+  try {
     const pathByRegistration = new Map<string, string>();
 
     for (const registration of registrations) {

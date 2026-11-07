@@ -11,7 +11,12 @@
    (the rider waits in the Skipped box until "Ride now"), Take out (an injured
    horse, a disqualification; "Bring back" undoes it), Undo last and Call next
    pool. Rounds, the full start list and what the screens show belong to the
-   person in control on /admin/scoring. */
+   person in control on /admin/scoring.
+
+   On a phone (below `sm`/`lg`, a 375px screen) the name is smaller so the
+   result cards fit above the fold, Cancel | Confirm and Skip | Take out sit
+   in two full-width rows, every button is at least 44px tall, the status bar
+   keeps to one line and the pools fold up. From `lg` up nothing changes. */
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -406,6 +411,13 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
     return `${index} / ${size}`;
   };
 
+  /* "Pool A · 1/10": the status bar's one item on a phone (the round's name
+     and "Round 1 of 3" are in the top strip and the facts already). */
+  const phonePlace = (run: ScoringRun) => {
+    const { index, size } = blockPosition(runs, run);
+    return [poolName(run.pool_label), `${index}/${size}`].filter(Boolean).join(" · ");
+  };
+
   /* The facts row: Horse | Pool | Run | Round (or the team's rider). */
   const facts = (run: ScoringRun) => {
     const teamRuns = run.team_id
@@ -506,7 +518,7 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
               <button
                 type="button"
                 onClick={cancelPick}
-                className="mono h-7 border border-[var(--ledger-bronze)] bg-transparent px-2.5 text-[11px] uppercase text-[var(--ledger-bronze)]"
+                className="mono h-11 border border-[var(--ledger-bronze)] bg-transparent px-2.5 text-[11px] uppercase text-[var(--ledger-bronze)] sm:h-7"
               >
                 Back to rider on course
               </button>
@@ -514,7 +526,7 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
           </div>
           <h1
             id="current-rider-name"
-            className="break-words text-[52px] font-bold uppercase leading-[0.95] tracking-[-0.02em] sm:text-[68px] xl:text-[84px]"
+            className="break-words text-[38px] font-bold uppercase leading-[0.95] tracking-[-0.02em] sm:text-[68px] xl:text-[84px]"
           >
             {targetRun ? targetRun.rider_name : roundComplete ? round.name : "Waiting for a rider"}
           </h1>
@@ -559,13 +571,16 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
               })}
             </section>
 
-            <div className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] items-center gap-3 xl:grid-cols-[auto_minmax(0,1fr)_180px_240px]">
-              <div className="flex gap-2">
+            {/* Phones: Cancel | Confirm, then Skip | Take out, each pair in
+                equal halves (the Skip/Take out pair is ordered after the two
+                big buttons). From `sm` up: one row, as designed. */}
+            <div className="grid grid-cols-2 items-center gap-3 sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] xl:grid-cols-[auto_minmax(0,1fr)_180px_240px]">
+              <div className="order-1 col-span-2 grid grid-cols-2 gap-3 sm:order-none sm:col-span-1 sm:flex sm:gap-2">
                 <button
                   type="button"
                   disabled={busy || editing || targetRun.status !== "on_course"}
                   onClick={() => arm({ kind: "void", run: targetRun })}
-                  className="mono h-[52px] whitespace-nowrap border border-[var(--ledger-ink)] bg-transparent px-[18px] text-[13px] uppercase disabled:opacity-35"
+                  className="mono h-12 border border-[var(--ledger-ink)] bg-transparent px-3 text-[13px] uppercase disabled:opacity-35 sm:h-[52px] sm:whitespace-nowrap sm:px-[18px]"
                 >
                   Skip
                 </button>
@@ -581,7 +596,7 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
                       out: true,
                     })
                   }
-                  className="mono h-[52px] whitespace-nowrap border border-[var(--ledger-red)] bg-transparent px-[18px] text-[13px] uppercase text-[var(--ledger-red)] disabled:opacity-35"
+                  className="mono h-12 border border-[var(--ledger-red)] bg-transparent px-3 text-[13px] uppercase text-[var(--ledger-red)] disabled:opacity-35 sm:h-[52px] sm:whitespace-nowrap sm:px-[18px]"
                 >
                   Take out
                 </button>
@@ -740,7 +755,7 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
               type="button"
               disabled={busy || !lastScored}
               onClick={() => lastScored && arm({ kind: "clear", run: lastScored, returnToRun: true })}
-              className="mono h-8 border border-[var(--ledger-ink)] bg-transparent px-3.5 text-[12px] uppercase disabled:opacity-35"
+              className="mono h-11 border border-[var(--ledger-ink)] bg-transparent px-3.5 text-[12px] uppercase disabled:opacity-35 sm:h-8"
             >
               Undo last
             </button>
@@ -774,7 +789,7 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
                   setEditRunId(run.id);
                   setSelected(null);
                 }}
-                className="h-7 border border-[var(--ledger-rule)] bg-transparent px-2 text-[12px] uppercase disabled:opacity-35"
+                className="h-11 border border-[var(--ledger-rule)] bg-transparent px-2 text-[12px] uppercase disabled:opacity-35 sm:h-7"
               >
                 Change
               </button>
@@ -841,7 +856,14 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
           <h2 className="border-t-[3px] border-[var(--ledger-rule)] pt-2 text-[20px] font-bold uppercase">
             All pools
           </h2>
-          <PoolList pools={poolRows} rounds={manyAttempts} />
+          {/* Below `lg` each pool folds to one tappable row; the pool on
+              course (or called) starts open. */}
+          <PoolList
+            pools={poolRows}
+            rounds={manyAttempts}
+            collapsible
+            openPool={currentRun?.pool_label ?? riding?.pool ?? calledPool}
+          />
         </>
       )}
     </>
@@ -863,7 +885,7 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
             type="button"
             disabled={busy}
             onClick={() => arm({ kind: "reset", scope: sample })}
-            className="mono h-9 border-2 border-[var(--ledger-ink)] bg-transparent px-3 text-[12px] font-semibold uppercase disabled:opacity-40"
+            className="mono h-11 border-2 border-[var(--ledger-ink)] bg-transparent px-3 text-[12px] font-semibold uppercase disabled:opacity-40 sm:h-9"
           >
             Reset training data
           </button>
@@ -901,6 +923,7 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
               ? `Round ${currentRun.attempt_number} of ${round?.attempts_per_rider}`
               : null,
           ]}
+          phoneItems={[currentRun ? phonePlace(currentRun) : poolName(calledPool)]}
           connection={connection}
           offlineNote="results not saving"
         />
@@ -960,7 +983,7 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
             <button
               type="button"
               onClick={() => dismissToast(toast.id)}
-              className="mono min-h-10 shrink-0 border border-current px-3 text-[12px] uppercase"
+              className="mono min-h-11 shrink-0 border border-current px-3 text-[12px] uppercase sm:min-h-10"
             >
               OK
             </button>
