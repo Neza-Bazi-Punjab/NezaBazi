@@ -22,6 +22,7 @@
 export type RiderIdentity = {
   email?: unknown;
   full_name?: unknown;
+  phone?: unknown;
 };
 
 /* Lower-case, trimmed, runs of whitespace collapsed to one space. Anything
@@ -50,4 +51,37 @@ export const isOwnRegistration = (
 
   const fullName = normaliseIdentityText(registration.full_name);
   return fullName !== "" && fullName === normaliseIdentityText(account.full_name);
+};
+
+/* How two phones are compared for a duplicate: by their digits once there are
+   enough of them to be a number, otherwise as typed. The same rule as
+   phone_digits / paper_registration_phone_key in the database. */
+export const phoneDigitsKey = (value: unknown) => {
+  const phone = typeof value === "string" ? value : "";
+  const digits = phone.replace(/\D/g, "");
+  return digits.length >= 6 ? digits : phone.trim().toLowerCase();
+};
+
+/* A true duplicate: the same full name with the same email or the same
+   phone. Riders may share an email or a phone (a family, a club contact), so
+   neither alone is a match. Says which contact matched, or null. The database
+   enforces the same rule per table (20261108120000_shared_contact_details). */
+export const sameRiderMatch = (
+  first: RiderIdentity,
+  second: RiderIdentity
+): "email" | "phone" | null => {
+  const name = normaliseIdentityText(first.full_name);
+
+  if (name === "" || name !== normaliseIdentityText(second.full_name)) {
+    return null;
+  }
+
+  const email = normaliseIdentityText(first.email);
+
+  if (email !== "" && email === normaliseIdentityText(second.email)) {
+    return "email";
+  }
+
+  const phone = phoneDigitsKey(first.phone);
+  return phone !== "" && phone === phoneDigitsKey(second.phone) ? "phone" : null;
 };

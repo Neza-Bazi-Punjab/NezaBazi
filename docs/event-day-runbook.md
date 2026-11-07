@@ -38,20 +38,19 @@ Some riders will not register online. They fill in a printed form and an adminis
 1. Open `/admin/paper` (or **Paper entry** in the admin menu).
 2. Choose **Solo rider** or **Team of 4**.
 3. Type the fields in the order the sheet prints them. Father's and mother's names are optional, as they are online.
-4. Watch the **Possible duplicate** box: while you type a phone number, name or email, the panel lists registrations that look like the same rider — someone who also registered online, or a form already keyed in. Check before saving.
+4. Watch the **Possible duplicate** box: while you type a phone number, name or email, the panel lists registrations that look like the same rider — someone who also registered online, or a form already keyed in. It is a warning only: riders may share an email and a phone (a family, a club contact), so a shared number on its own is not a mistake. Check before saving.
 5. **Email is optional.** Leave it blank if the rider has none. The database then stores a made-up address ending in `@paper.nezabazipunjab.com`; no email is ever sent to it, and the dashboard shows it as "No email (paper entry)".
 6. Press **Save Registration** (or **Save Team**).
 7. The next screen shows the **confirmation code** in large type (four codes for a team). Write it in the **Office use only** box on the paper form, with your name and the date. If the rider gave an email address, the code is also emailed to them; otherwise give it to them yourself — it is what they show at check-in.
 
-The database refuses an entry when:
+The database refuses an entry only when:
 
-- the email or phone is already on another entry of the same kind (solo or team);
-- the phone is already on an entry of the other kind under a different (or no) email — if it really is the same rider, give both entries the same email so they share one code;
-- a team does not have exactly four riders.
+- the same full name is already entered in the same kind of entry (solo, or on a team) with the same email **or** the same phone (names compared ignoring capitals and extra spaces, phones by their digits) — that is the same rider twice;
+- a team does not have exactly four riders, or names the same rider twice.
 
-The same rider may hold one solo entry and one team place under the same email: both share one confirmation code. Two administrators can key in forms at the same time; the database takes paper entries one at a time so the duplicate checks cannot be raced. Each paper entry appears in the audit log as "Paper Registration Entered".
+Everything else is allowed: several riders may share one email and one phone, and each still gets their own confirmation code. The same rider may hold one solo entry and one team place: under the same name and email both share one confirmation code and one check-in. Two administrators can key in forms at the same time; the database takes paper entries one at a time so the duplicate checks cannot be raced. Each paper entry appears in the audit log as "Paper Registration Entered".
 
-**A paper rider without email can enter only one event.** If such a rider is already entered (solo or on a team) and also wants the other event, the second entry is refused: their phone number is already on the first entry, and a placeholder address cannot be shared to tie the two together. The rider needs a real email address on both entries: if they have one, put it on the first entry (edit it in the dashboard, as below) and key in the second form with the same address; then both entries share one code.
+**A paper rider without email who enters both events gets two codes.** The second entry is accepted, but each entry without email has its own placeholder address, so nothing ties the two together: write both codes on the forms and check the rider in with each. To give them one code, put the same real email address on both entries (edit the first in the dashboard, as below, then key in the second form with that address).
 
 **Never add mail (MX) records for `paper.nezabazipunjab.com`.** The placeholder addresses are safe only because nobody can receive mail there. A rider's entries are linked to an account by a confirmed email address; if that domain could receive mail, someone could confirm a placeholder address and claim a paper rider's entry.
 

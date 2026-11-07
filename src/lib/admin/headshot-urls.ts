@@ -220,15 +220,26 @@ export const findProfileIdByEmail = async (
   return accounts.get(address.toLowerCase()) ?? null;
 };
 
-/* A team rider's photo: the leader's account (for the leader's row) or the
-   accounts found by the rider's email, in that order, and only an account
-   whose email and full name are the rider's. Team riders have no photo of
-   their own on the row yet. No match means initials. */
+/* A team rider's photo: the row's own photo first (`team_members.headshot_path`,
+   set by an administrator), then the leader's account (for the leader's row)
+   or the accounts found by the rider's email, in that order, and only an
+   account whose email and full name are the rider's. No match means
+   initials. */
 export const getTeamRiderHeadshotUrl = async (
   client: ServiceRoleClient,
-  rider: { email: string | null | undefined; full_name: string | null | undefined },
+  rider: {
+    id?: string | null;
+    email: string | null | undefined;
+    full_name: string | null | undefined;
+  },
   leaderProfileId: string | null
 ): Promise<string | null> => {
+  const own = rider.id ? await getPaperHeadshotUrl(client, rider.id, "team") : null;
+
+  if (own) {
+    return own;
+  }
+
   const address = rider.email?.trim().toLowerCase() ?? "";
   const candidates = [leaderProfileId, await findProfileIdByEmail(client, rider.email)];
 
@@ -298,12 +309,14 @@ export const forgetPaperHeadshotUrl = (registrationId: string) => {
   headshotCache.delete(paperCacheKey(registrationId));
 };
 
-/* The photo stored on a solo registration itself. Cached like the account
-   photos. Any failure, including the column not existing yet, is just
-   "no photo". */
+/* The photo stored on a registration row itself: a solo registration, or a
+   team rider's row. Cached like the account photos (row ids are unique
+   across both tables). Any failure, including the column not existing yet,
+   is just "no photo". */
 export const getPaperHeadshotUrl = async (
   client: ServiceRoleClient,
-  registrationId: string
+  registrationId: string,
+  kind: "solo" | "team" = "solo"
 ): Promise<string | null> => {
   const key = paperCacheKey(registrationId);
   const cached = headshotCache.get(key);
@@ -317,7 +330,7 @@ export const getPaperHeadshotUrl = async (
 
   try {
     const { data, error } = await client
-      .from("solo_registrations")
+      .from(kind === "team" ? "team_members" : "solo_registrations")
       .select("headshot_path")
       .eq("id", registrationId)
       .maybeSingle();
@@ -367,6 +380,9 @@ export type SoloHeadshot = { url: string | null };
    account holder's own. */
 export type AuthUserIndex = {
   accountById: Map<string, { path: string | null; email: string | null; full_name: unknown }>;
+  /* Accounts by confirmed email address, for team riders (see
+     loadConfirmedAuthEmails for why only confirmed ones). */
+  confirmedIdByEmail: Map<string, string>;
 };
 
 /* Every Auth account's own photo path, email and name: what the Solo riders
@@ -388,18 +404,24 @@ export const loadAuthUserIndex = async (
     }
 
     const accountById: AuthUserIndex["accountById"] = new Map();
+    const confirmedIdByEmail: AuthUserIndex["confirmedIdByEmail"] = new Map();
 
     for (const user of data?.users ?? []) {
       const metadata = user.user_metadata as Record<string, unknown> | undefined;
+      const address = user.email?.trim().toLowerCase();
 
       accountById.set(user.id, {
         path: readOwnHeadshotPath(user.id, metadata),
         email: user.email ?? null,
         full_name: metadata?.full_name,
       });
+
+      if (address && user.email_confirmed_at && !confirmedIdByEmail.has(address)) {
+        confirmedIdByEmail.set(address, user.id);
+      }
     }
 
-    return { accountById };
+    return { accountById, confirmedIdByEmail };
   } catch (error) {
     console.error("[headshots] solo list lookup failed", error);
     return null;
@@ -466,31 +488,103 @@ export const matchSoloHeadshots = async (
         pathByRegistration.set(registration.id, path);
       }
     }
-    const paths = Array.from(new Set(pathByRegistration.values()));
+    await signInto(client, pathByRegistration, result);
+  } catch (error) {
+    console.error("[headshots] solo list lookup failed", error);
+  }
 
-    if (paths.length > 0) {
-      const signed = await client.storage
-        .from(HEADSHOT_BUCKET)
-        .createSignedUrls(paths, HEADSHOT_SIGNED_URL_SECONDS);
+  return result;
+};
 
-      if (signed.error) {
-        throw signed.error;
-      }
+/* One batch signing call for a list's photos, written into `result`. */
+const signInto = async (
+  client: ServiceRoleClient,
+  pathByRow: Map<string, string>,
+  result: Record<string, SoloHeadshot>
+) => {
+  const paths = Array.from(new Set(pathByRow.values()));
 
-      const urlByPath = new Map<string, string>();
+  if (paths.length === 0) {
+    return;
+  }
 
-      for (const entry of signed.data ?? []) {
-        if (entry.path && entry.signedUrl && !entry.error) {
-          urlByPath.set(entry.path, entry.signedUrl);
+  const signed = await client.storage
+    .from(HEADSHOT_BUCKET)
+    .createSignedUrls(paths, HEADSHOT_SIGNED_URL_SECONDS);
+
+  if (signed.error) {
+    throw signed.error;
+  }
+
+  const urlByPath = new Map<string, string>();
+
+  for (const entry of signed.data ?? []) {
+    if (entry.path && entry.signedUrl && !entry.error) {
+      urlByPath.set(entry.path, entry.signedUrl);
+    }
+  }
+
+  for (const [rowId, path] of pathByRow) {
+    result[rowId].url = urlByPath.get(path) ?? null;
+  }
+};
+
+/* Photos for the admin Teams list, keyed by team_members id. The rider's own
+   photo on the row first; then, as getTeamRiderHeadshotUrl does for the
+   desk, the leader's account (leader's row only), an account behind a solo
+   entry under the rider's email, or a confirmed account with that email,
+   and only an account whose email and full name are the rider's. With no
+   account index, only the riders' own photos. Never throws. */
+export const matchTeamHeadshots = async (
+  index: AuthUserIndex | null,
+  members: Array<{
+    id: string;
+    team_id: string;
+    email: string;
+    full_name: string;
+    is_leader: boolean;
+    headshot_path?: string | null;
+  }>,
+  leaderProfileByTeam: Map<string, string | null>,
+  soloProfileByEmail: Map<string, string>,
+  client: ServiceRoleClient
+): Promise<Record<string, SoloHeadshot>> => {
+  const result: Record<string, SoloHeadshot> = {};
+
+  try {
+    const pathByMember = new Map<string, string>();
+
+    for (const member of members) {
+      result[member.id] = { url: null };
+
+      let path = readPaperHeadshotPath(member.id, member.headshot_path);
+
+      if (!path && index) {
+        const address = member.email?.trim().toLowerCase() ?? "";
+        const candidates = [
+          member.is_leader ? leaderProfileByTeam.get(member.team_id) ?? null : null,
+          address ? soloProfileByEmail.get(address) ?? null : null,
+          address ? index.confirmedIdByEmail.get(address) ?? null : null,
+        ];
+
+        for (const profileId of new Set(candidates)) {
+          const account = profileId ? index.accountById.get(profileId) : undefined;
+
+          if (account?.path && isOwnRegistration(member, account)) {
+            path = account.path;
+            break;
+          }
         }
       }
 
-      for (const [registrationId, path] of pathByRegistration) {
-        result[registrationId].url = urlByPath.get(path) ?? null;
+      if (path) {
+        pathByMember.set(member.id, path);
       }
     }
+
+    await signInto(client, pathByMember, result);
   } catch (error) {
-    console.error("[headshots] solo list lookup failed", error);
+    console.error("[headshots] team list lookup failed", error);
   }
 
   return result;

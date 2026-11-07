@@ -102,9 +102,12 @@ test("the Solo riders and Audit log pages start the account listing before await
   // Only after the administrator check.
   assert.ok(body.indexOf('if (access.kind !== "admin")') < body.indexOf("loadAuthUserIndex("));
 
-  // Solo: the listing starts before the rows, the matching runs after them.
-  assert.match(body, /const authUserIndexLoad = soloService \? loadAuthUserIndex\(soloService\) : null;/);
-  assert.ok(body.indexOf("loadAuthUserIndex(soloService)") < rowsAwaited);
+  // Solo and Teams: the listing starts before the rows, the matching runs
+  // after them.
+  assert.match(body, /const photoService = needs\.solo \|\| needs\.teams \? createServiceRoleClient\(\) : null;/);
+  assert.match(body, /const authUserIndexLoad = photoService \? loadAuthUserIndex\(photoService\) : null;/);
+  assert.ok(body.indexOf("loadAuthUserIndex(photoService)") < rowsAwaited);
+  assert.ok(body.indexOf("matchTeamHeadshots(") > rowsAwaited);
   assert.ok(body.indexOf("matchSoloHeadshots(") > rowsAwaited);
   assert.match(body, /matchSoloHeadshots\(\s*await authUserIndexLoad,/);
   assert.doesNotMatch(body, /loadSoloHeadshots/);

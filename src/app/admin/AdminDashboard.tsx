@@ -16,7 +16,7 @@ import {
 import { PROFILE_ROLES, type ProfileRole } from "@/lib/scoring/types";
 import { site } from "@/lib/site";
 import CheckInPanel from "./CheckInPanel";
-import SoloHeadshotCell, { type SoloHeadshotState } from "./SoloHeadshotCell";
+import RiderHeadshotCell, { type RiderHeadshotState } from "./SoloHeadshotCell";
 
 /* The email box of the edit form. A paper placeholder is shown as an empty
    box with PAPER_EMAIL_DISPLAY as its placeholder text, so neither the
@@ -98,6 +98,8 @@ export type TeamMember = {
   mother_name: string | null;
   is_leader: boolean;
   created_at: string;
+  /* The rider's own photo, set by an administrator (20261108120000). */
+  headshot_path?: string | null;
 };
 
 export type AuditLogEntry = {
@@ -137,7 +139,9 @@ type AdminDashboardProps = {
   auditArchive: ArchivedAuditEntry[];
   auditActors: AuditActor[];
   /* Solo riders' photos by registration id; empty on other pages. */
-  soloHeadshots: Record<string, SoloHeadshotState>;
+  soloHeadshots: Record<string, RiderHeadshotState>;
+  /* Team riders' photos by team_members id; empty on other pages. */
+  teamHeadshots: Record<string, RiderHeadshotState>;
   /* Which section this page shows; each has its own address under /admin
      (see AdminNav), so refresh and Back stay on it. */
   tab: AdminSection;
@@ -673,6 +677,7 @@ export default function AdminDashboard({
   auditArchive,
   auditActors,
   soloHeadshots,
+  teamHeadshots,
   tab: activeTab,
 }: AdminDashboardProps) {
   const router = useRouter();
@@ -2274,8 +2279,9 @@ export default function AdminDashboard({
                     return (
                       <tr key={registration.id} className="border-b border-bronze/10 last:border-0">
                         <td className="px-3 py-2">
-                          <SoloHeadshotCell
+                          <RiderHeadshotCell
                             registrationId={registration.id}
+                            kind="solo"
                             riderName={registration.full_name}
                             initial={soloHeadshots[registration.id]}
                             onError={setPhotoError}
@@ -3099,6 +3105,12 @@ export default function AdminDashboard({
             />
           </div>
 
+          {photoError && (
+            <p role="alert" className="rounded-lg border border-red-700/30 bg-red-50 px-3 py-2 text-sm text-red-800">
+              {photoError}
+            </p>
+          )}
+
           {filteredTeams.length > 0 ? (
             <div className="space-y-6">
               {filteredTeams.map((team) => {
@@ -3262,8 +3274,9 @@ export default function AdminDashboard({
 
                     {members.length > 0 ? (
                       <div className="mt-4 max-w-full overflow-x-auto overscroll-x-contain">
-                        <table className="w-full min-w-[1880px] table-fixed border-collapse text-left text-sm text-brown">
+                        <table className="w-full min-w-[1944px] table-fixed border-collapse text-left text-sm text-brown">
                           <colgroup>
+                            <col className="w-[64px]" />
                             <col className="w-[230px]" />
                             <col className="w-[170px]" />
                             <col className="w-[170px]" />
@@ -3278,6 +3291,7 @@ export default function AdminDashboard({
                           </colgroup>
                           <thead className="border-b border-bronze/20 bg-parchment">
                             <tr className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
+                              <th className="whitespace-nowrap px-3 py-2">Photo</th>
                               <th className="whitespace-nowrap px-3 py-2">Name</th>
                               <th className="whitespace-nowrap px-3 py-2">Father&apos;s Name</th>
                               <th className="whitespace-nowrap px-3 py-2">Mother&apos;s Name</th>
@@ -3297,6 +3311,15 @@ export default function AdminDashboard({
                                 key={member.id}
                                 className="border-b border-bronze/10 last:border-0"
                               >
+                                <td className="px-3 py-2">
+                                  <RiderHeadshotCell
+                                    registrationId={member.id}
+                                    kind="team"
+                                    riderName={member.full_name}
+                                    initial={teamHeadshots[member.id]}
+                                    onError={setPhotoError}
+                                  />
+                                </td>
                                 <td className="overflow-hidden whitespace-nowrap px-3 py-2 font-semibold text-ink">
                                   {isEditingTeam ? (
                                     <div className="flex min-w-0 items-center gap-2">

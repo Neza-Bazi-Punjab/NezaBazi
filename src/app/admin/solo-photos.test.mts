@@ -117,7 +117,7 @@ test("an upload goes onto the account only for the holder's own registration", (
   // A photo already on the registration is the one replaced; otherwise the
   // account only for the holder, the registration row for everyone else.
   const post = sectionOf(uploadRoute, "export async function POST");
-  assert.match(post, /if \(!registrationPath\) \{[\s\S]*?if \(found\.holder\) \{\s*return saveAccountHeadshot\(/);
+  assert.match(post, /if \(kind === "solo" && !registrationPath\) \{[\s\S]*?if \(found\.holder\) \{\s*return saveAccountHeadshot\(/);
   assert.match(post, /return saveRegistrationHeadshot\(/);
 });
 
@@ -128,9 +128,16 @@ test("a claimed paper entry's photo moves onto the rider's account", () => {
   assert.match(sync, /metadata\.headshot_path !== ""\) \{\s*return;/);
 });
 
-test("deleting a solo entry removes its registration photo", () => {
+test("deleting a solo entry or a team removes its registration photos", () => {
   assert.match(registrationsRoute, /operation === "delete_solo"[\s\S]*?readPaperHeadshotPath/);
-  assert.match(registrationsRoute, /\.remove\(\[paperHeadshotPath\]\)/);
+  assert.match(registrationsRoute, /operation === "delete_team"[\s\S]*?from\("team_members"\)[\s\S]*?\.eq\("team_id", targetId\)[\s\S]*?readPaperHeadshotPath\(memberId, member\.headshot_path\)/);
+  assert.match(registrationsRoute, /\.remove\(ownHeadshots\.map\(\(headshot\) => headshot\.path\)\)/);
+  // Removed only after the database delete succeeded.
+  assert.ok(
+    registrationsRoute.indexOf('rpc("admin_mutate_registration"') <
+      registrationsRoute.indexOf(".remove(ownHeadshots"),
+    "photos are removed after the registration is deleted"
+  );
 });
 
 test("the add-photo menu offers files and the camera; photos open in a pop-up", () => {
@@ -243,23 +250,22 @@ test("the account page lists every registration the account entered", () => {
   assert.match(accountPage, /entry\.confirmation_code/);
 });
 
-test("any account may enter several solo riders; later riders start blank, with no photo box", () => {
+test("any account may enter several solo riders; later riders share the account's contact details, with no photo box", () => {
   // No one-entry gate on the solo page, for anyone.
   assert.doesNotMatch(soloPage, /You have already registered for solo competition/);
   assert.doesNotMatch(soloPage, /!isAdmin && existingRegistration/);
   assert.match(soloPage, /Registering another rider\? Enter their details below\./);
   assert.match(soloPage, /href="\/account"/);
-  // Another rider starts blank and unlocked, email and phone included (the
-  // database still refuses a repeated one), with a line saying so.
+  // Another rider is unlocked, with only the account's email and phone
+  // prefilled: riders may share contact details (7 Nov 2026).
   assert.match(soloPage, /lockContactFields=\{!isAdmin && !enteringAnotherRider\}/);
-  assert.match(soloPage, /\? \/\/ Another rider starts blank[\s\S]*?\{\}\s*: \{/);
-  assert.doesNotMatch(soloPage, /email: user\.email, phone: authMetadata\?\.phone/);
-  assert.match(soloPage, /ownContactNote=\{enteringAnotherRider\}/);
-  assert.match(soloForm, /\{ownContactNote && \([\s\S]*?For now each rider needs their own email address and phone number\./);
+  assert.match(soloPage, /\? \/\/ Another rider: only the contact details carry over\.[\s\S]*?\{ email: user\.email, phone: authMetadata\?\.phone \}\s*: \{/);
+  assert.doesNotMatch(soloPage, /ownContactNote/);
+  assert.doesNotMatch(soloForm, /ownContactNote|each rider needs their own email/);
   // The photo box (the account's own photo) only for the holder's first entry.
   assert.match(soloPage, /showHeadshot=\{!isAdmin && !enteringAnotherRider\}/);
   assert.match(soloForm, /\{headshotShown && \(\s*<div[^>]*>\s*<HeadshotUpload/);
-  assert.match(soloForm, /This rider is already registered with this email or phone\./);
+  assert.match(soloForm, /This rider is already registered with this name and email or phone\./);
   // Finishing a registration clears the draft, so the next rider starts blank.
   assert.match(soloForm, /await deleteRegistrationDraft\("solo"\);/);
   // Success shows the newest entry and offers another.

@@ -321,7 +321,7 @@ test("a solo paper form validates like the online form, with email optional", ()
   }
 });
 
-test("a team needs four different riders, leader first", () => {
+test("a team needs four different riders, leader first; riders may share contact details", () => {
   const team = {
     ...emptyTeamInput(),
     team_name: "Majha Riders",
@@ -331,18 +331,20 @@ test("a team needs four different riders, leader first", () => {
       rider(),
       rider({ full_name: "Rider Two", phone: "98765-43211", email: "two@example.com" }),
       rider({ full_name: "Rider Three", phone: "98765 43212" }),
-      rider({ full_name: "Rider Four", phone: "9876543210" }),
+      rider({ full_name: "  harpreet   SINGH ", phone: "9876543210", email: "" }),
     ],
   };
 
+  // The same name with the same phone (by its digits) is the same rider twice.
   const duplicate = validatePaperTeam(team);
   assert.equal(duplicate.ok, false);
 
   if (!duplicate.ok) {
-    assert.match(duplicate.errors["riders.3.phone"], /Same phone number as rider 1 \(team leader\)/);
+    assert.match(duplicate.errors["riders.3.phone"], /Same name and phone number as rider 1 \(team leader\)/);
   }
 
-  team.riders[3] = rider({ full_name: "Rider Four", phone: "98765 43213" });
+  // A different rider on the leader's phone and email is allowed (a family).
+  team.riders[3] = rider({ full_name: "Rider Four" });
   const valid = validatePaperTeam(team);
   assert.equal(valid.ok, true);
 
@@ -350,6 +352,7 @@ test("a team needs four different riders, leader first", () => {
     assert.equal(valid.payload.riders.length, 4);
     assert.equal(valid.payload.riders[0].full_name, "Harpreet Singh");
     assert.equal(valid.payload.riders[1].email, "two@example.com");
+    assert.equal(valid.payload.riders[3].phone, valid.payload.riders[0].phone);
   }
 });
 
@@ -483,16 +486,20 @@ test("the paper pages are reachable and the admin page is gated", () => {
   assert.match(panel, /\/api\/admin\/paper-registration\/matches/);
 });
 
-test("a paper solo rider is linked to their account by confirmed email", () => {
+test("a paper solo rider is linked to their account by confirmed email and name", () => {
   const sync = repoFile("src/lib/supabase/sync-registration-profile.ts");
   const accountRoute = repoFile("src/app/api/account/profile/route.ts");
 
-  // Claimed before the update-by-profile_id, paper rows only, unclaimed only.
+  // Claimed before the update-by-profile_id, paper rows only, unclaimed only,
+  // and only the row whose name is the account's (riders may share an email).
   const claim = sync.indexOf("await claimPaperSoloRegistration(");
   const soloUpdate = sync.indexOf('.in("id", ownSoloIds)\n      .eq("profile_id", userId)');
   assert.notEqual(claim, -1);
   assert.ok(claim < soloUpdate, "claim runs before the solo update by profile_id");
-  assert.match(sync, /\.update\(\{ profile_id: userId \}\)\s*\.is\("profile_id", null\)\s*\.eq\("registration_source", "paper"\)\s*\.ilike\("email", escapeIlikePattern\(confirmedEmail\)\)/);
+  assert.match(sync, /\.select\("\*"\)\s*\.is\("profile_id", null\)\s*\.eq\("registration_source", "paper"\)\s*\.ilike\("email", escapeIlikePattern\(confirmedEmail\)\)/);
+  assert.match(sync, /\.filter\(\(row\) => isOwnRegistration\(row, \{ email: confirmedEmail, full_name: fullName \}\)\)/);
+  assert.match(sync, /\.update\(\{ profile_id: userId \}\)\s*\.in\("id", ownIds\)\s*\.is\("profile_id", null\)\s*\.eq\("registration_source", "paper"\)/);
+  assert.doesNotMatch(sync, /\.update\(\{ profile_id: userId \}\)[\s\S]{0,200}\.ilike\("email"/);
 
   // Both callers pass the address the session has already confirmed.
   assert.match(sync, /if \(!hasConfirmedEmail\(user\)\)[\s\S]*confirmedEmail: user\.email,/);

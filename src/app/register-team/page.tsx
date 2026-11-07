@@ -6,6 +6,7 @@ import PageHeader from "@/components/PageHeader";
 import SectionHeading from "@/components/SectionHeading";
 import { isAccountProfileComplete } from "@/lib/account-profile";
 import type { TeamDraftData } from "@/lib/registration-drafts";
+import { isOwnRegistration } from "@/lib/registration-identity";
 import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
 import { escapeIlikePattern } from "@/lib/supabase/query";
 import { createClient } from "@/lib/supabase/server";
@@ -86,13 +87,20 @@ export default async function RegisterTeamPage() {
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
-    const { data: membership, error: membershipError } = await serviceSupabase
+    // Several riders may share one email (a family, a club contact), so a
+    // team row under the account's address is the holder's own only when the
+    // name is theirs too (registration-identity.ts). A parent whose email is
+    // on a child's team row may still lead a team of their own; the submit
+    // route and the database refuse only the same name with the same email
+    // or phone twice.
+    const { data: memberRows, error: membershipError } = await serviceSupabase
       .from("team_members")
-      .select("team_id")
+      .select("team_id, full_name, email")
       .ilike("email", escapeIlikePattern(user.email))
-      .eq("is_leader", false)
-      .limit(1)
-      .maybeSingle();
+      .eq("is_leader", false);
+    const membership = (memberRows ?? []).find((row) =>
+      isOwnRegistration(row, { email: user.email, full_name: authMetadata?.full_name })
+    );
 
     if (membershipError) {
       console.error("Unable to check the user's existing team membership", membershipError);

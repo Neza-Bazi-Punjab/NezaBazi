@@ -128,8 +128,9 @@ test("the desk sees a dual-entry rider once, with both entries", () => {
     checkInRoute.indexOf("const searchRiders")
   );
 
-  // Deduplicated on the shared code, not on the row id.
-  assert.match(searchBody, /const byCode = new Map/);
+  // Deduplicated on the shared code, not on the row id (mergeRidersByCode,
+  // tested in src/lib/shared-contact.test.mts).
+  assert.match(searchBody, /mergeRidersByCode\(rows\)/);
   assert.doesNotMatch(searchBody, /byId\.set/);
   assert.match(checkInRoute, /entries\.find\(/);
 });
@@ -319,7 +320,7 @@ test("the desk's instant search loads a short rider list, admins only, never cac
   assert.match(listBody, /\.select\("id, full_name, email, phone, confirmation_code, checked_in_at"\)/);
   assert.doesNotMatch(listBody, /location|emergency|father_name|\bage\b/);
   // One row per code, like the search.
-  assert.match(listBody, /const byCode = new Map/);
+  assert.match(listBody, /mergeRidersByCode\(rows\)/);
 
   // Behind the same administrator check as every other request here.
   const post = checkInRoute.slice(checkInRoute.indexOf("export async function POST"));

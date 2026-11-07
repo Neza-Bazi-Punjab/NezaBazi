@@ -23,6 +23,7 @@ import { AdminAccessMessage, getAdminAccess, type AdminAccess } from "./admin-ac
 import {
   loadAuthUserIndex,
   matchSoloHeadshots,
+  matchTeamHeadshots,
   type SoloHeadshot,
 } from "@/lib/admin/headshot-urls";
 
@@ -117,8 +118,14 @@ async function AdminSectionData({
      instead of waiting for them. Only after the administrator check above,
      and only on the pages that use it. Neither load ever rejects: a failure
      only means no thumbnails or no actor names. */
-  const soloService = needs.solo ? createServiceRoleClient() : null;
-  const authUserIndexLoad = soloService ? loadAuthUserIndex(soloService) : null;
+  const photoService = needs.solo || needs.teams ? createServiceRoleClient() : null;
+  const authUserIndexLoad = photoService ? loadAuthUserIndex(photoService) : null;
+  /* Team riders' photos may come from an account behind a solo entry under
+     their email; the Teams page does not otherwise read solo entries. */
+  const soloContactsLoad =
+    needs.teams && photoService
+      ? photoService.from("solo_registrations").select("email, profile_id").not("profile_id", "is", null)
+      : null;
 
   // The account list only puts names to the audit log's actors. A thrown
   // failure is caught like a returned one, so starting it early can never
@@ -184,12 +191,36 @@ async function AdminSectionData({
   /* Thumbnails for the Photo column. Admins read every headshot, but the
      signing goes through the service role like every other staff screen. */
   let soloHeadshots: Record<string, SoloHeadshot> = {};
+  let teamHeadshots: Record<string, SoloHeadshot> = {};
 
-  if (soloService && authUserIndexLoad) {
+  if (needs.solo && photoService && authUserIndexLoad) {
     soloHeadshots = await matchSoloHeadshots(
       await authUserIndexLoad,
       (soloRegistrations ?? []) as SoloRegistration[],
-      soloService
+      photoService
+    );
+  }
+
+  /* The same for the Teams list: each rider's own photo on the row first,
+     then the account rule (matchTeamHeadshots). */
+  if (needs.teams && photoService && authUserIndexLoad && soloContactsLoad) {
+    const [index, soloContacts] = await Promise.all([authUserIndexLoad, soloContactsLoad]);
+    const soloProfileByEmail = new Map<string, string>();
+
+    for (const row of (soloContacts.data ?? []) as Array<{ email: string | null; profile_id: string | null }>) {
+      const address = row.email?.trim().toLowerCase();
+
+      if (address && row.profile_id && !soloProfileByEmail.has(address)) {
+        soloProfileByEmail.set(address, row.profile_id);
+      }
+    }
+
+    teamHeadshots = await matchTeamHeadshots(
+      index,
+      (teamMembers ?? []) as TeamMember[],
+      new Map(((teams ?? []) as Team[]).map((team) => [team.id, team.leader_profile_id ?? null])),
+      soloProfileByEmail,
+      photoService
     );
   }
 
@@ -206,6 +237,7 @@ async function AdminSectionData({
       auditArchive={(auditArchive ?? []) as ArchivedAuditEntry[]}
       auditActors={auditActors}
       soloHeadshots={soloHeadshots}
+      teamHeadshots={teamHeadshots}
     />
   );
 }
