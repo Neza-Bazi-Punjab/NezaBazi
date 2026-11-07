@@ -23,10 +23,11 @@ import { parseScoreRequest } from "@/lib/scoring/validation";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  // Training mode (?sample=1): answered from a practice session in memory,
-  // before and instead of the role check below. Allowed on a laptop with
-  // SCORING_SAMPLE_MODE=1 (anyone, one shared session) or for a signed-in
-  // judge, commentator or administrator (their own session); anyone else gets
+  // Training mode (?sample=1): answered from the practice session, before and
+  // instead of the role check below. Allowed on a laptop with
+  // SCORING_SAMPLE_MODE=1 (anyone, the laptop's session in memory) or for a
+  // signed-in judge, commentator or administrator (the one shared demo, the
+  // same on every device); anyone else gets
   // the same 401/403 as the real route. This branch never reads or writes the
   // scoring or registration tables and never returns real data.
   const training = await resolveSampleAccess(request);
@@ -36,9 +37,15 @@ export async function POST(request: Request) {
   }
 
   if (training.kind === "training") {
-    return sampleWriteResponse(request, parseScoreRequest, (value) => ({
-      run: recordResult(training.session, value.run_id, value.result, value.override === true),
-      state: sampleJudgeState(training.session),
+    return sampleWriteResponse(request, parseScoreRequest, async (value) => ({
+      run: await recordResult(
+        training.session,
+        value.run_id,
+        value.result,
+        value.override === true,
+        training.actor ?? null
+      ),
+      state: await sampleJudgeState(training.session),
     }));
   }
 

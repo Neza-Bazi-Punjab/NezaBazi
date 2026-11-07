@@ -173,22 +173,22 @@ Use a phone. Sign in with your judge account and open `/judge`. The panel keeps 
 
 **What you see:** the round name, the pool and "Run 12 of 48" at the top, with a connection badge (**Live**, **Updating** or **Offline**). Below that the pool call-up box, the rider on course in very large type, the three result buttons, the last result, and who is next. **Start list**, **Round** and **Screens** buttons sit at the top.
 
-**Call a pool.** The call-up box shows the pool **Called** and the **Next** one. When the called pool has finished, a large **Call Pool B** button appears; before then there is a smaller **Call Pool B early**. Confirm. Any pool can also be called from its header in the start list.
+**Call a pool.** The call-up box shows the pool **Called** and the **Next** one. When the called pool has finished, a large **Call Pool B** button appears; before then there is a smaller **Call Pool B early**. Confirm. Any pool can also be called from its header in the start list. Calling a pool brings its riders to the start but puts nobody on course: tap **Start** for the first rider when they are ready.
 
 **Score a run — two taps.**
 
 1. Tap **CARRIED 4**, **STRUCK 2** or **MISS 0**.
 2. A bar asks "Record Carried (4) for Harpreet Singh?" — tap **Confirm Carried** (or Cancel).
 
-The next rider comes on course by themselves. While a request is being sent the buttons are disabled; an error appears as a message and nothing is changed — tap again.
+The rider leaves the course: nobody is on course, and the panel shows "Last: Harpreet Singh — Carried 4" above one large **Start <next rider>** button. When the next rider is at the start, tap it (no question asked) and score them the same way. While a request is being sent the buttons are disabled; an error appears as a message and nothing is changed — tap again.
 
 **Undo the last result.** In the **Last result** box, **Undo last result** → confirm. The result is removed and that rider comes back on course so you can record the right one.
 
 **Change a result.** **Change result** in the Last result box, or open the **Start list**, tap the run, **Change result**. The recorded result is shown; choose the correct one and confirm. **Clear result** (in the start list) removes a result without putting the rider back on course.
 
-**Skip a run.** **Skip run** → confirm. The run will not be scored and the next rider comes on course. A skipped run can be brought back with **Restore this run** (or from the start list).
+**Skip a run.** **Skip run** → confirm. The run will not be scored; nobody is on course until you tap **Start** for the next rider. A skipped run can be brought back with **Restore this run** (or from the start list).
 
-**Put a particular rider on course.** **Start list** → tap the run → **Put on course**. When nobody is on course the panel offers **Put … on course** for the next rider waiting. In the start list, type part of a rider's name, team, horse or pool ("Sandhu", "Pool B") in **Find a rider** to narrow the list as you type.
+**Put a particular rider on course.** **Start list** → tap the run → **Put on course**. When nobody is on course the panel offers **Start …** for the next rider in order; a rider picked out of order from the start list is asked about first. In the start list, type part of a rider's name, team, horse or pool ("Sandhu", "Pool B") in **Find a rider** to narrow the list as you type.
 
 **Two judges on one run.** If another judge has already recorded the run, you see "This run already has a result. Use Change result to replace it." Nothing was overwritten; look at the last result before changing anything.
 
@@ -203,6 +203,8 @@ The next rider comes on course by themselves. While a request is being sent the 
 ## 6. Commentators at `/commentary`
 
 Use a laptop or a tablet held sideways. Sign in and open `/commentary`. It follows the judges by itself; there is nothing to press except the standings toggle. A phone works too: the panel stacks into one column (rider on course, next riders, round progress, recent results, then standings), shows the current pool's standings with a **Show all pools** button for the rest, and keeps every rider's full name.
+
+Between riders nobody is on course: the panel shows the last result and **Up next · <name>**, the rider the judge will start next, so there is a moment to introduce them.
 
 - **Header:** the round and event, "Now riding: Pool A · Next: Pool B", **Screens:** what the stream is showing (Scoreboard, Leaderboard, Rider, Pool call-up, Message only, or Hidden for Blank), and the connection badge.
 - **On course now** (left, largest type): the rider's name, then **Father** and **Mother** (each shown only when the rider gave it — both are optional), **From** (the full home address as registered), **Age**, **Horse** (name, breed, age), **Riding** (years of experience), **Team** with a "Team leader" tag, and the rider's photo if they uploaded one. Below: every run they have ridden today with its result, **Total today**, and their **Rank** in the round and in their pool.
@@ -241,21 +243,27 @@ Tell riders at the briefing to check the Pools tab for their pool, and to listen
 
 ## 9. Training mode: practise before event day
 
-Judges and commentators can rehearse on the real panels with sample riders. Nothing they do in practice touches the real results.
+Judges, commentators and the stream team can rehearse on the real panels with sample riders. Nothing they do in practice touches the real results.
 
-**From home, on the live site.**
+**One shared demo, on the live site.** The practice on the live site is **one demo for everyone**: every judge, commentator and administrator who opens it sees the same thing, each on their own device, so the whole team can rehearse the day together.
 
 1. Sign in with your staff account (judge, commentator or administrator).
 2. Open the **Judge Panel** or **Commentary** link, then **Practise on sample riders** at the bottom of the page. Or go straight to `/judge/demo` or `/commentary/demo`.
-3. A yellow **TRAINING MODE** banner reads "Practice data — yours only, nothing is recorded; it may reset after a while." The practice is yours alone: two people practising at the same time never see each other's taps.
-4. To practise both panels together, open `/judge/demo` on your phone and `/commentary/demo` on a laptop, signed in with the same account. The commentary panel follows your judging within about two seconds.
-5. **Reset training data** (in the judges' banner, with a confirmation) starts your practice again from the beginning. It never affects anyone else. Practice data is kept in the server's memory only: it is dropped after six hours unused, and it can also start again by itself when the site restarts.
+3. A yellow **TRAINING MODE** banner reads "Practice data — one demo shared by everyone, on every device; nothing is recorded."
+4. Judges drive the demo on `/judge/demo`; commentators follow it on `/commentary/demo`, on any device, within about two seconds. Two judges can work at once, as on the day: if both tap the same run, the second is told it is already scored. If two taps land at exactly the same moment, one of them is asked to try again ("Someone else just changed the practice. It has refreshed; try again.").
+5. **Reset training data** (in the judges' banner, with a confirmation) **restarts the demo for everyone, on every device**, from the top of Qualification. Agree a reset with the team first.
 6. **Leave practice — open the live panel** at the bottom of the page returns to the real panel.
 
 Everyone else gets the same "Log in" or "Access denied" page as `/judge`. The practice pages are hidden from search engines.
 
-**On a practice laptop at the venue (no login).** Add `SCORING_SAMPLE_MODE=1` to `.env.local` on that laptop and start the site with `npm run dev`. **Never set this variable on the live site.** Anyone on the same Wi-Fi can then open `/judge/demo` and `/commentary/demo` at the laptop's network address that `npm run dev` prints. Everyone shares **one** practice session there, and the banner says so. A reset restarts it for everyone. `/live?sample=1` on that laptop shows what the public would see.
+**The stream follows the demo.** Add `?sample=demo` to any vMix feed, to `/live` or to any `/overlay/...` address and it shows the shared demo as the judges drive it, within about two seconds, with no login. Every feed row says `sample` = `Yes`. The addresses are listed on the **Graphics Rehearsal Feed** card on `/admin/scoring`, under "Follows the demo". It is always on, because it is never real data: the riders are the 30 invented ones of the practice. `?sample=1` keeps its fixed rehearsal data and `?sample=solo` its scripted loop, as before. **Remove `?sample=demo` from every address before going on air.**
 
-**Same as the day, either way.** Two-tap scoring, the automatic skip after a qualifying carry, undo, change, skip, **Call Pool**, **Screens**, and the start list with **Find a rider** all behave exactly as on event day. Nothing is written to the database or the audit log, and the sample riders and their families are invented. The vMix feeds do not follow the practice either: `?sample=1` keeps its fixed rehearsal data, and `?sample=solo` plays its own scripted loop.
+**Close the demo on event day.** On `/admin/scoring`, in the **Graphics Rehearsal Feed** card under "Follows the demo", **Close demo** (with a confirmation) closes the practice for the event, so a forgotten practice page or address can never be mistaken for the real thing. While it is closed, `/judge/demo` and `/commentary/demo` show "Demo closed for the event" with a button to the live panel, any practice tap is refused ("The demo is closed for the event. Open the live panel."), and every `?sample=demo` address shows the frozen sample rows (the `?sample=1` data), still marked SAMPLE, never anything live. **Open demo** reopens it. Each change is in the audit log as "Close Demo" or "Open Demo". Until the migration below is applied the switch is not there and the demo stays open.
+
+**Before the migration.** The shared demo is stored in `scoring_training_sessions` (`20261107120000_scoring_training_sessions.sql`, entry in [supabase-changes.md](supabase-changes.md)). Until that file is applied, practice still works, but each server keeps its own copy in memory, so two devices may not see the same demo and it can start again by itself; the banner then adds "(not yet shared between devices)".
+
+**On a practice laptop at the venue (no login).** Add `SCORING_SAMPLE_MODE=1` to `.env.local` on that laptop and start the site with `npm run dev`. **Never set this variable on the live site.** Anyone on the same Wi-Fi can then open `/judge/demo` and `/commentary/demo` at the laptop's network address that `npm run dev` prints. Everyone shares **one** practice session there, kept in the laptop's memory, and the banner says so. A reset restarts it for everyone. `/live?sample=1` and `/live?sample=demo` on that laptop show what the public would see.
+
+**Same as the day, either way.** Two-tap scoring, the automatic skip after a qualifying carry, undo, change, skip, **Call Pool**, **Screens**, and the start list with **Find a rider** all behave exactly as on event day. Nothing is written to the scoring tables or the audit log, and the sample riders and their families are invented.
 
 **Dress rehearsal.** Before event day the whole team rehearses together once, on the real system with test riders only; the run sheet is `public/documents/rehearsal-guide.pdf` (served at `/documents/rehearsal-guide.pdf`), built by `npm run build:guide` from [2026-10-26-rehearsal-guide-outline.md](superpowers/plans/2026-10-26-rehearsal-guide-outline.md).

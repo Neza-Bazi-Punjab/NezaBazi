@@ -1,4 +1,5 @@
-// Moving rehearsal data for the vMix feeds (?sample=solo).
+// Moving rehearsal data for the vMix feeds: ?sample=solo (a scripted loop)
+// and ?sample=demo (the organisers' shared demo, as the judges drive it).
 //
 // ?sample=1 is a frozen snapshot: the graphics team can bind every column to
 // it, but nothing on screen ever changes. ?sample=solo plays a scripted
@@ -25,17 +26,35 @@
 // off by default. Off, ?sample=solo answers exactly like ?sample=1 (the frozen
 // snapshot, still sample = "Yes"), so an address keeps its bindings but stops
 // moving. The name leaves room for a team (Section) loop, ?sample=team.
-// See docs/vmix-data-feed.md.
+//
+// ?sample=demo needs no switch to start: it follows the shared
+// practice session that /judge/demo drives (sample-session.ts, the
+// scoring_training_sessions row on the live site, read at most once a second
+// per server instance), so titles can be tested against what the judges are
+// actually doing in a rehearsal. It is never real data — the riders are the
+// invented ones of the practice — and every row still says sample = "Yes".
+// When an administrator closes the demo for the event, it answers with the
+// frozen ?sample=1 rows instead.
+// This file never names a database client: the practice row is read by
+// sample-session.ts and training-db.ts. See docs/vmix-data-feed.md.
 import "server-only";
 
 import {
   computeSampleLeaderboard,
   createSampleEngine,
+  overridesFor,
   type SampleEngine,
   type SampleSeed,
 } from "@/lib/scoring/sample-engine";
 import { isSoloSampleOn } from "@/lib/scoring/rehearsal";
-import { assembleSnapshot } from "@/lib/scoring/sample-session";
+import { isDemoClosed } from "@/lib/scoring/training-switch";
+import {
+  LOCAL_TRAINING_SESSION,
+  TRAINING_QUALIFICATION_ROUND_ID,
+  assembleSnapshot,
+  demoTrainingSession,
+  readDemoSnapshot,
+} from "@/lib/scoring/sample-session";
 import {
   toPublicLiveState,
   type DisplayMode,
@@ -164,9 +183,35 @@ const seedFor = (loopStart: number): SampleSeed => {
 const scriptedResult = (run: ScoringRun): RunResult =>
   SCRIPT[run.rider_name]?.[run.attempt_number - 1] ?? "miss";
 
-const apply = (engine: SampleEngine, step: Step, memory: { wrongRunId: string | null }) => {
+/* The rider on course; when nobody is (judges start each rider: a result
+   leaves the course empty until the judge taps Start), the judge's Start on
+   the next rider still to ride in the live round, as a judge would before
+   scoring them. With a rider already on course this changes nothing. */
+const onCourse = (engine: SampleEngine): ScoringRun | null => {
   const { live, runs } = engine.snapshot();
   const current = runs.find((run) => run.id === live.current_run_id) ?? null;
+
+  if (current) {
+    return current;
+  }
+
+  const next =
+    runs
+      .filter((run) => run.round_id === live.current_round_id && run.status === "pending")
+      .sort((a, b) => a.run_order - b.run_order)[0] ?? null;
+
+  if (!next) {
+    return null;
+  }
+
+  engine.setLive({ current_run_id: next.id });
+  return next;
+};
+
+const apply = (engine: SampleEngine, step: Step, memory: { wrongRunId: string | null }) => {
+  const { runs } = engine.snapshot();
+  const needsRider = step.kind === "score" || step.kind === "wrong" || step.kind === "skip";
+  const current = needsRider ? onCourse(engine) : null;
 
   switch (step.kind) {
     case "call":
@@ -248,33 +293,62 @@ const FIXED_SAMPLE: VmixSampleSource = {
   leaderboardForRound: sampleLeaderboardForRound,
 };
 
-const movingSample = (now: number): VmixSampleSource => {
-  const all = movingSampleSnapshot(now);
+/* The feeds' view of any engine snapshot: the moving loop's, or the demo's. */
+const sourceFromSnapshot = (all: SampleSeed, liveRoundId: string): VmixSampleSource => {
   const rounds = [...all.rounds].sort((a, b) => a.sort_order - b.sort_order);
   const runsForRound = (roundId: string) =>
     all.runs.filter((run) => run.round_id === roundId).sort((a, b) => a.run_order - b.run_order);
 
   return {
-    liveRoundId: SAMPLE_QUALIFICATION_ROUND_ID,
+    liveRoundId,
     state: () => toPublicLiveState(assembleSnapshot(all).state),
     rounds: () => rounds,
     allRuns: () => all.runs,
     runsForRound,
     leaderboardForRound: (roundId) => {
       const round = rounds.find((candidate) => candidate.id === roundId);
-      return round ? computeSampleLeaderboard(round, runsForRound(roundId)) : [];
+      return round
+        ? computeSampleLeaderboard(round, runsForRound(roundId), overridesFor(all.overrides, roundId))
+        : [];
     },
   };
 };
 
-/* ?sample=solo: the moving loop while the switch is on; any other sample
-   request, or the switch off: the frozen snapshot. The switch is read only
-   for ?sample=solo, so ?sample=1 never touches the database. */
+const movingSample = (now: number): VmixSampleSource =>
+  sourceFromSnapshot(movingSampleSnapshot(now), SAMPLE_QUALIFICATION_ROUND_ID);
+
+/* ?sample=demo: the shared demo as it stands, its own live round (the
+   Qualification until the judges move on). Closed for the event (the admin
+   switch, training-switch.ts): the frozen ?sample=1 rows instead, never
+   anything live. The laptop's own session is never closed. */
+const demoSample = async (): Promise<VmixSampleSource> => {
+  const key = demoTrainingSession();
+
+  if (key !== LOCAL_TRAINING_SESSION && (await isDemoClosed())) {
+    return FIXED_SAMPLE;
+  }
+
+  const all = await readDemoSnapshot(key);
+  return sourceFromSnapshot(all, all.live.current_round_id ?? TRAINING_QUALIFICATION_ROUND_ID);
+};
+
+/* ?sample=demo: the shared demo, always. ?sample=solo: the moving loop while
+   the switch is on; any other sample request, or the switch off: the frozen
+   snapshot. The switch is read only for ?sample=solo and the practice row
+   only for ?sample=demo, so ?sample=1 never touches the database. */
 export const wantsSoloSample = (url: URL) =>
   url.searchParams.get("sample")?.trim().toLowerCase() === "solo";
+
+export const wantsDemoSample = (url: URL) =>
+  url.searchParams.get("sample")?.trim().toLowerCase() === "demo";
 
 export const vmixSampleSource = async (
   url: URL,
   now: number = Date.now()
-): Promise<VmixSampleSource> =>
-  wantsSoloSample(url) && (await isSoloSampleOn()) ? movingSample(now) : FIXED_SAMPLE;
+): Promise<VmixSampleSource> => {
+  if (wantsDemoSample(url)) {
+    return demoSample();
+  }
+
+  return wantsSoloSample(url) && (await isSoloSampleOn()) ? movingSample(now) : FIXED_SAMPLE;
+};

@@ -318,13 +318,13 @@ test("every public builder shapes its payload; the staff states keep the full lo
   const session = repoFile("src/lib/scoring/sample-session.ts");
   assert.match(
     session,
-    /export const samplePublicLiveState = \(key: string = LOCAL_TRAINING_SESSION\): PublicLiveState =>\s+toPublicLiveState\(assemble\(key\)\.state\);/
+    /export const samplePublicLiveState = async \(\s*key: string = LOCAL_TRAINING_SESSION\s*\): Promise<PublicLiveState> => toPublicLiveState\(assembleSnapshot\(await readDemoSnapshot\(key\)\)\.state\);/
   );
   const judgeStart = session.indexOf("export const sampleJudgeState");
   assert.doesNotMatch(session.slice(judgeStart, session.indexOf("\n};", judgeStart)), /toPublic/);
 
   // And the public route serves exactly those two.
   const route = repoFile("src/app/api/live/state/route.ts");
-  assert.match(route, /NextResponse\.json\(samplePublicLiveState\(LOCAL_TRAINING_SESSION\)/);
+  assert.match(route, /NextResponse\.json\(await samplePublicLiveState\(LOCAL_TRAINING_SESSION\)/);
   assert.match(route, /const state = await buildPublicLiveState\(\);/);
 });

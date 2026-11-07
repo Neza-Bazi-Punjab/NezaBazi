@@ -1,21 +1,30 @@
 import type { Metadata, Viewport } from "next";
 import { unstable_rethrow } from "next/navigation";
+import DemoClosed from "@/components/scoring/DemoClosed";
 import StaffGate from "@/components/scoring/StaffGate";
 import { getSessionRole, type SessionRole } from "@/lib/scoring/auth";
+import { sharedTrainingScope } from "@/lib/scoring/sample-session";
+import { isDemoClosed } from "@/lib/scoring/training-switch";
 import { STAFF_ROLES } from "@/lib/scoring/types";
 import JudgePanel from "../JudgePanel";
 
-// /judge/demo — the judges' panel in training mode: sample riders held in the
-// server's memory, nothing written to the database.
+// /judge/demo — the judges' panel in training mode: sample riders, nothing
+// written to the real scoring tables.
 //
 //   - On a laptop started with SCORING_SAMPLE_MODE=1 (in .env.local): open to
-//     anyone, no login, one practice session shared by everyone using it.
+//     anyone, no login, one practice session in the laptop's memory, shared
+//     by everyone using it.
 //   - Everywhere else, the live site included: signed-in judges, commentators
-//     and administrators only, each on their own practice session; everyone
-//     else sees the same Login / Access Denied page as /judge.
+//     and administrators only, all on the organisers' ONE shared demo (stored
+//     in scoring_training_sessions, so every device sees the same thing, and
+//     ?sample=demo on the feeds, /live and the overlays follows it); everyone
+//     else sees the same Login / Access Denied page as /judge. Until the
+//     migration is applied the banner says "(not yet shared between devices)".
 //
 // The API routes enforce the same rule on every request (sample-mode.ts);
-// this page only decides what to render. See docs/event-day-runbook.md,
+// this page only decides what to render. Once an administrator has closed the
+// demo for the event (training-switch.ts), staff see "Demo closed for the
+// event" with a button to the real panel. See docs/event-day-runbook.md,
 // "Training mode".
 export const metadata: Metadata = {
   title: "Judges' Panel — Training",
@@ -57,5 +66,12 @@ export default async function JudgeDemoPage() {
     return <StaffGate kind="denied" title={TITLE} audience={AUDIENCE} redirectTo="/judge/demo" />;
   }
 
-  return <JudgePanel sample="personal" />;
+  // Closed for the event by an administrator: say so, and point to the real panel.
+  if (await isDemoClosed()) {
+    return <DemoClosed title={TITLE} livePanel="/judge" livePanelLabel="Open the judges' panel" />;
+  }
+
+  // The organisers' one shared demo, the same on every device; "unshared"
+  // until the scoring_training_sessions migration is applied.
+  return <JudgePanel sample={await sharedTrainingScope()} />;
 }
