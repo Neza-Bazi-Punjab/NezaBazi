@@ -57,6 +57,8 @@ So a Solo riders click waited on roughly 78 + 78 + 116 ms (two Auth checks and t
 
 **After (expected; to be confirmed from the same gateway query after deploy):** per admin click, the proxy checks the token locally (no call), the page makes one `profiles` read, then its own data. Server-side `/auth/v1/user` calls should fall to just those made by the account pages, registration and sign-in, which still use `getUser()`, `profiles` calls should roughly halve on full loads and refreshes (the layout and page now share one).
 
+**Measured on the dev server, signed in as an administrator, 6 Nov 2026 (32 solo riders, database in us-west-2 reached from Seattle):** a menu click from the Overview to Solo riders showed the full table 359 ms after the click; a full page load of `/admin/solo` sent its first byte (the heading, with the placeholder in the table's place) at 215 ms and finished the rows at 466 ms, so the shell is on screen before the data. The placeholder was not seen on that run: the rows arrived within the same paint. These are dev-server numbers; the live site's come from the gateway query above.
+
 A full load or `router.refresh()` also drops the layout's duplicate `getUser()` and `profiles` calls (they ran alongside the page's, so they cost load rather than waiting). An expired session (about once an hour) still costs one refresh call, before and after. The local check needs the public key once per server instance every 10 minutes.
 
 | Measurement | Result |
