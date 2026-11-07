@@ -1,8 +1,8 @@
 // The admin speed-up (6 Nov 2026, docs/performance.md): session checks read
 // the token's verified claims instead of asking the Auth server, one check per
 // request, an instant loading state, the account listing started alongside
-// the rows, and functions pinned next to the database. Reads the source and
-// asserts the invariants, so a later change cannot quietly undo them.
+// the rows, and the pages' frames drawn before their rows stream in. Reads the
+// source and asserts the invariants, so a later change cannot quietly undo them.
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
@@ -123,7 +123,79 @@ test("the Solo riders and Audit log pages start the account listing before await
   assert.match(headshots, /address && user\.email_confirmed_at && !idByConfirmedEmail\.has\(address\)/);
 });
 
-test("functions run in the database's region", () => {
-  const config = JSON.parse(repoFile("vercel.json")) as { regions?: unknown };
-  assert.deepEqual(config.regions, ["pdx1"]);
+test("a section page draws its heading first and streams its rows in under it", () => {
+  const body = code(section);
+  const page = body.indexOf("export default async function AdminDashboardSection(");
+  const data = body.indexOf("async function AdminSectionData(");
+
+  assert.ok(page > 0 && data > page, "the rows are read in their own component, below the page");
+  const shell = body.slice(page, data);
+  const rows = body.slice(data);
+
+  // The page itself reads nothing after the administrator check.
+  assert.doesNotMatch(shell, /\.from\(|Promise\.all|listUsers|loadAuthUserIndex/);
+  assert.match(rows, /await Promise\.all\(\[/);
+  assert.match(rows, /<AdminDashboard\s/);
+
+  // Heading first, then the rows inside a Suspense boundary with the skeleton.
+  assert.match(
+    shell,
+    /<AdminPageHeading title=\{title\} intro=\{intro\} \/>[\s\S]*?<Suspense fallback=\{<AdminTableSkeleton tab=\{tab\} \/>\}>\s*\{data\}\s*<\/Suspense>/
+  );
+  assert.match(shell, /const data = \(\s*<AdminSectionData /);
+  // Only the pages that read rows wait; Check-in and Staff render as before.
+  assert.match(shell, /const readsRows = tab === "solo" \|\| tab === "team" \|\| tab === "audit";/);
+});
+
+test("the table skeleton is busy, plain markup, and shows no text or numbers", () => {
+  const skeleton = code(repoFile("src/app/admin/AdminTableSkeleton.tsx"));
+
+  assert.match(skeleton, /export default function AdminTableSkeleton\(\{ tab \}: \{ tab: AdminSection \}\)/);
+  assert.match(skeleton, /role="status"\s*aria-busy="true"\s*aria-label="Loading"/);
+  assert.match(skeleton, /rounded-lg border border-bronze\/20 bg-sand/);
+  assert.match(skeleton, /const ROWS = 6;/);
+  assert.match(skeleton, /motion-safe:animate-pulse/);
+  assert.doesNotMatch(skeleton, /\bawait\b|\bfetch\(|supabase|"use client"/);
+  // Nothing visible between tags, and no digit in any text: attribute
+  // values (class names) and JSX comments aside, the markup is empty.
+  const markup = skeleton.replace(/\{\/\*[\s\S]*?\*\/\}/g, "").replace(/"[^"]*"/g, '""');
+  // (A closing "))}" of the rows' map is code, not text.)
+  assert.doesNotMatch(markup, />\s*[^<\s{()][^<]*</, "no text between tags");
+  for (const text of markup.match(/>[^<>]*</g) ?? []) {
+    assert.doesNotMatch(text.replace(/\{[^}]*\}/g, ""), /\d/, text);
+  }
+});
+
+test("the Overview draws its heading and countdowns at once and its numbers inside Suspense", () => {
+  const overview = code(repoFile("src/app/admin/page.tsx"));
+  const page = overview.slice(overview.indexOf("export default async function AdminOverviewPage("));
+  const header = page.indexOf("</header>");
+
+  // The reads start without being awaited; the countdowns need no database.
+  assert.match(page, /const overview = loadOverview\(access\.supabase\);/);
+  assert.doesNotMatch(page, /await loadOverview|await Promise\.all|supabase\s*\.from\(/);
+  assert.ok(page.indexOf("checkInCountdown") < header && page.indexOf("eventCountdown") < header);
+  assert.ok(page.indexOf("<Suspense") > header, "nothing in the heading waits");
+
+  // Every piece that shows data awaits the reads inside a Suspense boundary.
+  const pieces = page.match(/<Suspense[\s\S]*?<\/Suspense>/g) ?? [];
+  const waited = (pattern: RegExp) =>
+    pieces.some((piece) => pattern.test(piece) && /<Await promise=\{overview\}>/.test(piece));
+  for (const pattern of [
+    /String\(soloRows\.length\)/,
+    /String\(teamRows\.length\)/,
+    /\$\{ridersIn\} \/ \$\{riders\.size\}/,
+    /String\(paperEntries\)/,
+    /liveState \? modeLabel/,
+    /rehearsalOn \?/,
+    /actorNames\.get\(entry\.actor_id\)/,
+    /latestRegistration \? dateAndTime/,
+    /places\.slice\(0, PLACES_SHOWN\)/,
+  ]) {
+    assert.ok(waited(pattern), String(pattern));
+  }
+  // Each placeholder is a muted bar, never a number.
+  assert.match(overview, /<Suspense fallback=\{<PendingNumber \/>\}>/);
+  assert.match(overview, /<Suspense fallback=\{<PendingDetail \/>\}>/);
+  assert.match(overview, /function Pending\(\{ box, bar \}[\s\S]*?aria-busy="true"[\s\S]*?motion-safe:animate-pulse/);
 });

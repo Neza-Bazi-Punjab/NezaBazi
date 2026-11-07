@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { DISPLAY_MODE_CHOICES } from "@/components/scoring/format";
 import { isPaperPlaceholderEmail } from "@/lib/paper-registration";
 import { createServiceRoleClient } from "@/lib/admin/server";
 import { isSoloSampleOn } from "@/lib/scoring/rehearsal";
 import { site } from "@/lib/site";
-import { AdminAccessMessage, getAdminAccess } from "./admin-access";
+import { AdminAccessMessage, getAdminAccess, type AdminAccess } from "./admin-access";
 
 export const metadata: Metadata = {
   title: "Admin Dashboard",
@@ -187,7 +188,7 @@ function StatBlock({
   linkLabel,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   href: string;
   linkLabel: string;
 }) {
@@ -242,14 +243,40 @@ const currentActorNames = async (entries: AuditRow[]) => {
   return names;
 };
 
-export default async function AdminOverviewPage() {
-  const access = await getAdminAccess();
+/* A muted bar standing in for a value that is still being read: no words or
+   numbers, so nothing on it can be mistaken for real data. `box` is the
+   height of the line it replaces and `bar` the bar's own size, so the card
+   keeps its shape when the value arrives. */
+function Pending({ box, bar }: { box: string; bar: string }) {
+  return (
+    <span role="status" aria-busy="true" aria-label="Loading" className={`flex items-center ${box}`}>
+      <span aria-hidden="true" className={`block motion-safe:animate-pulse rounded bg-bronze/15 ${bar}`} />
+    </span>
+  );
+}
+/* In place of a headline number (text-3xl) and of a detail row's value (text-sm). */
+const PendingNumber = () => <Pending box="h-9" bar="h-7 w-20" />;
+const PendingDetail = () => <Pending box="h-5" bar="h-3.5 w-28" />;
 
-  if (access.kind !== "admin") {
-    return <AdminAccessMessage title="Admin Dashboard" kind={access.kind} redirect="/admin" />;
-  }
+/* Waits for the Overview's reads, then draws one piece of the page with
+   them. Each piece sits in its own Suspense boundary, so the page's framing
+   is on screen at once and each number fills in where it belongs. */
+async function Await<T>({
+  promise,
+  children,
+}: {
+  promise: Promise<T>;
+  children: (value: T) => React.ReactNode;
+}) {
+  return children(await promise);
+}
 
-  const { supabase } = access;
+type ServerSupabase = Extract<AdminAccess, { kind: "admin" }>["supabase"];
+
+/* Every read the Overview makes, and everything worked out from them. The
+   page starts it once without waiting, and every piece awaits that same
+   promise, so the database is asked once per visit, as before. */
+const loadOverview = async (supabase: ServerSupabase) => {
   const [solo, teams, members, live, audit, rehearsalOn] = await Promise.all([
     supabase
       .from("solo_registrations")
@@ -309,8 +336,6 @@ export default async function AdminOverviewPage() {
     }
   }
   const places = [...placeCounts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  const checkInCountdown = countdownTo(site.checkInDate);
-  const eventCountdown = countdownTo(site.eventDate);
 
   const latestRegistration = [...soloRows, ...teamRows]
     .map((row) => Date.parse(row.created_at))
@@ -323,6 +348,36 @@ export default async function AdminOverviewPage() {
   const modeLabel =
     DISPLAY_MODE_CHOICES.find((choice) => choice.mode === activeMode)?.label ?? activeMode ?? "—";
   const screensHidden = activeMode === "blank";
+
+  return {
+    soloRows,
+    teamRows,
+    riders,
+    ridersIn,
+    paperEntries,
+    places,
+    latestRegistration,
+    liveState,
+    modeLabel,
+    screensHidden,
+    rehearsalOn,
+    activity,
+    actorNames,
+  };
+};
+
+export default async function AdminOverviewPage() {
+  const access = await getAdminAccess();
+
+  if (access.kind !== "admin") {
+    return <AdminAccessMessage title="Admin Dashboard" kind={access.kind} redirect="/admin" />;
+  }
+
+  /* Started now and awaited by each piece below: the heading, the countdowns
+     and every card's framing draw without waiting for the database. */
+  const overview = loadOverview(access.supabase);
+  const checkInCountdown = countdownTo(site.checkInDate);
+  const eventCountdown = countdownTo(site.eventDate);
 
   return (
     <section className="bg-cream">
@@ -370,40 +425,63 @@ export default async function AdminOverviewPage() {
           </div>
         </header>
 
-        {screensHidden && (
-          <p className="mt-4 rounded-lg border-l-4 border-amber-600 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
-            The screens are set to <strong>Blank</strong>: the public scoreboard and the stream
-            graphics show nothing. Change it under{" "}
-            <Link href="/admin/scoring" className="font-semibold underline">
-              Scoring › Screens
-            </Link>
-            .
-          </p>
-        )}
+        {/* A warning only when the screens are Blank, so it has no placeholder. */}
+        <Suspense fallback={null}>
+          <Await promise={overview}>
+            {({ screensHidden }) =>
+              screensHidden && (
+                <p className="mt-4 rounded-lg border-l-4 border-amber-600 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
+                  The screens are set to <strong>Blank</strong>: the public scoreboard and the stream
+                  graphics show nothing. Change it under{" "}
+                  <Link href="/admin/scoring" className="font-semibold underline">
+                    Scoring › Screens
+                  </Link>
+                  .
+                </p>
+              )
+            }
+          </Await>
+        </Suspense>
 
         {/* Headline numbers */}
         <div className="grid grid-cols-2 gap-x-4 gap-y-5 border-b border-bronze/20 py-5 sm:gap-6 sm:divide-bronze/20 xl:grid-cols-4 xl:divide-x">
           <StatBlock
             label="Solo riders"
-            value={String(soloRows.length)}
+            value={
+              <Suspense fallback={<PendingNumber />}>
+                <Await promise={overview}>{({ soloRows }) => String(soloRows.length)}</Await>
+              </Suspense>
+            }
             href="/admin/solo"
             linkLabel="View riders"
           />
           <StatBlock
             label="Teams"
-            value={String(teamRows.length)}
+            value={
+              <Suspense fallback={<PendingNumber />}>
+                <Await promise={overview}>{({ teamRows }) => String(teamRows.length)}</Await>
+              </Suspense>
+            }
             href="/admin/teams"
             linkLabel="View teams"
           />
           <StatBlock
             label="Check-in"
-            value={`${ridersIn} / ${riders.size}`}
+            value={
+              <Suspense fallback={<PendingNumber />}>
+                <Await promise={overview}>{({ ridersIn, riders }) => `${ridersIn} / ${riders.size}`}</Await>
+              </Suspense>
+            }
             href="/admin/check-in"
             linkLabel="View check-in"
           />
           <StatBlock
             label="Paper entries"
-            value={String(paperEntries)}
+            value={
+              <Suspense fallback={<PendingNumber />}>
+                <Await promise={overview}>{({ paperEntries }) => String(paperEntries)}</Await>
+              </Suspense>
+            }
             href="/admin/paper"
             linkLabel="Add paper entry"
           />
@@ -420,31 +498,60 @@ export default async function AdminOverviewPage() {
             </p>
 
             <dl className="mt-3 grid divide-y divide-bronze/10 rounded-lg border border-bronze/15 bg-cream px-4 sm:grid-cols-2 sm:gap-x-8 sm:divide-y-0 xl:grid-cols-1 xl:divide-y">
-              <DetailRow term="Display mode">{liveState ? modeLabel : "—"}</DetailRow>
+              <DetailRow term="Display mode">
+                <Suspense fallback={<PendingDetail />}>
+                  <Await promise={overview}>
+                    {({ liveState, modeLabel }) => (liveState ? modeLabel : "—")}
+                  </Await>
+                </Suspense>
+              </DetailRow>
               <DetailRow term="Rehearsal feed">
-                {rehearsalOn ? "Running (sample solo)" : "Stopped"}
+                <Suspense fallback={<PendingDetail />}>
+                  <Await promise={overview}>
+                    {({ rehearsalOn }) => (rehearsalOn ? "Running (sample solo)" : "Stopped")}
+                  </Await>
+                </Suspense>
               </DetailRow>
               <DetailRow term="Screen output">
-                {liveState ? (
-                  screensHidden ? (
-                    <span className="text-amber-800">Hidden (Blank)</span>
-                  ) : (
-                    "Active"
-                  )
-                ) : (
-                  "—"
-                )}
+                <Suspense fallback={<PendingDetail />}>
+                  <Await promise={overview}>
+                    {({ liveState, screensHidden }) =>
+                      liveState ? (
+                        screensHidden ? (
+                          <span className="text-amber-800">Hidden (Blank)</span>
+                        ) : (
+                          "Active"
+                        )
+                      ) : (
+                        "—"
+                      )
+                    }
+                  </Await>
+                </Suspense>
               </DetailRow>
               <DetailRow term="Last updated">
-                {liveState?.updated_at ? dateAndTime.format(new Date(liveState.updated_at)) : "—"}
+                <Suspense fallback={<PendingDetail />}>
+                  <Await promise={overview}>
+                    {({ liveState }) =>
+                      liveState?.updated_at ? dateAndTime.format(new Date(liveState.updated_at)) : "—"
+                    }
+                  </Await>
+                </Suspense>
               </DetailRow>
-              {liveState?.message && (
-                <div className="sm:col-span-2 xl:col-span-1">
-                  <DetailRow term="Message">
-                    <span className="whitespace-normal">{liveState.message}</span>
-                  </DetailRow>
-                </div>
-              )}
+              {/* Only when there is a message, so it has no placeholder. */}
+              <Suspense fallback={null}>
+                <Await promise={overview}>
+                  {({ liveState }) =>
+                    liveState?.message && (
+                      <div className="sm:col-span-2 xl:col-span-1">
+                        <DetailRow term="Message">
+                          <span className="whitespace-normal">{liveState.message}</span>
+                        </DetailRow>
+                      </div>
+                    )
+                  }
+                </Await>
+              </Suspense>
             </dl>
             <p className="mt-2 text-xs text-brown/65">
               Change what the screens show from the Screens card on the{" "}
@@ -461,48 +568,73 @@ export default async function AdminOverviewPage() {
             </h2>
             <p className={panelIntro}>Latest actions from administrators, judges and commentators.</p>
 
-            {activity.length === 0 ? (
-              <p className="mt-3 rounded-lg border border-bronze/15 bg-cream p-4 text-sm text-brown/75">
-                Nothing logged yet.
-              </p>
-            ) : (
-              <div className="mt-3 overflow-x-auto rounded-lg border border-bronze/15 bg-cream">
-                <table className="w-full min-w-[32rem] text-left text-sm">
-                  <thead className="bg-sand">
-                    <tr>
-                      {["Time", "User", "Action", "Details"].map((heading) => (
-                        <th
-                          key={heading}
-                          className="px-3 py-2 font-display text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-ink"
-                        >
-                          {heading}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-bronze/10">
-                    {activity.map((entry) => {
-                      const when = new Date(entry.created_at);
-                      const today = dayOnly.format(when) === dayOnly.format(new Date());
+            <Suspense
+              fallback={
+                <div
+                  role="status"
+                  aria-busy="true"
+                  aria-label="Loading"
+                  className="mt-3 divide-y divide-bronze/10 rounded-lg border border-bronze/15 bg-cream"
+                >
+                  {Array.from({ length: RECENT_ACTIVITY }, (_, row) => (
+                    <div key={row} aria-hidden="true" className="flex items-center gap-4 px-3 py-3">
+                      <span className="block h-3.5 w-12 motion-safe:animate-pulse rounded bg-bronze/15" />
+                      <span className="block h-3.5 w-1/4 motion-safe:animate-pulse rounded bg-bronze/10" />
+                      <span className="block h-3.5 w-1/3 motion-safe:animate-pulse rounded bg-bronze/10" />
+                    </div>
+                  ))}
+                </div>
+              }
+            >
+              <Await promise={overview}>
+                {({ activity, actorNames }) => (
+                  <>
+                    {activity.length === 0 ? (
+                      <p className="mt-3 rounded-lg border border-bronze/15 bg-cream p-4 text-sm text-brown/75">
+                        Nothing logged yet.
+                      </p>
+                    ) : (
+                      <div className="mt-3 overflow-x-auto rounded-lg border border-bronze/15 bg-cream">
+                        <table className="w-full min-w-[32rem] text-left text-sm">
+                          <thead className="bg-sand">
+                            <tr>
+                              {["Time", "User", "Action", "Details"].map((heading) => (
+                                <th
+                                  key={heading}
+                                  className="px-3 py-2 font-display text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-ink"
+                                >
+                                  {heading}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-bronze/10">
+                            {activity.map((entry) => {
+                              const when = new Date(entry.created_at);
+                              const today = dayOnly.format(when) === dayOnly.format(new Date());
 
-                      return (
-                        <tr key={entry.id}>
-                          <td className="whitespace-nowrap px-3 py-2 text-ink">
-                            {timeOnly.format(when)}
-                            {!today && (
-                              <span className="ml-1.5 text-xs text-brown/60">{dayOnly.format(when)}</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-ink">{(entry.actor_id && actorNames.get(entry.actor_id)) || entry.actor_name || "—"}</td>
-                          <td className="px-3 py-2 text-ink">{formatAction(entry.action)}</td>
-                          <td className="px-3 py-2 text-ink">{describeDetails(entry)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                              return (
+                                <tr key={entry.id}>
+                                  <td className="whitespace-nowrap px-3 py-2 text-ink">
+                                    {timeOnly.format(when)}
+                                    {!today && (
+                                      <span className="ml-1.5 text-xs text-brown/60">{dayOnly.format(when)}</span>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2 text-ink">{(entry.actor_id && actorNames.get(entry.actor_id)) || entry.actor_name || "—"}</td>
+                                  <td className="px-3 py-2 text-ink">{formatAction(entry.action)}</td>
+                                  <td className="px-3 py-2 text-ink">{describeDetails(entry)}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </>
+                )}
+              </Await>
+            </Suspense>
 
             <div className="mt-auto pt-3 text-right">
               <GoLink href="/admin/audit">View full audit log</GoLink>
@@ -521,7 +653,13 @@ export default async function AdminOverviewPage() {
                 <DetailRow term="Check-in date">{formatCalendarDate(site.checkInDate)}</DetailRow>
                 <DetailRow term="Event date">{formatCalendarDate(site.eventDate)}</DetailRow>
                 <DetailRow term="Latest registration">
-                  {latestRegistration ? dateAndTime.format(latestRegistration) : "—"}
+                  <Suspense fallback={<PendingDetail />}>
+                    <Await promise={overview}>
+                      {({ latestRegistration }) =>
+                        latestRegistration ? dateAndTime.format(latestRegistration) : "—"
+                      }
+                    </Await>
+                  </Suspense>
                 </DetailRow>
               </dl>
             </div>
@@ -531,24 +669,43 @@ export default async function AdminOverviewPage() {
             <div className="lg:pl-6">
               <div className="rounded-lg border border-bronze/15 bg-cream p-3">
                 <p className={eyebrow}>Riders from</p>
-                {places.length === 0 ? (
-                  <p className="mt-2 text-sm text-brown/70">No locations yet.</p>
-                ) : (
-                  <ul className="mt-2 space-y-1 text-sm">
-                    {places.slice(0, PLACES_SHOWN).map(([place, count]) => (
-                      <li key={place} className="flex items-baseline justify-between gap-3">
-                        <span className="min-w-0 truncate text-ink">{place}</span>
-                        <span className="shrink-0 font-display font-bold text-bronze-dark">{count}</span>
-                      </li>
-                    ))}
-                    {places.length > PLACES_SHOWN && (
-                      <li className="text-xs text-brown/60">
-                        +{places.length - PLACES_SHOWN} more{" "}
-                        {places.length - PLACES_SHOWN === 1 ? "place" : "places"}
-                      </li>
+                <Suspense
+                  fallback={
+                    <div role="status" aria-busy="true" aria-label="Loading" className="mt-2 space-y-1">
+                      {[0, 1, 2].map((row) => (
+                        <div key={row} aria-hidden="true" className="flex h-5 items-center justify-between gap-3">
+                          <span className="block h-3.5 w-24 motion-safe:animate-pulse rounded bg-bronze/10" />
+                          <span className="block h-3.5 w-6 motion-safe:animate-pulse rounded bg-bronze/15" />
+                        </div>
+                      ))}
+                    </div>
+                  }
+                >
+                  <Await promise={overview}>
+                    {({ places }) => (
+                      <>
+                        {places.length === 0 ? (
+                          <p className="mt-2 text-sm text-brown/70">No locations yet.</p>
+                        ) : (
+                          <ul className="mt-2 space-y-1 text-sm">
+                            {places.slice(0, PLACES_SHOWN).map(([place, count]) => (
+                              <li key={place} className="flex items-baseline justify-between gap-3">
+                                <span className="min-w-0 truncate text-ink">{place}</span>
+                                <span className="shrink-0 font-display font-bold text-bronze-dark">{count}</span>
+                              </li>
+                            ))}
+                            {places.length > PLACES_SHOWN && (
+                              <li className="text-xs text-brown/60">
+                                +{places.length - PLACES_SHOWN} more{" "}
+                                {places.length - PLACES_SHOWN === 1 ? "place" : "places"}
+                              </li>
+                            )}
+                          </ul>
+                        )}
+                      </>
                     )}
-                  </ul>
-                )}
+                  </Await>
+                </Suspense>
               </div>
             </div>
           </div>

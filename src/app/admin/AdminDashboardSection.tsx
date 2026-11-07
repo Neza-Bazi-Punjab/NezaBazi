@@ -1,9 +1,15 @@
 /* One section of the admin dashboard as its own page: Solo riders, Teams,
    Check-in, Staff or Audit log. Each lives at its own address under /admin
    (so refresh and Back stay put) and renders the same AdminDashboard
-   component as before, told which section to show. */
+   component as before, told which section to show.
+
+   The heading draws as soon as the administrator check passes; the rows
+   stream in after it (React Suspense), with a muted placeholder table in
+   their place meanwhile, so a slow read never holds up the whole page. */
+import { Suspense } from "react";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import AdminPageHeading from "./AdminPageHeading";
+import AdminTableSkeleton from "./AdminTableSkeleton";
 import AdminDashboard, {
   type AdminSection,
   type AuditActor,
@@ -13,7 +19,7 @@ import AdminDashboard, {
   type Team,
   type TeamMember,
 } from "./AdminDashboard";
-import { AdminAccessMessage, getAdminAccess } from "./admin-access";
+import { AdminAccessMessage, getAdminAccess, type AdminAccess } from "./admin-access";
 import {
   loadAuthUserIndex,
   matchSoloHeadshots,
@@ -59,7 +65,42 @@ export default async function AdminDashboardSection({
     return <AdminAccessMessage title={title} kind={access.kind} redirect={path} />;
   }
 
-  const { supabase } = access;
+  /* Check-in and Staff read nothing here (they fetch through their own
+     routes), so there is nothing to wait for and no placeholder to flash. */
+  const readsRows = tab === "solo" || tab === "team" || tab === "audit";
+  const data = (
+    <AdminSectionData tab={tab} supabase={access.supabase} currentAdminId={access.userId} />
+  );
+
+  return (
+    <>
+      <AdminPageHeading title={title} intro={intro} />
+
+      <section className="bg-cream">
+        <div className="px-6 pb-12 pt-4 sm:pb-16 sm:pt-6">
+          {readsRows ? (
+            <Suspense fallback={<AdminTableSkeleton tab={tab} />}>{data}</Suspense>
+          ) : (
+            data
+          )}
+        </div>
+      </section>
+    </>
+  );
+}
+
+/* The section's rows: every database read the page makes, then the dashboard
+   drawn with them. It is its own async component so it can stream in under
+   the heading instead of holding the whole page until the last read lands. */
+async function AdminSectionData({
+  tab,
+  supabase,
+  currentAdminId,
+}: {
+  tab: AdminSection;
+  supabase: Extract<AdminAccess, { kind: "admin" }>["supabase"];
+  currentAdminId: string;
+}) {
 
   /* Each page loads only what it shows. Check-in and Staff fetch their own
      data through their own routes, so they need none of this. Every load is
@@ -155,24 +196,16 @@ export default async function AdminDashboardSection({
   const auditActors = await auditActorsLoad;
 
   return (
-    <>
-      <AdminPageHeading title={title} intro={intro} />
-
-      <section className="bg-cream">
-        <div className="px-6 pb-12 pt-4 sm:pb-16 sm:pt-6">
-          <AdminDashboard
-            tab={tab}
-            currentAdminId={access.userId}
-            soloRegistrations={(soloRegistrations ?? []) as SoloRegistration[]}
-            teams={(teams ?? []) as Team[]}
-            teamMembers={(teamMembers ?? []) as TeamMember[]}
-            auditLog={(auditLog ?? []) as AuditLogEntry[]}
-            auditArchive={(auditArchive ?? []) as ArchivedAuditEntry[]}
-            auditActors={auditActors}
-            soloHeadshots={soloHeadshots}
-          />
-        </div>
-      </section>
-    </>
+    <AdminDashboard
+      tab={tab}
+      currentAdminId={currentAdminId}
+      soloRegistrations={(soloRegistrations ?? []) as SoloRegistration[]}
+      teams={(teams ?? []) as Team[]}
+      teamMembers={(teamMembers ?? []) as TeamMember[]}
+      auditLog={(auditLog ?? []) as AuditLogEntry[]}
+      auditArchive={(auditArchive ?? []) as ArchivedAuditEntry[]}
+      auditActors={auditActors}
+      soloHeadshots={soloHeadshots}
+    />
   );
 }
