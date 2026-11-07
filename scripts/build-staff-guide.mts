@@ -91,6 +91,17 @@ const GUIDES: Guide[] = [
     subject: `Live scoring data feeds for vMix: the graphics team's guide, ${site.eventDate}, ${site.venue}.`,
   },
   {
+    // The short version of the whole day, for the organisers; draws the staff
+    // guide's diagrams and no pictures of its own.
+    source: join(ROOT, "docs", "superpowers", "plans", "2026-11-07-organisers-quick-guide-outline.md"),
+    figureDir: join(ROOT, "scripts", "staff-guide"),
+    output: join(ROOT, "public", "documents", "organisers-guide.pdf"),
+    kicker: "ORGANISERS · THE DAY IN PLAIN WORDS",
+    contents:
+      "Read it once, front to back: it is short. **The one idea** first, then the day in order, then **The demo** and **If something goes wrong**. Each section has its name on the tab at the page edge.",
+    subject: `Event day in plain words: the organisers' short guide, ${site.eventDate}, ${site.venue}.`,
+  },
+  {
     // Reuses the staff guide's screenshots; it has none of its own.
     source: join(ROOT, "docs", "superpowers", "plans", "2026-10-26-rehearsal-guide-outline.md"),
     figureDir: join(ROOT, "scripts", "staff-guide"),

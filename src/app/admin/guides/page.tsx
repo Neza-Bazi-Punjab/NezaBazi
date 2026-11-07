@@ -12,10 +12,17 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-/* The three printed guides, built from docs/ by `npm run build:guide`. Each
+/* The four printed guides, built from docs/ by `npm run build:guide`. Each
    opens in a new tab. The PDFs themselves are public files; this page only
    gathers them for the organisers, behind the same gate as /admin. */
 const PDF_GUIDES = [
+  {
+    href: "/documents/organisers-guide.pdf",
+    title: "Organisers' guide",
+    audience: "Whoever is running the day",
+    description:
+      "The whole day in plain words: what the organisers press, what the judges tap, how solo turns into teams, and how the demo keeps everything safe.",
+  },
   {
     href: "/documents/staff-guide.pdf",
     title: "Staff guide",
