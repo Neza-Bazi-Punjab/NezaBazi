@@ -1,37 +1,52 @@
-// Training mode: in-memory scoring sessions on sample riders.
+// Training mode: practice scoring sessions on sample riders.
 //
 // /judge/demo and /commentary/demo (and the scoring APIs with ?sample=1) work
-// against a practice session here instead of the database, so judges and
-// commentators can practise before event day. Who gets which session is
-// decided in sample-mode.ts: a laptop running with SCORING_SAMPLE_MODE=1
-// shares one session (LOCAL_TRAINING_SESSION) between everyone, no login
-// needed; on the live site each signed-in judge, commentator or administrator
-// gets their own (personalTrainingSession(userId)), so two people practising
-// at once never see each other's taps. Every judge write goes through
-// sample-engine.ts, which re-implements the database functions' rules, and
-// every read is assembled here in the same shapes as server.ts builds from
-// the database.
+// against a practice session here instead of the real scoring tables, so
+// judges and commentators can practise before event day. Who gets which
+// session is decided in sample-mode.ts:
+//   - a laptop running with SCORING_SAMPLE_MODE=1: one session
+//     (LOCAL_TRAINING_SESSION) for everyone using it, no login, kept in this
+//     server process's memory exactly as before;
+//   - the live site: every signed-in judge, commentator or administrator on
+//     ONE shared session (SHARED_TRAINING_SESSION, the organisers' demo),
+//     stored as a row of scoring_training_sessions (training-db.ts), so every
+//     device and every server instance sees the same demo. ?sample=demo on the
+//     vMix feeds, /api/live/state, /live and the overlays follows it too.
+// Every judge write goes through sample-engine.ts, which re-implements the
+// database functions' rules, and every read is assembled here in the same
+// shapes as server.ts builds from the database.
 //
-// It never touches the database and never returns real data: the 30 riders
-// and the commentators' background facts below are invented. A session starts
-// at the top of Qualification (Pools A, B and C of ten, three attempts,
-// ridden round by round) with nobody ridden yet, and the engine builds each
-// Aarhi round from the riders who carried, through to the Final
-// (SampleProgression in sample-engine.ts), so a practice runs the whole day.
-// The only imports are the scoring types, the pure engine and the pure pool
-// helpers from server.ts; no database client is created or called anywhere
-// in this file.
+// One helper, withSession(key, act), is the only way in. For the local key it
+// hands `act` the in-memory engine. For any other key it loads the row (the
+// sample seed when there is none yet), rebuilds the engine with
+// createSampleEngine, runs `act`, and, for a write, saves
+// { ...engine.snapshot(), progression } with the version it loaded. A lost
+// race (someone else saved in between) reloads and re-applies the action
+// once, then refuses with a 409 SampleRefusal. Reads never save.
 //
-// Sessions live in this server process's memory (on globalThis, so every
-// route shares one store and a dev-server hot reload keeps it), bounded by
-// training-store.ts: at most MAX_TRAINING_SESSIONS (the least recently used
-// is dropped to make room) and none kept after TRAINING_IDLE_MS without use.
-// "Reset training data" restarts only the caller's session. A server restart
-// — or, on a host that runs several instances, landing on another instance —
-// starts a session again from the sample data; the practice banner says so.
+// Before the migration is applied (the table missing: TrainingNotConfigured)
+// the shared key falls back to the in-memory store, one session per server
+// instance, and the demo pages show the "unshared" banner of training.ts,
+// "(not yet shared between devices)". Nothing breaks.
+//
+// It never touches the scoring or registration tables and never returns real
+// data: the 30 riders and the commentators' background facts below are
+// invented. A session starts at the top of Qualification (Pools A, B and C of
+// ten, three attempts, ridden round by round) with nobody ridden yet, and the
+// engine builds each Aarhi round from the riders who carried, through to the
+// Final (SampleProgression in sample-engine.ts), so a practice runs the whole
+// day. The only imports are the scoring types, the pure engine, the pure pool
+// helpers from server.ts, the in-memory store and training-db.ts (the
+// practice row, through the service role); no client is created in this file.
+//
+// The in-memory store lives on globalThis (every route shares it and a
+// dev-server hot reload keeps it), bounded by training-store.ts: at most
+// MAX_TRAINING_SESSIONS (the least recently used is dropped to make room) and
+// none kept after TRAINING_IDLE_MS without use.
 import "server-only";
 
 import {
+  SampleRefusal,
   createSampleEngine,
   computeSampleLeaderboard,
   overridesFor,
@@ -39,7 +54,17 @@ import {
   type SampleEngine,
   type SampleSeed,
 } from "@/lib/scoring/sample-engine";
+import {
+  SHARED_TRAINING_SESSION,
+  TrainingNotConfigured,
+  deleteTrainingState,
+  loadTrainingState,
+  openTrainingDatabase,
+  saveTrainingState,
+  type TrainingDatabase,
+} from "@/lib/scoring/training-db";
 import { createTrainingStore, type TrainingStore } from "@/lib/scoring/training-store";
+import { upNextRuns } from "@/lib/scoring/next-to-ride";
 import {
   buildPoolRosters,
   listPools,
@@ -60,6 +85,7 @@ import {
 } from "@/lib/scoring/types";
 
 export { SampleRefusal } from "@/lib/scoring/sample-engine";
+export { SHARED_TRAINING_SESSION } from "@/lib/scoring/training-db";
 
 /* Seed --------------------------------------------------------------------------- */
 
@@ -132,6 +158,9 @@ const POOL_SIZE = 10;
 /* Three or fewer riders through: the next round is the Final. */
 const FINAL_AT = 3;
 
+/* How the engine builds each Aarhi round of a practice session. */
+const TRAINING_PROGRESSION = { poolSize: POOL_SIZE, finalAt: FINAL_AT };
+
 const trainingId = (prefix: string, index: number) =>
   `5a3b1e00-0000-4000-${prefix}-${String(index).padStart(12, "0")}`;
 
@@ -199,7 +228,7 @@ const buildSeed = (): SampleSeed => {
       message: "Training mode — sample riders, not real results",
       updated_at: createdAt,
     },
-    progression: { poolSize: POOL_SIZE, finalAt: FINAL_AT },
+    progression: TRAINING_PROGRESSION,
   };
 };
 
@@ -208,15 +237,26 @@ const buildSeed = (): SampleSeed => {
 /* The one session of a laptop running with SCORING_SAMPLE_MODE=1. */
 export const LOCAL_TRAINING_SESSION = "local";
 
-/* A signed-in staff member's own session on the live site. */
-export const personalTrainingSession = (userId: string) => `user:${userId}`;
+/* The session ?sample=demo follows (the vMix feeds, /api/live/state, /live
+   and the overlays): the laptop's own on a SCORING_SAMPLE_MODE=1 laptop
+   (that is where its judges practise), the shared demo everywhere else. */
+export const demoTrainingSession = () =>
+  process.env.SCORING_SAMPLE_MODE === "1" ? LOCAL_TRAINING_SESSION : SHARED_TRAINING_SESSION;
 
 export const MAX_TRAINING_SESSIONS = 200;
 export const TRAINING_IDLE_MS = 6 * 60 * 60 * 1000;
 
+type DemoCacheEntry = {
+  value: SampleSeed | null;
+  readAt: number;
+  pending: Promise<SampleSeed> | null;
+};
+
 const globalStore = globalThis as typeof globalThis & {
   __nezaBaziTrainingSessions?: TrainingStore<SampleEngine>;
   __nezaBaziTrainingVersion?: string;
+  __nezaBaziTrainingFallbackLogged?: boolean;
+  __nezaBaziDemoSnapshots?: Map<string, DemoCacheEntry>;
 };
 
 /* The store outlives a hot reload (it sits on globalThis), and with it the
@@ -238,38 +278,171 @@ if (globalStore.__nezaBaziTrainingVersion !== version) {
   globalStore.__nezaBaziTrainingVersion = version;
 }
 
+/* The in-memory sessions: the laptop's, and the shared demo's fallback until
+   the migration is applied. */
 const sessions = (): TrainingStore<SampleEngine> =>
   (globalStore.__nezaBaziTrainingSessions ??= createTrainingStore(
     () => createSampleEngine(buildSeed()),
     { max: MAX_TRAINING_SESSIONS, idleMs: TRAINING_IDLE_MS }
   ));
 
-const session = (key: string): SampleEngine => sessions().get(key);
+/* Said once per server instance, so the logs show why the demo is not shared. */
+const noteFallback = () => {
+  if (!globalStore.__nezaBaziTrainingFallbackLogged) {
+    globalStore.__nezaBaziTrainingFallbackLogged = true;
+    console.warn(
+      "[scoring] scoring_training_sessions is missing; practice runs in memory on this instance (apply 20261107120000_scoring_training_sessions.sql)"
+    );
+  }
+};
+
+/* The 409 after a lost race and one retry. */
+export const LOST_RACE_MESSAGE =
+  "Someone else just changed the practice. It has refreshed; try again.";
+
+/* A write: who made it, for the row's updated_by (diagnostics only). */
+type Write = { by: string | null };
+
+/* One read or write on the database row: load (or seed), rebuild the engine,
+   act on it, and for a write save with the version check, retrying once. */
+const withStoredSession = async <T>(
+  client: TrainingDatabase,
+  key: string,
+  act: (engine: SampleEngine) => T,
+  write: Write | null
+): Promise<T> => {
+  for (let attempt = 1; ; attempt += 1) {
+    const stored = await loadTrainingState(client, key);
+    const seed = stored?.state ?? buildSeed();
+    const engine = createSampleEngine(seed);
+    // A refusal (already scored, not found...) throws here, before any save.
+    const result = act(engine);
+
+    if (!write) {
+      return result;
+    }
+
+    const saved = await saveTrainingState(
+      client,
+      key,
+      { ...engine.snapshot(), progression: seed.progression ?? TRAINING_PROGRESSION },
+      stored?.version ?? null,
+      write.by
+    );
+
+    if (saved) {
+      return result;
+    }
+
+    if (attempt >= 2) {
+      throw new SampleRefusal("22023", LOST_RACE_MESSAGE);
+    }
+  }
+};
+
+/* The only way into a session. `write` null: a read, which never saves. */
+const withSession = async <T>(
+  key: string,
+  act: (engine: SampleEngine) => T,
+  write: Write | null = null
+): Promise<T> => {
+  if (key === LOCAL_TRAINING_SESSION) {
+    return act(sessions().get(key));
+  }
+
+  try {
+    return await withStoredSession(openTrainingDatabase(), key, act, write);
+  } catch (caught) {
+    if (!(caught instanceof TrainingNotConfigured)) {
+      throw caught;
+    }
+
+    noteFallback();
+    return act(sessions().get(key));
+  }
+};
+
+/* Whether the live site's demo is really shared between devices yet, for the
+   demo pages' banner: "unshared" only while the table is missing. Any other
+   failure reads as "shared" (the panel's own request will say what went
+   wrong). */
+export const sharedTrainingScope = async (): Promise<"shared" | "unshared"> => {
+  try {
+    await loadTrainingState(openTrainingDatabase(), SHARED_TRAINING_SESSION);
+    return "shared";
+  } catch (caught) {
+    if (caught instanceof TrainingNotConfigured) {
+      noteFallback();
+      return "unshared";
+    }
+
+    console.error("[scoring] checking the shared practice session failed", caught);
+    return "shared";
+  }
+};
 
 /* Judge writes on one session (same semantics as the database functions;
    refusals throw a SampleRefusal carrying the database's own message and
-   404 / 409) ---------------------------------------------------------------------- */
+   404 / 409). `by`: the signed-in staff member, when there is one. */
 
-export const recordResult = (key: string, runId: string, result: RunResult, override: boolean) =>
-  session(key).recordResult(runId, result, override);
+export const recordResult = async (
+  key: string,
+  runId: string,
+  result: RunResult,
+  override: boolean,
+  by: string | null = null
+) => withSession(key, (engine) => engine.recordResult(runId, result, override), { by });
 
-export const clearResult = (key: string, runId: string, makeCurrent: boolean) =>
-  session(key).clearResult(runId, makeCurrent);
+export const clearResult = async (
+  key: string,
+  runId: string,
+  makeCurrent: boolean,
+  by: string | null = null
+) => withSession(key, (engine) => engine.clearResult(runId, makeCurrent), { by });
 
-export const setRunStatus = (key: string, runId: string, status: "pending" | "void") =>
-  session(key).setRunStatus(runId, status);
+export const setRunStatus = async (
+  key: string,
+  runId: string,
+  status: "pending" | "void",
+  by: string | null = null
+) => withSession(key, (engine) => engine.setRunStatus(runId, status), { by });
 
-export const setLive = (key: string, payload: LiveUpdateRequest) =>
-  session(key).setLive(payload);
+export const setLive = async (key: string, payload: LiveUpdateRequest, by: string | null = null) =>
+  withSession(key, (engine) => engine.setLive(payload), { by });
 
-export const callPool = (key: string, roundId: string, poolLabel: string) =>
-  session(key).callPool(roundId, poolLabel);
+export const callPool = async (
+  key: string,
+  roundId: string,
+  poolLabel: string,
+  by: string | null = null
+) => withSession(key, (engine) => engine.callPool(roundId, poolLabel), { by });
 
-export const takeOut = (key: string, roundId: string, entrantKey: string, out: boolean) =>
-  session(key).takeOut(roundId, entrantKey, out);
+export const takeOut = async (
+  key: string,
+  roundId: string,
+  entrantKey: string,
+  out: boolean,
+  by: string | null = null
+) => withSession(key, (engine) => engine.takeOut(roundId, entrantKey, out), { by });
 
-/* Back to the start for this session only: the top of Qualification. */
-export const reset = (key: string) => {
+/* Back to the start: the top of Qualification. On the live site that is the
+   shared demo, so it restarts for everyone, on every device: the row is
+   deleted and the next read seeds afresh. */
+export const reset = async (key: string) => {
+  if (key !== LOCAL_TRAINING_SESSION) {
+    try {
+      await deleteTrainingState(openTrainingDatabase(), key);
+      globalStore.__nezaBaziDemoSnapshots?.delete(key);
+      return;
+    } catch (caught) {
+      if (!(caught instanceof TrainingNotConfigured)) {
+        throw caught;
+      }
+
+      noteFallback();
+    }
+  }
+
   sessions().reset(key);
 };
 
@@ -281,7 +454,51 @@ const UP_NEXT_RIDERS = 3;
 type Assembled = { state: PublicLiveState; runs: ScoringRun[]; all: SampleSeed };
 
 /* loadLiveSnapshot, over a session instead of the tables. */
-const assemble = (key: string): Assembled => assembleSnapshot(session(key).snapshot());
+const assemble = (key: string): Promise<Assembled> =>
+  withSession(key, (engine) => assembleSnapshot(engine.snapshot()));
+
+/* How long a public demo read is reused on one server instance. */
+const DEMO_CACHE_MS = 1_000;
+
+/* The session's state for the public demo addresses (?sample=demo on the
+   vMix feeds and /api/live/state): at most one database read a second per
+   server instance, however many feeds and viewers poll; requests in the same
+   second share it. The local key is in memory and never cached. */
+export const readDemoSnapshot = async (
+  key: string = SHARED_TRAINING_SESSION,
+  now: number = Date.now()
+): Promise<SampleSeed> => {
+  const read = () => withSession(key, (engine): SampleSeed => engine.snapshot());
+
+  if (key === LOCAL_TRAINING_SESSION) {
+    return read();
+  }
+
+  const cache = (globalStore.__nezaBaziDemoSnapshots ??= new Map<string, DemoCacheEntry>());
+  let entry = cache.get(key);
+
+  if (!entry) {
+    entry = { value: null, readAt: 0, pending: null };
+    cache.set(key, entry);
+  }
+
+  if (entry.value && now - entry.readAt < DEMO_CACHE_MS) {
+    return entry.value;
+  }
+
+  const current = entry;
+  current.pending ??= read()
+    .then((value) => {
+      current.value = value;
+      current.readAt = Date.now();
+      return value;
+    })
+    .finally(() => {
+      current.pending = null;
+    });
+
+  return current.pending;
+};
 
 /* The same assembly over any engine snapshot (the moving vMix sample in
    vmix-sample-live.ts replays its own engine and reads it through this). */
@@ -302,7 +519,6 @@ export const assembleSnapshot = (all: SampleSeed): Assembled => {
       )
       .sort((a, b) => Date.parse(b.scored_at) - Date.parse(a.scored_at))[0] ?? null;
   const currentRun = runs.find((run) => run.id === live.current_run_id) ?? null;
-  const after = currentRun ? currentRun.run_order : 0;
   const pools = listPools(runs);
 
   return {
@@ -316,9 +532,9 @@ export const assembleSnapshot = (all: SampleSeed): Assembled => {
       current_run: currentRun,
       last_scored_run: lastScored,
       recent_results: recentResults(runs),
-      up_next: runs
-        .filter((run) => run.status === "pending" && run.run_order > after)
-        .slice(0, UP_NEXT_LIMIT),
+      // Between riders this names the rider the judges' Start button offers,
+      // never a rider passed over earlier (next-to-ride.ts).
+      up_next: upNextRuns(runs, live, UP_NEXT_LIMIT),
       leaderboard: currentRound
         ? computeSampleLeaderboard(currentRound, runs, overridesFor(all.overrides, currentRound.id))
         : [],
@@ -330,16 +546,17 @@ export const assembleSnapshot = (all: SampleSeed): Assembled => {
   };
 };
 
-/* GET /api/live/state?sample=1 on a SCORING_SAMPLE_MODE=1 laptop — what
-   /live?sample=1 and the overlays show. The same public shape as the real
-   route (district and state only, no judge id), so rehearsals show what the
-   public will see. */
-export const samplePublicLiveState = (key: string = LOCAL_TRAINING_SESSION): PublicLiveState =>
-  toPublicLiveState(assemble(key).state);
+/* GET /api/live/state?sample=1 on a SCORING_SAMPLE_MODE=1 laptop, and
+   ?sample=demo (the shared demo) — what /live and the overlays show with
+   those flags. The same public shape as the real route (district and state
+   only, no judge id), so rehearsals show what the public will see. */
+export const samplePublicLiveState = async (
+  key: string = LOCAL_TRAINING_SESSION
+): Promise<PublicLiveState> => toPublicLiveState(assembleSnapshot(await readDemoSnapshot(key)).state);
 
 /* GET /api/judge/state?sample=1, and the `state` every sample write returns. */
-export const sampleJudgeState = (key: string): JudgeState => {
-  const { state, runs } = assemble(key);
+export const sampleJudgeState = async (key: string): Promise<JudgeState> => {
+  const { state, runs } = await assemble(key);
   return { ...state, runs };
 };
 
@@ -394,8 +611,8 @@ const riderDetail = (run: ScoringRun, all: SampleSeed): RiderDetail => {
 };
 
 /* GET /api/commentary/state?sample=1. */
-export const sampleCommentaryState = (key: string): CommentaryState => {
-  const { state, all, runs } = assemble(key);
+export const sampleCommentaryState = async (key: string): Promise<CommentaryState> => {
+  const { state, all, runs } = await assemble(key);
   const nextRuns = state.up_next.slice(0, UP_NEXT_RIDERS);
   const leaderboards: Record<string, LeaderboardRow[]> = {};
 

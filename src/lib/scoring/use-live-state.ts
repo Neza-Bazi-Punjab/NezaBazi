@@ -18,10 +18,11 @@
 //   back online.
 // - Keeps the last good payload when a request fails, and never throws into
 //   render: failures surface as `error` and `connection: "offline"`.
-// - Training mode (a URL carrying ?sample=1, answered from the server's
-//   in-memory sample session): no realtime channel, because nothing in the
-//   database changes when a trainee scores, and a poll every 2 s instead, so
-//   the commentary demo and /live?sample=1 follow /judge/demo closely.
+// - Training mode (a URL carrying ?sample=1 or ?sample=demo, answered from the
+//   server's practice session): no realtime channel, because nothing in the
+//   scoring tables changes when a trainee scores, and a poll every 2 s
+//   instead, so the commentary demo, /live?sample=1 and /live?sample=demo (and
+//   the overlays with either flag) follow /judge/demo closely.
 // - `setData` lets a panel apply the state returned by its own write at once
 //   (the judges' panel never waits on realtime to show its own action); any
 //   request already in flight when that happens is discarded as older.
@@ -108,11 +109,19 @@ const readErrorMessage = async (response: Response) => {
   return `The server answered ${response.status}. Retrying…`;
 };
 
-/* Local rehearsal: when the page itself was opened with ?sample=1, ask the
-   server for its sample data too. The server honours that only while
-   SCORING_SAMPLE_MODE is set in its environment, so on the live site this is
-   a no-op and the public always sees real results. */
-const SAMPLE_FLAG = /[?&]sample=1(?:&|$)/;
+/* Rehearsal: when the page itself was opened with ?sample=1 or ?sample=demo,
+   ask the server for the same sample data. ?sample=1 is honoured only while
+   SCORING_SAMPLE_MODE is set in the server's environment, so on the live site
+   it is a no-op and the public always sees real results. ?sample=demo is the
+   organisers' shared demo (invented riders), on any site, so /live and the
+   overlays can follow a rehearsal; it is never real data. */
+const SAMPLE_FLAG = /[?&]sample=(?:1|demo)(?:&|$)/;
+
+/* The page's own flag, when it is one the server knows. */
+const pageSampleFlag = (): "1" | "demo" | null => {
+  const flag = new URLSearchParams(window.location.search).get("sample");
+  return flag === "1" || flag === "demo" ? flag : null;
+};
 
 /* True for a URL that asks for training data. The training panels
    (/judge/demo, /commentary/demo) pass the flag explicitly. */
@@ -123,11 +132,13 @@ const withSampleFlag = (url: string) => {
     return url;
   }
 
-  if (new URLSearchParams(window.location.search).get("sample") !== "1") {
+  const flag = pageSampleFlag();
+
+  if (flag === null) {
     return url;
   }
 
-  return `${url}${url.includes("?") ? "&" : "?"}sample=1`;
+  return `${url}${url.includes("?") ? "&" : "?"}sample=${flag}`;
 };
 
 export function useLiveState<T>(url: string): LiveStateHook<T> {

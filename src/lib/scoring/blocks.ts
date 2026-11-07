@@ -10,6 +10,7 @@
 //
 // Pure: no React, no database. The server, the training engine and the panels
 // all use these, so "next" means the same thing everywhere.
+import { lastRiddenRun, nextToRide } from "./next-to-ride.ts";
 import type { ScoringRun } from "@/lib/scoring/types";
 
 type BlockRun = Pick<ScoringRun, "id" | "run_order" | "attempt_number" | "pool_label" | "status">;
@@ -43,10 +44,45 @@ export const runBlocks = <T extends BlockRun>(runs: readonly T[]): RunBlock<T>[]
 
 export type PoolBlockRef = { pool: string; attempt: number };
 
+/* Between riders (nobody on course: the judge has not tapped Start yet) the
+   called pool stays as it was. Once the block it was riding has been ridden to
+   the end — the furthest result is in the called pool and nobody in that pool
+   and round is left to ride — the pools are worked out as if nothing were
+   called, so "Next" is the pool after it rather than its next round. The
+   judges' panel draws its pools the same way. */
+export const calledBlockRidden = (
+  runs: readonly BlockRun[],
+  called: string | null,
+  currentRunId: string | null
+) => {
+  if (called === null || (currentRunId !== null && runs.some((run) => run.id === currentRunId))) {
+    return false;
+  }
+
+  const last = lastRiddenRun(runs);
+
+  return (
+    last !== null &&
+    last.pool_label === called &&
+    !runs.some(
+      (run) =>
+        run.pool_label === called && run.attempt_number === last.attempt_number && isOpenRun(run)
+    )
+  );
+};
+
+/* The called pool as the pool lists use it: null once its block has been
+   ridden to the end between riders (calledBlockRidden). */
+export const shownCalledPool = (
+  runs: readonly BlockRun[],
+  called: string | null,
+  currentRunId: string | null
+) => (calledBlockRidden(runs, called, currentRunId) ? null : called);
+
 /* The block the riding is in: the current run's block when the current run
    belongs to the called pool (or nothing is called), otherwise the called
    pool's earliest block that still has riders to go (a pool called ahead).
-   -1 when there is no anchor yet. */
+   -1 when there is no anchor yet. `called` has been through shownCalledPool. */
 const anchorIndex = (
   blocks: RunBlock[],
   called: string | null,
@@ -81,15 +117,24 @@ const anchorIndex = (
 
 /* The pool (and round) to call next: the first block after the riding one
    that still has riders to go. Before anything is called or ridden it is the
-   first block with riders to go — the pool the judge calls first. Null when
-   the round is unpooled or every later block has ridden. */
+   first block with riders to go — the pool the judge calls first. Between
+   riders with nothing (or a finished pool) called, the block of the furthest
+   result is the anchor, so a rider passed over earlier in the list does not
+   pull "Next" back to their pool. Null when the round is unpooled or every
+   later block has ridden. */
 export const nextPoolBlock = (
   runs: readonly BlockRun[],
   called: string | null,
   currentRunId: string | null
 ): PoolBlockRef | null => {
   const blocks = runBlocks(runs);
-  const anchor = anchorIndex(blocks, called, currentRunId);
+  let anchor = anchorIndex(blocks, shownCalledPool(runs, called, currentRunId), currentRunId);
+
+  if (anchor < 0) {
+    const last = lastRiddenRun(runs);
+    anchor = last ? blocks.findIndex((block) => block.runs.some((run) => run.id === last.id)) : -1;
+  }
+
   const next = blocks
     .slice(anchor + 1)
     .find((block) => block.pool !== null && block.runs.some(isOpenRun));
@@ -104,7 +149,7 @@ export const ridingPoolBlock = (
   currentRunId: string | null
 ): PoolBlockRef | null => {
   const blocks = runBlocks(runs);
-  const anchor = anchorIndex(blocks, called, currentRunId);
+  const anchor = anchorIndex(blocks, shownCalledPool(runs, called, currentRunId), currentRunId);
   const block = anchor >= 0 ? blocks[anchor] : null;
   return block && block.pool !== null ? { pool: block.pool, attempt: block.attempt } : null;
 };
@@ -210,15 +255,16 @@ export const poolSummaries = (
   const riding = ridingPoolBlock(runs, called, currentRunId);
   const next = nextPoolBlock(runs, called, currentRunId);
   const current = currentRunId ? runs.find((run) => run.id === currentRunId) ?? null : null;
-  const nextRun =
-    [...runs]
-      .sort((a, b) => a.run_order - b.run_order)
-      .find(
-        (run) =>
-          run.status === "pending" &&
-          run.id !== currentRunId &&
-          (current === null || run.run_order > current.run_order)
-      ) ?? null;
+  /* The rider marked "up next": after the rider on course, or, between
+     riders, the one the judges' Start button names (next-to-ride.ts). */
+  const nextRun = current
+    ? ([...runs]
+        .sort((a, b) => a.run_order - b.run_order)
+        .find(
+          (run) =>
+            run.status === "pending" && run.id !== current.id && run.run_order > current.run_order
+        ) ?? null)
+    : nextToRide(runs, { current_run_id: currentRunId, called_pool_label: called });
   const ridingAttempt =
     riding?.attempt ??
     next?.attempt ??

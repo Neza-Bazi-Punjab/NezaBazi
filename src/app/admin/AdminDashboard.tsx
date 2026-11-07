@@ -368,6 +368,8 @@ const auditActionLabels: Record<string, string> = {
   add_headshot: "Add Rider Photo",
   remove_headshot: "Remove Rider Photo",
   set_live: "Update Live Display",
+  close_demo: "Close Demo",
+  open_demo: "Open Demo",
 };
 
 const formatAuditAction = (action: string) =>

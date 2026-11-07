@@ -28,6 +28,10 @@ export type JudgeAction =
      riders have more than one attempt; only the wording uses it. */
   | { kind: "call"; roundId: string; pool: string; attempt?: number | null }
   | { kind: "current"; run: ScoringRun }
+  /* The big Start button: the next rider in order comes on course. Sent
+     straight away with no question (see needsConfirmation); any other pick
+     uses "current" or "ride_now", which ask first. */
+  | { kind: "start"; run: ScoringRun }
   | { kind: "round"; round: ScoringRound }
   /* The Skipped box: a skipped (or passed-over) ride goes on course now. */
   | { kind: "ride_now"; run: ScoringRun }
@@ -84,13 +88,18 @@ export const describeAction = (
       };
     case "call":
       return {
-        question: `Call ${callName(action)} to the start? Every screen shows the Pool ${action.pool} roster until the first result.`,
+        question: `Call ${callName(action)} to the start? Every screen shows the Pool ${action.pool} roster until the first result; then tap Start for its first rider.`,
         confirm: `Call Pool ${action.pool}`,
       };
     case "current":
       return {
         question: `Put ${action.run.rider_name} (run ${action.run.run_order}) on course now?`,
         confirm: "Put on course",
+      };
+    case "start":
+      return {
+        question: `Start ${action.run.rider_name}?`,
+        confirm: "Start",
       };
     case "round":
       return {
@@ -133,6 +142,7 @@ export const successMessage = (action: JudgeAction) => {
     case "call":
       return `${callName(action)} called.`;
     case "current":
+    case "start":
       return `${action.run.rider_name} is on course.`;
     case "round":
       return `"${action.round.name}" is now the live round.`;
@@ -144,6 +154,11 @@ export const successMessage = (action: JudgeAction) => {
       return "Training data reset.";
   }
 };
+
+/* Only Start for the next rider in order skips the confirm bar: after a
+   result nobody is on course until the judge taps it, so it is the panel's
+   most frequent tap and its button names the rider. */
+export const needsConfirmation = (action: JudgeAction) => action.kind !== "start";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -246,6 +261,8 @@ export const sendAction = async (
         })
       );
     case "current":
+    case "start":
+      // The judge's Start: the one way a rider comes on course.
       return stateFromResponse(
         await post("/api/judge/live", { current_run_id: action.run.id })
       );

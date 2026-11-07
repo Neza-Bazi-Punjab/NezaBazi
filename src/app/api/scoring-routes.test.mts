@@ -42,6 +42,7 @@ test("every expected route exists", () => {
   assert.deepEqual(commentaryRoutes, ["src/app/api/commentary/state/route.ts"]);
   assert.deepEqual(adminRoutes, [
     "src/app/api/admin/scoring/advance/route.ts",
+    "src/app/api/admin/scoring/demo-switch/route.ts",
     "src/app/api/admin/scoring/pool/route.ts",
     "src/app/api/admin/scoring/rehearsal/route.ts",
     "src/app/api/admin/scoring/rounds/[id]/entrants/[entrantKey]/route.ts",
@@ -161,7 +162,7 @@ test("staff and admin responses are never cached; the public state is cached for
   }
 
   // Training answers go through sampleResponse, which is jsonNoStore too.
-  assert.match(repoFile("src/lib/scoring/sample-mode.ts"), /return jsonNoStore\(produce\(\)\);/);
+  assert.match(repoFile("src/lib/scoring/sample-mode.ts"), /return jsonNoStore\(await produce\(\)\);/);
   assert.match(repoFile(RESET_SAMPLE_ROUTE), /sampleResponse\(/);
 
   for (const path of publicRoutes) {
@@ -342,13 +343,13 @@ test("training is allowed with SCORING_SAMPLE_MODE=1 or for signed-in staff, nev
   assert.ok(start > 0, "resolveSampleAccess exists");
   // In order: no ?sample=1 → the real path (no session read at all); the
   // environment flag → the shared local session; otherwise the staff check,
-  // whose own 401/403 is returned unchanged; staff → their own session.
+  // whose own 401/403 is returned unchanged; staff → the one shared demo.
   const steps = [
     /if \(new URL\(request\.url\)\.searchParams\.get\("sample"\) !== "1"\) \{\s+return \{ kind: "real" \};\s+\}/,
     /if \(process\.env\.SCORING_SAMPLE_MODE === "1"\) \{\s+return \{ kind: "training", session: LOCAL_TRAINING_SESSION \};\s+\}/,
     /const access = await verifyRoleRequest\(STAFF_ROLES\);/,
     /if \(!access\.ok\) \{\s+return \{ kind: "refused", response: access\.response \};\s+\}/,
-    /return \{ kind: "training", session: personalTrainingSession\(access\.actor\.id\) \};/,
+    /return \{ kind: "training", session: SHARED_TRAINING_SESSION, actor: access\.actor\.id \};/,
   ];
   let position = 0;
 
@@ -426,7 +427,7 @@ test("each route resolves training access first; refused callers get the real ro
   // The public state answers training only on a SCORING_SAMPLE_MODE=1 laptop
   // and never reads a session, so it stays public and cacheable.
   const live = repoFile("src/app/api/live/state/route.ts");
-  assert.match(live, /import \{ isSampleRequest \} from "@\/lib\/scoring\/sample-mode";/);
+  assert.match(live, /import \{ isDemoRequest, isSampleRequest \} from "@\/lib\/scoring\/sample-mode";/);
   assert.match(live, /samplePublicLiveState\(LOCAL_TRAINING_SESSION\)/);
   assert.ok(live.indexOf("if (isSampleRequest(request))") < live.indexOf("await buildPublicLiveState()"));
   assert.doesNotMatch(live, /resolveSampleAccess|getSessionRole|verifyRoleRequest|cookies/);
@@ -439,17 +440,17 @@ test("reset-sample resets only the caller's practice session, and is a 404 for e
     source,
     /export async function POST\(request: Request\) \{\s+const training = await resolveSampleAccess\(request\);\s+if \(training\.kind !== "training"\) \{\s+return jsonError\("Not found\.", 404\);\s+\}/
   );
-  assert.match(source, /reset\(training\.session\);/);
+  assert.match(source, /await reset\(training\.session\);/);
   assert.match(source, /sampleJudgeState\(training\.session\)/);
   assert.match(source, /never reads or writes the scoring or registration tables/);
   assert.doesNotMatch(source, /createServiceRoleClient|verifyRoleRequest|\.rpc\(|\.from\(|supabase\//);
 });
 
-test("practice sessions are per staff member on the live site, shared locally, and bounded", () => {
+test("practice sessions: one shared demo on the live site, shared locally, and bounded", () => {
   const session = repoFile("src/lib/scoring/sample-session.ts");
 
   assert.match(session, /export const LOCAL_TRAINING_SESSION = "local";/);
-  assert.match(session, /export const personalTrainingSession = \(userId: string\) => `user:\$\{userId\}`;/);
+  assert.doesNotMatch(session, /personalTrainingSession/);
   assert.match(session, /export const MAX_TRAINING_SESSIONS = 200;/);
   assert.match(session, /export const TRAINING_IDLE_MS = 6 \* 60 \* 60 \* 1000;/);
   assert.match(session, /createTrainingStore\(\s+\(\) => createSampleEngine\(buildSeed\(\)\),\s+\{ max: MAX_TRAINING_SESSIONS, idleMs: TRAINING_IDLE_MS \}\s+\)/);
@@ -457,11 +458,12 @@ test("practice sessions are per staff member on the live site, shared locally, a
 
   // Every read and write names its session; reset touches only that one.
   for (const name of ["recordResult", "clearResult", "setRunStatus", "setLive", "callPool"]) {
-    assert.match(session, new RegExp(`export const ${name} = \\(key: string, `), name);
+    assert.match(session, new RegExp(`export const ${name} = async \\(\\s*key: string,`), name);
   }
-  assert.match(session, /export const reset = \(key: string\) => \{\s+sessions\(\)\.reset\(key\);\s+\};/);
-  assert.match(session, /export const sampleJudgeState = \(key: string\): JudgeState =>/);
-  assert.match(session, /export const sampleCommentaryState = \(key: string\): CommentaryState =>/);
+  assert.match(session, /export const reset = async \(key: string\) => \{/);
+  assert.match(session, /sessions\(\)\.reset\(key\);\s+\};/);
+  assert.match(session, /export const sampleJudgeState = async \(key: string\): Promise<JudgeState> =>/);
+  assert.match(session, /export const sampleCommentaryState = async \(key: string\): Promise<CommentaryState> =>/);
 
   // The store's own rules are exercised in sample-engine.test.mts.
   const store = repoFile("src/lib/scoring/training-store.ts");
@@ -492,6 +494,8 @@ test("the training session never imports or calls a database client", () => {
     "server-only",
     "@/lib/scoring/sample-engine",
     "@/lib/scoring/server",
+    "@/lib/scoring/next-to-ride",
+    "@/lib/scoring/training-db",
     "@/lib/scoring/training-store",
     "@/lib/scoring/types",
     "@/lib/scoring/vmix-sample",
@@ -524,7 +528,7 @@ test("the moving sample (?sample=solo) is rehearsal data behind an admin switch"
   const migration = repoFile("supabase/migrations/20261028120000_scoring_rehearsal_feed.sql");
 
   // ?sample=solo goes down the same branch as ?sample=1, before any scoring read.
-  assert.match(vmix, /\["1", "true", "yes", "solo"\]/);
+  assert.match(vmix, /\["1", "true", "yes", "solo", "demo"\]/);
   // It replays the training engine; the only database read is the switch.
   assert.match(live, /createSampleEngine\(/);
   assert.doesNotMatch(live, /createPublicScoringClient|createServiceRoleClient|supabase/i);

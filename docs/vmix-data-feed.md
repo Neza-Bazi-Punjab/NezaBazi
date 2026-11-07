@@ -63,6 +63,7 @@ Add options after `?`, and join several with `&`:
 | `format=csv` | all four | CSV with a header row instead of JSON |
 | `sample=1` | all four | Fixed rehearsal data instead of live data (see Rehearsal, under Setting up) |
 | `sample=solo` | all four | Moving rehearsal data: a scripted solo competition that changes every 8 seconds, while the organisers have it running (see Rehearsal, under Setting up) |
+| `sample=demo` | all four | Rehearsal data that follows the organisers' shared demo: whatever the judges do in a practice on their own panel shows here within a couple of seconds. Always on (see Rehearsing with the judges, under Setting up) |
 | `pool=A` | leaderboard | Only Pool A, ranked within the pool |
 | `limit=10` | leaderboard | At most 10 rows (default 50, maximum 200) |
 | `round=<round_id>` | entrants | Another round than the live one; take the `round_id` from the rounds feed |
@@ -113,6 +114,20 @@ It follows the same rules as real scoring and uses the same columns, options and
 > **Ask us to start it.** The organisers start and stop the rehearsal feed from the website. While it is stopped, `?sample=solo` answers exactly like `?sample=1`: frozen, and still marked `sample` = `Yes`. To check whether it is running, open `https://www.nezabazipunjab.com/overlay` and look for "Moving sample right now", or open a `?sample=solo` address twice, ten seconds apart: if it is running, the answers differ. A start or stop reaches the feeds within a second or two.
 
 > **Bind a "SAMPLE" badge to the `sample` column**, so rehearsal data can never go to air unnoticed. **Remove `?sample=1` and `?sample=solo` from every Data Source before the event.**
+
+## Rehearsing with the judges: ?sample=demo
+
+`?sample=solo` follows a script. When the organisers hold a rehearsal with the judges and commentators, add `?sample=demo` instead, to any feed, and the feeds follow **the organisers' shared demo**: the one practice session every judge, commentator and administrator sees on their own device. Every result a judge records, every pool they call, every result they change or undo shows on the feeds within a couple of seconds, so you can test titles against exactly what is happening in the rehearsal.
+
+> `https://www.nezabazipunjab.com/api/live/vmix/current?sample=demo`
+
+- **Always on.** There is no switch: the demo is never real data. Before anyone has practised, it shows the top of a qualification with nobody ridden yet.
+- **Invented riders.** The demo uses the same 30 invented riders as the judges' practice, in Pools A, B and C. Nothing in it is a real result.
+- **Every row has `sample` = `Yes`**, exactly like `?sample=1` and `?sample=solo`.
+- The public scoreboard and the ready-made overlays follow the demo too: add `?sample=demo` to `https://www.nezabazipunjab.com/live` or to any `/overlay/...` address.
+- When the organisers reset the practice, the demo starts again from the top for everyone, and the feeds show that too.
+
+> **Remove `?sample=demo` from every Data Source before the event**, with the other two. The organisers also **close the demo on event day**: a closed demo address shows the frozen sample rows (the same as `?sample=1`), marked SAMPLE, never anything live.
 
 # Screens — what the organisers want on screen
 
@@ -264,8 +279,9 @@ The setup page, with the steps for vMix and other software, is `https://www.neza
 | Old values | Check the Data Source's refresh interval in the Data Sources manager. For a Web Browser input, right-click it and choose **Reload**. Then open the feed address in an ordinary browser to see what it says now. |
 | HTTP 503 | A temporary server problem. vMix keeps the last good values and picks up the next good answer by itself at the next refresh. |
 | HTTP 404 | The address is mistyped (or the website update that publishes the feeds is not live yet — ask us). |
-| The SAMPLE badge shows | That Data Source still has `?sample=1` or `?sample=solo` on its address: its rows are rehearsal data. Remove it. |
+| The SAMPLE badge shows | That Data Source still has `?sample=1`, `?sample=solo` or `?sample=demo` on its address: its rows are rehearsal data. Remove it. |
 | `?sample=solo` does not move | The rehearsal feed is stopped. It answers like `?sample=1` until the organisers start it. |
+| `?sample=demo` does not move | Nobody is practising right now. It follows the judges' practice and only changes when they record something. |
 
 ## What has not been tested yet
 
@@ -277,10 +293,10 @@ The setup page, with the steps for vMix and other software, is `https://www.neza
 Go through this on the vMix computer before the first pool is called.
 
 1. Every Data Source refreshes every **1–2 seconds** (check in the Data Sources manager).
-2. `?sample=1` and `?sample=solo` are gone from every Data Source address, and `--sample` and `--moving-sample` from the bridge script if you run it.
+2. `?sample=1`, `?sample=solo` and `?sample=demo` are gone from every Data Source address (close the demo on event day; a closed demo address shows frozen sample rows marked SAMPLE), and `--sample` and `--moving-sample` from the bridge script if you run it.
 3. Every title has its **SAMPLE** badge bound to the `sample` column, and no badge is showing.
 4. Your titles honour `display_mode` (see Screens), or you use the ready-made overlays, which follow it by themselves.
-5. The current feed, `https://www.nezabazipunjab.com/api/live/vmix/current`, opened in an ordinary browser, shows `"sample":"No"`. `"sample":"Yes"` means `?sample=1` or `?sample=solo` is still on the address.
+5. The current feed, `https://www.nezabazipunjab.com/api/live/vmix/current`, opened in an ordinary browser, shows `"sample":"No"`. `"sample":"Yes"` means `?sample=1`, `?sample=solo` or `?sample=demo` is still on the address.
 6. You know whom to contact: on the day, the head organiser at the scoring laptop; before the day, {site.email}.
 
 ## Contact

@@ -3,6 +3,11 @@
 // scoring_set_live, scoring_call_pool) and the scoring_leaderboard view,
 // re-done in TypeScript over plain arrays held in memory.
 //
+// Judges start each rider (20261107130000_scoring_judge_starts_each_rider):
+// a result, a skip or a take-out of the rider on course, and a pool call-up,
+// leave nobody on course; only setLive({ current_run_id }) (the judge's
+// Start) puts a rider on course. The engine follows the same rule.
+//
 // Training mode (SCORING_SAMPLE_MODE=1, ?sample=1) lets judges and
 // commentators practise on sample riders without a database or a login. For
 // the practice to be worth anything the panels must behave exactly as they
@@ -416,26 +421,17 @@ export const createSampleEngine = (
   const runsOfRound = (roundId: string) =>
     runs.filter((run) => run.round_id === roundId).sort((a, b) => a.run_order - b.run_order);
 
-  /* scoring_advance_live_pointer */
-  const advanceLivePointer = (roundId: string, afterOrder: number) => {
+  /* scoring_leave_course (20261107130000): the rider on course has been
+     scored, skipped or taken out and leaves the course. Nobody is on course
+     until the judge taps Start; the next rider stays pending and the called
+     pool is left as it is. Returns the next rider still to ride after
+     `afterOrder` (the database keeps it in the audit row). */
+  const leaveCourse = (roundId: string, afterOrder: number) => {
     const next =
       runsOfRound(roundId).find((run) => run.status === "pending" && run.run_order > afterOrder) ??
       null;
 
-    if (next) {
-      setStatus(next, "on_course");
-    }
-
-    updateLive({
-      current_run_id: next?.id ?? null,
-      called_pool_label: sampleCalledPoolAfter(
-        runsOfRound(roundId),
-        live.called_pool_label,
-        live.current_run_id ? (findRun(live.current_run_id) ?? null) : null,
-        next
-      ),
-    });
-
+    updateLive({ current_run_id: null });
     return next?.id ?? null;
   };
 
@@ -672,11 +668,12 @@ export const createSampleEngine = (
     }
 
     if (before.current_run_id === runId) {
-      advanceLivePointer(run.round_id, run.run_order);
+      leaveCourse(run.round_id, run.run_order);
     } else if (before.current_run_id !== null && autoVoided.includes(before.current_run_id)) {
-      // The rider was already on course for a later attempt: move on past it.
+      // The rider was already on course for a later attempt: that ride is not
+      // needed, so they leave the course too.
       const current = findRun(before.current_run_id);
-      advanceLivePointer(run.round_id, current?.run_order ?? run.run_order);
+      leaveCourse(run.round_id, current?.run_order ?? run.run_order);
     }
 
     if (
@@ -778,7 +775,7 @@ export const createSampleEngine = (
       setStatus(run, "void");
 
       if (before.current_run_id === runId) {
-        advanceLivePointer(run.round_id, run.run_order);
+        leaveCourse(run.round_id, run.run_order);
       }
     } else {
       if (run.status !== "void") {
@@ -978,7 +975,9 @@ export const createSampleEngine = (
       throw notFound(`Pool ${poolLabel} is not in ${round.name}.`);
     }
 
-    // A rider already on course counts, so calling twice skips nobody.
+    // The pool's first rider still to ride (a rider on course counts). Only
+    // the refusal below needs it: the call-up brings the pool to the start
+    // and the judge taps Start for that rider.
     const first = roundRuns.find(
       (run) =>
         run.pool_label === poolLabel && (run.status === "pending" || run.status === "on_course")
@@ -988,7 +987,9 @@ export const createSampleEngine = (
       throw notAllowed(`Every rider in Pool ${poolLabel} has already ridden.`);
     }
 
-    if (before.current_run_id !== null && before.current_run_id !== first.id) {
+    // Nobody is on course after a call-up (20261107130000): the rider on
+    // course, here or in another round, goes back to waiting.
+    if (before.current_run_id !== null) {
       const leaving = findRun(before.current_run_id);
 
       if (leaving?.status === "on_course") {
@@ -997,13 +998,9 @@ export const createSampleEngine = (
     }
 
     for (const other of roundRuns) {
-      if (other.status === "on_course" && other.id !== first.id) {
+      if (other.status === "on_course") {
         setStatus(other, "pending");
       }
-    }
-
-    if (first.status === "pending") {
-      setStatus(first, "on_course");
     }
 
     if (round.status === "upcoming") {
@@ -1012,7 +1009,7 @@ export const createSampleEngine = (
 
     updateLive({
       current_round_id: roundId,
-      current_run_id: first.id,
+      current_run_id: null,
       called_pool_label: poolLabel,
       display_mode: "pool_call",
     });
@@ -1076,7 +1073,7 @@ export const createSampleEngine = (
       }
 
       if (current) {
-        advanceLivePointer(roundId, current.run_order);
+        leaveCourse(roundId, current.run_order);
       }
     } else {
       if (!existing || existing.advanced) {

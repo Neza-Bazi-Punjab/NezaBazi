@@ -7,6 +7,10 @@
    which is applied at once — the panel never waits on realtime to show its
    own action. Below 1024px the two columns stack into one.
 
+   Judges start each rider (20261107130000): after a result, a skip or a
+   take-out nobody is on course, the last result stays on screen and one big
+   "Start <name>" button puts the next rider on course, with no question.
+
    Kept simple for judges who are not at home with technology: score, Skip
    (the rider waits in the Skipped box until "Ride now"), Take out (an injured
    horse, a disqualification; "Bring back" undoes it), Undo last and Call next
@@ -51,6 +55,7 @@ import { TRAINING_BANNER, TRAINING_LABEL, type TrainingScope } from "@/lib/scori
 import { useLiveState } from "@/lib/scoring/use-live-state";
 import {
   describeAction,
+  needsConfirmation,
   sendAction,
   successMessage,
   withTrainingFlag,
@@ -74,8 +79,6 @@ const SAVED_FOR_MS = 5000;
 const label = "mono text-[11px] uppercase text-[var(--ledger-muted)]";
 const secondaryButton =
   "mono min-h-12 border-2 border-[var(--ledger-ink)] bg-transparent px-4 text-[13px] font-semibold uppercase text-[var(--ledger-ink)] active:bg-[var(--ledger-pick)] disabled:opacity-40";
-const primaryButton =
-  "min-h-14 w-full bg-[var(--ledger-ink)] px-4 text-[19px] font-bold uppercase text-[var(--ledger-paper)] active:opacity-90 disabled:opacity-40";
 
 const latestScored = (runs: ScoringRun[]) => {
   let latest: ScoringRun | null = null;
@@ -156,17 +159,53 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
   const calledPool = live?.called_pool_label ?? null;
   const lastScored = latestScored(runs);
   const carried = useMemo(() => carriedEntrantKeys(runs, round), [runs, round]);
-  const nextRider = state?.up_next.find((run) => run.id !== currentRun?.id) ?? null;
+
+  /* The furthest run ridden so far in start order (null before the first). */
+  const lastRidden = runs.reduce<ScoringRun | null>(
+    (furthest, run) =>
+      run.status === "scored" && (!furthest || run.run_order > furthest.run_order) ? run : furthest,
+    null
+  );
+
+  /* Who the Start button names when nobody is on course: the called pool's
+     first rider still to ride when that pool was called ahead (it is not the
+     pool that rode last), otherwise the next rider in start order after the
+     last one ridden. Riders passed over wait in the Skipped box instead. */
+  const startRider = currentRun
+    ? null
+    : (calledPool !== null && lastRidden?.pool_label !== calledPool
+        ? runs.find((run) => run.pool_label === calledPool && run.status === "pending")
+        : undefined) ??
+      runs.find((run) => run.status === "pending" && run.run_order > (lastRidden?.run_order ?? 0)) ??
+      null;
+  const nextRider = currentRun
+    ? (state?.up_next.find((run) => run.id !== currentRun.id) ?? null)
+    : startRider;
+
+  /* Between riders the called pool stays as it was until Start. Once its
+     block has been ridden to the end, the pools are drawn as if nothing were
+     called, so "Next" is the pool after it rather than its next round. */
+  const calledBlockDone =
+    !currentRun &&
+    lastRidden !== null &&
+    lastRidden.pool_label === calledPool &&
+    !runs.some(
+      (run) =>
+        run.pool_label === lastRidden.pool_label &&
+        run.attempt_number === lastRidden.attempt_number &&
+        isOpenRun(run)
+    );
+  const shownCalled = calledBlockDone ? null : calledPool;
 
   /* Round 1 / 2 / 3 (riders with more than one attempt). */
   const manyAttempts = (round?.attempts_per_rider ?? 1) > 1;
   const riding = useMemo(
-    () => ridingPoolBlock(runs, calledPool, currentRunId),
-    [runs, calledPool, currentRunId]
+    () => ridingPoolBlock(runs, shownCalled, currentRunId),
+    [runs, shownCalled, currentRunId]
   );
   const nextBlock = useMemo(
-    () => nextPoolBlock(runs, calledPool, currentRunId),
-    [runs, calledPool, currentRunId]
+    () => nextPoolBlock(runs, shownCalled, currentRunId),
+    [runs, shownCalled, currentRunId]
   );
   const chips = useMemo(() => roundChips(runs, riding?.attempt ?? null), [runs, riding]);
   const advanced = useMemo(
@@ -174,8 +213,8 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
     [state]
   );
   const poolRows = useMemo(
-    () => poolSummaries(runs, advanced, calledPool, currentRunId),
-    [runs, advanced, calledPool, currentRunId]
+    () => poolSummaries(runs, advanced, shownCalled, currentRunId),
+    [runs, advanced, shownCalled, currentRunId]
   );
   const roundComplete = runs.length > 0 && !runs.some(isOpenRun);
 
@@ -204,11 +243,11 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
      that the riding has already passed (a rider brought back, or put back on
      the list). Not the attempts a carry made unnecessary, nor a taken-out
      rider's. */
-  const lastRidden = Math.max(0, ...runs.filter((run) => run.status === "scored").map((run) => run.run_order));
-  const passedOrder = currentRun ? currentRun.run_order : lastRidden;
+  const passedOrder = currentRun ? currentRun.run_order : (lastRidden?.run_order ?? 0);
   const skippedRuns = runs.filter(
     (run) =>
       run.id !== currentRun?.id &&
+      run.id !== startRider?.id &&
       !takenOut.has(run.entrant_key) &&
       ((run.status === "void" && !carried.has(run.entrant_key)) ||
         (run.status === "pending" && run.run_order < passedOrder))
@@ -306,6 +345,15 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
   const arm = (action: JudgeAction) => {
     if (!busyRef.current) {
       setPending(action);
+    }
+  };
+
+  /* Start for the next rider is sent at once; everything else asks first. */
+  const tap = (action: JudgeAction) => {
+    if (needsConfirmation(action)) {
+      arm(action);
+    } else {
+      void perform(action);
     }
   };
 
@@ -627,19 +675,31 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
           </>
         ) : (
           <div className="flex min-h-[240px] flex-col items-center justify-center gap-4 border-[3px] border-[var(--ledger-rule)] bg-[var(--ledger-panel)] p-6 text-center">
+            {/* What was just recorded stays in view until the next Start. */}
+            {lastScored?.result && (
+              <p role="status" className="mono text-[15px] uppercase text-[var(--ledger-green)]">
+                Last: {lastScored.rider_name} — {RESULT_LABELS[lastScored.result]}{" "}
+                {RESULT_POINTS[lastScored.result]}
+              </p>
+            )}
             {roundComplete ? (
               <p className="text-[30px] font-bold uppercase">{round.name} complete</p>
-            ) : nextRider ? (
+            ) : startRider ? (
               <>
-                <p className="text-[var(--ledger-muted)]">Next waiting: {nextRider.rider_name}.</p>
+                {/* The judge's Start: the one way a rider comes on course. */}
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => void perform({ kind: "current", run: nextRider })}
-                  className={`${primaryButton} max-w-md`}
+                  onClick={() => tap({ kind: "start", run: startRider })}
+                  className="min-h-[88px] w-full max-w-md bg-[var(--ledger-ink)] px-4 py-3 text-[26px] font-bold uppercase leading-tight text-[var(--ledger-paper)] active:opacity-90 disabled:opacity-40 sm:text-[30px]"
                 >
-                  Put {nextRider.rider_name} on course
+                  {busy ? "Starting…" : `Start ${startRider.rider_name}`}
                 </button>
+                <p className="mono text-[12px] uppercase text-[var(--ledger-muted)]">
+                  {[startRider.horse_name, phonePlace(startRider), roundText(startRider.attempt_number)]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
               </>
             ) : (
               <p className="text-[var(--ledger-muted)]">
@@ -918,12 +978,18 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
           items={[
             round?.name,
             poolName(currentRun?.pool_label ?? null),
-            currentRun ? `Rider ${runInPool(currentRun)}` : null,
+            currentRun ? `Rider ${runInPool(currentRun)}` : nextRider ? `Up next · ${nextRider.rider_name}` : null,
             manyAttempts && currentRun
               ? `Round ${currentRun.attempt_number} of ${round?.attempts_per_rider}`
               : null,
           ]}
-          phoneItems={[currentRun ? phonePlace(currentRun) : poolName(calledPool)]}
+          phoneItems={[
+            currentRun
+              ? phonePlace(currentRun)
+              : nextRider
+                ? `Up next · ${nextRider.rider_name}`
+                : poolName(calledPool),
+          ]}
           connection={connection}
           offlineNote="results not saving"
         />

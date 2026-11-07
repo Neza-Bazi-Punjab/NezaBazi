@@ -7,8 +7,9 @@
 // nothing to show (scoring not set up, no live round) the response is still
 // one row of empty values, so the schema vMix learned never changes.
 //
-// Every row also carries `sample`: "Yes" for the rehearsal rows of ?sample=1
-// (vmix-sample.ts), "No" otherwise, so a title can show a SAMPLE badge.
+// Every row also carries `sample`: "Yes" for the rehearsal rows of ?sample=1,
+// ?sample=solo and ?sample=demo (vmix-sample.ts, vmix-sample-live.ts), "No"
+// otherwise, so a title can show a SAMPLE badge.
 //
 // Everything here is derived from the scoring_* tables and the
 // scoring_leaderboard view (assembled in server.ts) — no registration data.
@@ -376,10 +377,12 @@ export const wantsCsv = (url: URL) =>
   url.searchParams.get("format")?.trim().toLowerCase() === "csv";
 
 /* ?sample=1 (or true / yes): the frozen rehearsal rows; ?sample=solo: the
-   moving ones of vmix-sample-live.ts while the admin switch is on. Never the
+   moving ones of vmix-sample-live.ts while the admin switch is on;
+   ?sample=demo: the organisers' shared demo, as the judges drive it on
+   /judge/demo (invented riders, read from the practice row only). Never the
    scoring data. */
 export const wantsSample = (url: URL) =>
-  ["1", "true", "yes", "solo"].includes(
+  ["1", "true", "yes", "solo", "demo"].includes(
     url.searchParams.get("sample")?.trim().toLowerCase() ?? ""
   );
 

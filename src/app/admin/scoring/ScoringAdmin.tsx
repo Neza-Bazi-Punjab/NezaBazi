@@ -50,6 +50,21 @@ const inputClass =
 const labelClass =
   "font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink";
 const cardClass = "rounded-lg border border-bronze/20 bg-sand p-4 sm:p-5";
+
+/* The addresses that follow the shared demo (?sample=demo): the four vMix
+   feeds, the public scoreboard and the stream overlays. */
+const DEMO_FEED_ADDRESSES = [
+  "/api/live/vmix/current?sample=demo",
+  "/api/live/vmix/leaderboard?sample=demo",
+  "/api/live/vmix/entrants?sample=demo",
+  "/api/live/vmix/rounds?sample=demo",
+  "/live?sample=demo",
+  "/overlay/scorebug?sample=demo",
+  "/overlay/lower-third?sample=demo",
+  "/overlay/leaderboard?sample=demo",
+  "/overlay/pool-call?sample=demo",
+  "/overlay/ticker?sample=demo",
+] as const;
 const headingClass =
   "font-display text-2xl font-bold uppercase tracking-wide text-bronze-dark";
 const subheadingClass =
@@ -130,6 +145,22 @@ const isAdminState = (value: unknown): value is AdminScoringState =>
   "configured" in value &&
   "rounds" in value &&
   Array.isArray((value as { rounds: unknown }).rounds);
+
+/* The demo switch as GET / POST /api/admin/scoring/demo-switch return it. */
+type DemoSwitchState = { demo_closed: boolean; changed_at: string | null };
+
+const toDemoSwitch = (value: unknown): DemoSwitchState | null =>
+  value !== null &&
+  typeof value === "object" &&
+  typeof (value as { demo_closed?: unknown }).demo_closed === "boolean"
+    ? {
+        demo_closed: (value as { demo_closed: boolean }).demo_closed,
+        changed_at:
+          typeof (value as { changed_at?: unknown }).changed_at === "string"
+            ? (value as { changed_at: string }).changed_at
+            : null,
+      }
+    : null;
 
 /* Confirmation bar --------------------------------------------------------------- */
 
@@ -473,6 +504,24 @@ export default function ScoringAdmin({
   const [printRequest, setPrintRequest] = useState(0);
   /* The Screens card's message box; null while it shows the live message. */
   const [messageDraft, setMessageDraft] = useState<string | null>(null);
+  /* The "Close the demo" switch: undefined while loading, null when it is not
+     set up yet (the demo then counts as open). */
+  const [demoSwitch, setDemoSwitch] = useState<DemoSwitchState | null | undefined>(undefined);
+
+  // The demo switch is not part of the scoring payload: read it once on load.
+  useEffect(() => {
+    let cancelled = false;
+
+    void callApi("/api/admin/scoring/demo-switch", "GET").then((result) => {
+      if (!cancelled) {
+        setDemoSwitch(result.ok ? toDemoSwitch(result.body.demo) : null);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const refresh = useCallback(async () => {
     const result = await callApi("/api/admin/scoring/rounds", "GET");
@@ -811,6 +860,29 @@ export default function ScoringAdmin({
           { current_round_id: null, current_run_id: null },
           () => "No round is live now."
         );
+      },
+    });
+
+  /* "Close demo" / "Open demo": closed, the demo pages say so, practice is
+     refused and ?sample=demo shows the frozen sample rows. For event day. */
+  const setDemoClosed = (closed: boolean) =>
+    ask({
+      title: closed ? "Close the demo for the event?" : "Open the demo again?",
+      detail: closed
+        ? "Everyone on /judge/demo and /commentary/demo sees \"Demo closed for the event\" with a button to the live panel, practice taps are refused, and addresses with ?sample=demo show the frozen sample rows (still marked SAMPLE). Real scores do not change."
+        : "Judges, commentators and administrators can practise on the shared demo again, and addresses with ?sample=demo follow it again. Real scores do not change.",
+      confirmLabel: closed ? "Close demo" : "Open demo",
+      danger: false,
+      run: async () => {
+        await perform("/api/admin/scoring/demo-switch", "POST", { closed }, (body) => {
+          const next = toDemoSwitch(body.demo);
+
+          if (next) {
+            setDemoSwitch(next);
+          }
+
+          return closed ? "The demo is closed for the event." : "The demo is open again.";
+        });
       },
     });
 
@@ -1330,51 +1402,115 @@ export default function ScoringAdmin({
         </a>
       </section>
 
-      {/* Moving vMix sample for the graphics team */}
-      <section aria-labelledby="rehearsal-heading" className={`${cardClass} flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between print:hidden`}>
-        <div>
-          <h2 id="rehearsal-heading" className={subheadingClass}>
-            Graphics Rehearsal Feed
-          </h2>
-          <p className="mt-1 text-sm leading-6 text-brown/80">
-            For the graphics team to test their titles: while it runs, feed addresses ending in{" "}
-            <code className="rounded bg-bronze/10 px-1 font-mono text-xs">?sample=solo</code> play
-            a scripted qualification with invented riders, on a loop. Real scores and every
-            screen stay as they are, so it is safe to leave running.
-          </p>
-          <p className="mt-2 text-sm text-brown">
-            {data?.rehearsal ? (
-              <>
-                <span className="font-semibold">
-                  {data.rehearsal.solo_sample_enabled ? "Running" : "Stopped"}
-                </span>
-                {data.rehearsal.updated_by_name && (
-                  <span className="text-brown/70">
-                    {" "}
-                    · {data.rehearsal.solo_sample_enabled ? "started" : "stopped"} by{" "}
-                    {data.rehearsal.updated_by_name},{" "}
-                    {new Date(data.rehearsal.updated_at).toLocaleString()}
+      {/* Rehearsal feeds for the graphics team: the scripted loop behind a
+          switch, and the shared demo, always on */}
+      <section aria-labelledby="rehearsal-heading" className={`${cardClass} space-y-4 print:hidden`}>
+        <h2 id="rehearsal-heading" className={subheadingClass}>
+          Graphics Rehearsal Feed
+        </h2>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-brown">
+              Scripted loop (
+              <code className="rounded bg-bronze/10 px-1 font-mono text-xs">?sample=solo</code>)
+            </h3>
+            <p className="mt-1 text-sm leading-6 text-brown/80">
+              For the graphics team to test their titles: while it runs, feed addresses ending in{" "}
+              <code className="rounded bg-bronze/10 px-1 font-mono text-xs">?sample=solo</code> play
+              a scripted qualification with invented riders, on a loop. Real scores and every
+              screen stay as they are, so it is safe to leave running.
+            </p>
+            <p className="mt-2 text-sm text-brown">
+              {data?.rehearsal ? (
+                <>
+                  <span className="font-semibold">
+                    {data.rehearsal.solo_sample_enabled ? "Running" : "Stopped"}
                   </span>
-                )}
-              </>
-            ) : (
-              <span className="text-brown/70">
-                Not set up yet: apply the rehearsal feed migration
-                (20261028120000_scoring_rehearsal_feed.sql).
-              </span>
-            )}
-          </p>
+                  {data.rehearsal.updated_by_name && (
+                    <span className="text-brown/70">
+                      {" "}
+                      · {data.rehearsal.solo_sample_enabled ? "started" : "stopped"} by{" "}
+                      {data.rehearsal.updated_by_name},{" "}
+                      {new Date(data.rehearsal.updated_at).toLocaleString()}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="text-brown/70">
+                  Not set up yet: apply the rehearsal feed migration
+                  (20261028120000_scoring_rehearsal_feed.sql).
+                </span>
+              )}
+            </p>
+          </div>
+          {data?.rehearsal && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setSoloSample(!data.rehearsal?.solo_sample_enabled)}
+              className={`${data.rehearsal.solo_sample_enabled ? secondaryButton : primaryButton} shrink-0`}
+            >
+              {data.rehearsal.solo_sample_enabled ? "Stop" : "Start"}
+            </button>
+          )}
         </div>
-        {data?.rehearsal && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => setSoloSample(!data.rehearsal?.solo_sample_enabled)}
-            className={`${data.rehearsal.solo_sample_enabled ? secondaryButton : primaryButton} shrink-0`}
-          >
-            {data.rehearsal.solo_sample_enabled ? "Stop" : "Start"}
-          </button>
-        )}
+
+        <div className="border-t border-bronze/20 pt-4">
+          <h3 className="text-sm font-semibold text-brown">
+            Follows the demo (
+            <code className="rounded bg-bronze/10 px-1 font-mono text-xs">?sample=demo</code>)
+          </h3>
+          <p className="mt-1 text-sm leading-6 text-brown/80">
+            Everything the judges do on{" "}
+            <code className="rounded bg-bronze/10 px-1 font-mono text-xs">/judge/demo</code> shows
+            here within two seconds. Invented riders only; real scores are never touched. Close the
+            demo on event day: the practice pages then say so, and these addresses show the frozen
+            sample rows, still marked SAMPLE.
+          </p>
+          <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-brown">
+              {demoSwitch === undefined ? (
+                <span className="text-brown/70">Checking the demo…</span>
+              ) : demoSwitch === null ? (
+                <span className="text-brown/70">
+                  Open. The Close demo switch is not set up yet: apply
+                  20261107120000_scoring_training_sessions.sql.
+                </span>
+              ) : (
+                <>
+                  <span className="font-semibold">
+                    {demoSwitch.demo_closed ? "Closed for the event" : "Open"}
+                  </span>
+                  {demoSwitch.changed_at && (
+                    <span className="text-brown/70">
+                      {" "}
+                      · {demoSwitch.demo_closed ? "closed" : "opened"}{" "}
+                      {new Date(demoSwitch.changed_at).toLocaleString()}
+                    </span>
+                  )}
+                </>
+              )}
+            </p>
+            {demoSwitch && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setDemoClosed(!demoSwitch.demo_closed)}
+                className={`${demoSwitch.demo_closed ? primaryButton : secondaryButton} shrink-0`}
+              >
+                {demoSwitch.demo_closed ? "Open demo" : "Close demo"}
+              </button>
+            )}
+          </div>
+          <ul className="mt-2 space-y-1 text-sm text-brown">
+            {DEMO_FEED_ADDRESSES.map((address) => (
+              <li key={address}>
+                <code className="break-all rounded bg-bronze/10 px-1 font-mono text-xs">{address}</code>
+              </li>
+            ))}
+          </ul>
+        </div>
       </section>
 
       <div className="grid gap-8 lg:grid-cols-[320px_minmax(0,1fr)]">

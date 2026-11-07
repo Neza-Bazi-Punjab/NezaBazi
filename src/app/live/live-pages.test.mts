@@ -459,7 +459,7 @@ test("the training pages: anyone on a SCORING_SAMPLE_MODE=1 laptop, signed-in st
     assert.match(page, new RegExp(`kind="login"[^/]*redirectTo="/${route}/demo"`));
     assert.match(page, new RegExp(`kind="denied"[^/]*redirectTo="/${route}/demo"`));
     assert.match(page, /if \(!\(STAFF_ROLES as readonly string\[\]\)\.includes\(session\.role\)\) \{/);
-    assert.match(page, new RegExp(`return <${panel} sample="personal" />;\\s+\\}\\s*$`));
+    assert.match(page, new RegExp(`return <${panel} sample=\\{await sharedTrainingScope\\(\\)\\} />;\\s+\\}\\s*$`));
     assert.doesNotMatch(page, /createServiceRoleClient|notFound/);
   }
 
@@ -474,11 +474,9 @@ test("the training panels read and write a practice session and say whose it is"
   const actions = read("../judge/judge-actions.ts");
   const words = read("../../lib/scoring/training.ts");
 
-  assert.match(
-    words,
-    /personal: "Practice data — yours only, nothing is recorded; it may reset after a while\.",/
-  );
-  assert.match(words, /shared: "Practice data — shared by everyone practising on this server, nothing is recorded\.",/);
+  assert.match(words, /shared: "Practice data — one demo shared by everyone, on every device; nothing is recorded\.",/);
+  assert.match(words, /\(not yet shared between devices\)/);
+  assert.doesNotMatch(words, /personal/);
   assert.match(words, /TRAINING_LABEL = "TRAINING MODE"/);
 
   for (const source of [judge, commentary]) {
@@ -500,12 +498,12 @@ test("the training panels read and write a practice session and say whose it is"
   assert.match(commentary, /useLiveState<CommentaryState>\(stateUrl\)/);
 
   // Every write carries ?sample=1 in training; reset only ever goes to the
-  // caller's practice session, and its prompt says whose data it wipes.
+  // practice session, and its prompt says it restarts the demo for everyone.
   assert.match(judge, /await sendAction\(action, training\)/);
   assert.match(actions, /const post = \(url: string, body: unknown\) =>\s+postJson\(training \? withTrainingFlag\(url\) : url, body\);/);
   assert.match(actions, /postJson\(withTrainingFlag\("\/api\/judge\/reset-sample"\), \{\}\)/);
   assert.match(actions, /question: TRAINING_RESET_QUESTION\[action\.scope\]/);
-  assert.match(words, /Nobody else is affected\./);
+  assert.match(words, /This restarts the demo for everyone, on every device\./);
   assert.match(judge, /Reset training data/);
   assert.match(judge, /arm\(\{ kind: "reset", scope: sample \}\)/);
 

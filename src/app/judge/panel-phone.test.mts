@@ -62,8 +62,12 @@ test("StatusBar takes phoneItems: items from sm up, phoneItems below; unchanged 
   // Without phoneItems the bar keeps its classes.
   assert.match(ledger, /short \? "gap-x-3 px-3 sm:gap-x-7 sm:px-5" : "gap-x-7 px-5"/);
 
-  // The judges' panel: "Pool A · 1/10" on a phone, no round name or "Round 1 of 3".
-  assert.match(panel, /phoneItems=\{\[currentRun \? phonePlace\(currentRun\) : poolName\(calledPool\)\]\}/);
+  // The judges' panel: "Pool A · 1/10" on a phone, no round name or "Round 1 of 3";
+  // "Up next · <name>" while nobody is on course.
+  assert.match(
+    panel,
+    /phoneItems=\{\[\s*currentRun\s*\? phonePlace\(currentRun\)\s*: nextRider\s*\? `Up next · \$\{nextRider\.rider_name\}`\s*: poolName\(calledPool\),\s*\]\}/
+  );
   assert.match(panel, /\[poolName\(run\.pool_label\), `\$\{index\}\/\$\{size\}`\]\.filter\(Boolean\)\.join\(" · "\)/);
 });
 
@@ -110,4 +114,15 @@ test("the confirmation sheet keeps its safe-area padding and full-width halves, 
   assert.match(panel, /fixed inset-x-0 bottom-0 z-\[60\][^"]*pb-\[max\(1rem,env\(safe-area-inset-bottom\)\)\]/);
   assert.match(panel, /<div className="mt-4 grid grid-cols-2 gap-3">/);
   assert.match(panel, /<div className="sticky bottom-0 z-20">/);
+});
+
+test("between riders: the last result stays in view and one big Start <name> button, sent without a question", () => {
+  assert.match(panel, /Last: \{lastScored\.rider_name\} — \{RESULT_LABELS\[lastScored\.result\]\}/);
+  const start = buttonFor(panel, /\{busy \? "Starting…" : `Start \$\{startRider\.rider_name\}`\}/);
+  assert.match(start, /onClick=\{\(\) => tap\(\{ kind: "start", run: startRider \}\)\}/);
+  assert.match(start, /min-h-\[88px\] w-full/);
+  // Only Start skips the confirm bar; Ride now and Take out still ask.
+  const actions = read("./judge-actions.ts");
+  assert.match(actions, /export const needsConfirmation = \(action: JudgeAction\) => action\.kind !== "start";/);
+  assert.match(panel, /onClick=\{\(\) => arm\(\{ kind: "ride_now", run \}\)\}/);
 });
