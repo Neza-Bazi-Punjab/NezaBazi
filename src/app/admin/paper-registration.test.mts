@@ -489,7 +489,7 @@ test("a paper solo rider is linked to their account by confirmed email", () => {
 
   // Claimed before the update-by-profile_id, paper rows only, unclaimed only.
   const claim = sync.indexOf("await claimPaperSoloRegistration(");
-  const soloUpdate = sync.indexOf('.eq("profile_id", userId)\n    .select("id")');
+  const soloUpdate = sync.indexOf('.in("id", ownSoloIds)\n      .eq("profile_id", userId)');
   assert.notEqual(claim, -1);
   assert.ok(claim < soloUpdate, "claim runs before the solo update by profile_id");
   assert.match(sync, /\.update\(\{ profile_id: userId \}\)\s*\.is\("profile_id", null\)\s*\.eq\("registration_source", "paper"\)\s*\.ilike\("email", escapeIlikePattern\(confirmedEmail\)\)/);

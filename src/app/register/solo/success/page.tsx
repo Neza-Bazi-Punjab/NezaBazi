@@ -18,11 +18,14 @@ export default async function RegisterSuccessPage() {
 
   // Read the code back rather than passing it through the URL: a confirmation
   // code in a query string ends up in browser history, logs and shared links.
+  // An account may enter several riders, so this is the newest one.
   const { data: registration } = user
     ? await supabase
         .from("solo_registrations")
         .select("confirmation_code")
         .eq("profile_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle()
     : { data: null };
 
@@ -71,6 +74,12 @@ export default async function RegisterSuccessPage() {
               className="block w-full rounded-lg bg-bronze-deep px-6 py-3 text-center font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze"
             >
               View My Account
+            </Link>
+            <Link
+              href="/register/solo"
+              className="block w-full rounded-lg border border-bronze/40 px-6 py-3 text-center font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown transition-colors hover:bg-sand"
+            >
+              Register Another Rider
             </Link>
             <Link
               href="/"

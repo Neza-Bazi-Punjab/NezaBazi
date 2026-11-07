@@ -26,6 +26,10 @@ export async function POST() {
     .from("solo_registrations")
     .select("full_name, email, confirmation_code")
     .eq("profile_id", user.id)
+    // An account may enter several riders; the form calls this right after
+    // its insert, so the newest registration is the one just made.
+    .order("created_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (error) {

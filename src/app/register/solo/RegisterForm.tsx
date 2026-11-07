@@ -1,6 +1,7 @@
-// Solo registration form: prefilled from the account (locked for regular
-// players), autosaved to registration_drafts while typing, submitted straight
-// to solo_registrations under RLS.
+// Solo registration form: prefilled from the account (locked for a regular
+// player's own first entry; blank apart from email and phone when the account
+// is entering another rider), autosaved to registration_drafts while typing,
+// submitted straight to solo_registrations under RLS.
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -85,10 +86,14 @@ export default function RegisterForm({
   lockProfileFields = false,
   initialDraft,
   initialHeadshotPath = null,
+  showHeadshot = true,
 }: {
   initialValues?: InitialValues;
   lockProfileFields?: boolean;
   initialDraft?: SoloDraftData | null;
+  /* False when this rider is not the account holder: the photo box writes
+     the account's own photo, which would then belong to the wrong rider. */
+  showHeadshot?: boolean;
   /* The headshot lives on the account rather than the registration, so it is
      not part of the autosaved draft — it is already uploaded and recorded in
      Auth metadata by the time the form is submitted. */
@@ -333,8 +338,10 @@ export default function RegisterForm({
     if (error) {
       setLoading(false);
 
+      // The database still refuses a repeated email or phone (UNIQUE on each)
+      // until a later migration allows riders to share contact details.
       if (error.code === "23505") {
-        setError("You've already registered, or this email/phone is already in use.");
+        setError("This rider is already registered with this email or phone.");
       } else {
         setError(error.message);
       }
@@ -458,12 +465,14 @@ export default function RegisterForm({
         />
       </div>
 
-      <div className="rounded-lg border border-bronze/25 bg-sand p-5">
-        <HeadshotUpload
-          initialPath={initialHeadshotPath}
-          label="Headshot (optional)"
-        />
-      </div>
+      {showHeadshot && (
+        <div className="rounded-lg border border-bronze/25 bg-sand p-5">
+          <HeadshotUpload
+            initialPath={initialHeadshotPath}
+            label="Headshot (optional)"
+          />
+        </div>
+      )}
 
       <div>
         <label className={labelClassName}>Years of Neza Bazi Experience</label>

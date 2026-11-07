@@ -3,13 +3,14 @@
 /* The Photo column on the admin Solo riders list.
 
    A rider with a photo shows a small round thumbnail; clicking it opens the
-   photo in a pop-up over the page. A rider without one shows an add button
-   with two choices: choose a file, or take a photo. On a phone or tablet
-   "Take photo" opens the device camera directly; on a computer it opens the
-   webcam in a pop-up. Either way the photo is rotated, downscaled and
-   re-encoded in the browser exactly as a rider's own upload is, then stored as
-   that rider's headshot — on their account, or on the registration for a
-   rider who has no account (see /api/admin/headshots). */
+   photo in a pop-up over the page, with Replace photo and Remove photo. A
+   rider without one shows an add button with two choices: choose a file, or
+   take a photo (Replace offers the same two). On a phone or tablet "Take
+   photo" opens the device camera directly; on a computer it opens the webcam
+   in a pop-up. Either way the photo is rotated, downscaled and re-encoded in
+   the browser exactly as a rider's own upload is, then stored as that rider's
+   headshot — on the account only for the account holder's own registration,
+   otherwise on the registration itself (see /api/admin/headshots). */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -276,28 +277,33 @@ function WebcamCapture({
   );
 }
 
-/* The pop-up for a rider's photo: the photo, their name, and Delete photo
-   (asks once more before removing it, so a stray tap can't). */
+/* The pop-up for a rider's photo: the photo, their name, Replace photo (files
+   or camera, as the add menu) and Remove photo (asks once more before removing
+   it, so a stray tap can't). */
 function PhotoViewer({
   url,
   riderName,
   registrationId,
-  onDeleted,
+  onRemoved,
+  onReplace,
   close,
 }: {
   url: string;
   riderName: string;
   registrationId: string;
   /* The photo to show next: usually none. */
-  onDeleted: (nextUrl: string | null) => void;
+  onRemoved: (nextUrl: string | null) => void;
+  /* Opens the file picker or the camera; called inside the click itself, so
+     the browser allows the picker to open. */
+  onReplace: (source: "files" | "camera") => void;
   close: () => void;
 }) {
-  const [confirming, setConfirming] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [mode, setMode] = useState<"idle" | "replacing" | "confirming">("idle");
+  const [removing, setRemoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const remove = async () => {
-    setDeleting(true);
+    setRemoving(true);
     setError(null);
 
     try {
@@ -312,21 +318,27 @@ function PhotoViewer({
       };
 
       if (!response.ok) {
-        setError(result.error ?? "The photo couldn't be deleted.");
+        setError(result.error ?? "The photo couldn't be removed.");
         return;
       }
 
-      onDeleted(result.url ?? null);
+      onRemoved(result.url ?? null);
       close();
     } catch {
-      setError("The photo couldn't be deleted. Check the connection and try again.");
+      setError("The photo couldn't be removed. Check the connection and try again.");
     } finally {
-      setDeleting(false);
+      setRemoving(false);
     }
+  };
+
+  const replace = (source: "files" | "camera") => {
+    onReplace(source);
+    close();
   };
 
   const buttonClass =
     "rounded-lg px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] transition-colors disabled:opacity-60";
+  const quietButtonClass = `${buttonClass} border border-bronze/20 text-bronze-dark hover:border-bronze/40`;
 
   return (
     <figure className="min-w-[min(92vw,380px)] overflow-hidden rounded-2xl bg-cream shadow-2xl">
@@ -340,34 +352,51 @@ function PhotoViewer({
         <span className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
           {riderName}
         </span>
-        {confirming ? (
+        {mode === "confirming" ? (
           <span className="flex flex-wrap items-center justify-end gap-2">
-            <span className="text-sm text-brown">Delete this photo?</span>
+            <span className="text-sm text-brown">Remove this photo?</span>
             <button
               type="button"
-              onClick={() => setConfirming(false)}
-              disabled={deleting}
-              className={`${buttonClass} border border-bronze/20 text-bronze-dark hover:border-bronze/40`}
+              onClick={() => setMode("idle")}
+              disabled={removing}
+              className={quietButtonClass}
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={remove}
-              disabled={deleting}
+              disabled={removing}
               className={`${buttonClass} bg-red-800 text-cream hover:bg-red-700`}
             >
-              {deleting ? "Deleting…" : "Delete"}
+              {removing ? "Removing…" : "Remove"}
+            </button>
+          </span>
+        ) : mode === "replacing" ? (
+          <span className="flex flex-wrap items-center justify-end gap-2">
+            <button type="button" onClick={() => replace("files")} className={quietButtonClass}>
+              Choose from files
+            </button>
+            <button type="button" onClick={() => replace("camera")} className={quietButtonClass}>
+              Take photo
+            </button>
+            <button type="button" onClick={() => setMode("idle")} className={quietButtonClass}>
+              Cancel
             </button>
           </span>
         ) : (
-          <button
-            type="button"
-            onClick={() => setConfirming(true)}
-            className={`${buttonClass} border border-red-700/30 text-red-800 hover:border-red-700/60`}
-          >
-            Delete photo
-          </button>
+          <span className="flex flex-wrap items-center justify-end gap-2">
+            <button type="button" onClick={() => setMode("replacing")} className={quietButtonClass}>
+              Replace photo
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("confirming")}
+              className={`${buttonClass} border border-red-700/30 text-red-800 hover:border-red-700/60`}
+            >
+              Remove photo
+            </button>
+          </span>
         )}
         {error && <p className="w-full text-sm text-red-800">{error}</p>}
       </figcaption>
@@ -457,6 +486,7 @@ export default function SoloHeadshotCell({
       body.append("registrationId", registrationId);
       body.append("photo", prepared.blob, "headshot.jpg");
 
+      // The same request adds a first photo or replaces the one shown.
       const response = await fetch("/api/admin/headshots", { method: "POST", body });
       const result = (await response.json().catch(() => ({}))) as {
         url?: string | null;
@@ -464,13 +494,13 @@ export default function SoloHeadshotCell({
       };
 
       if (!response.ok) {
-        setError(result.error ?? "The photo couldn't be added.");
+        setError(result.error ?? "The photo couldn't be saved.");
         return;
       }
 
       setUrl(result.url ?? URL.createObjectURL(prepared.blob));
     } catch {
-      setError("The photo couldn't be added. Check the connection and try again.");
+      setError("The photo couldn't be saved. Check the connection and try again.");
     } finally {
       setBusy(false);
     }
@@ -508,80 +538,94 @@ export default function SoloHeadshotCell({
     }
   };
 
-  /* After a delete, the cell changes only once the pop-up has faded out. */
-  const afterDelete = useRef<{ url: string | null } | null>(null);
+  /* After a removal, the cell changes only once the pop-up has faded out. */
+  const afterRemove = useRef<{ url: string | null } | null>(null);
   const closeViewer = useCallback(() => {
     setViewing(false);
 
-    if (afterDelete.current) {
-      setUrl(afterDelete.current.url);
-      afterDelete.current = null;
+    if (afterRemove.current) {
+      setUrl(afterRemove.current.url);
+      afterRemove.current = null;
     }
   }, []);
   const closeWebcam = useCallback(() => setWebcam(false), []);
 
-  if (url) {
-    return (
-      <>
-        <button
-          type="button"
-          onClick={() => setViewing(true)}
-          title={`View ${riderName}'s photo`}
-          className="block h-10 w-10 overflow-hidden rounded-full border border-bronze/30 bg-parchment transition-transform hover:scale-110 focus-visible:scale-110"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element -- signed URL from a private bucket */}
-          <img src={url} alt={`${riderName}'s photo`} className="h-full w-full object-cover" />
-        </button>
-        {viewing && (
-          <Overlay label={`${riderName}'s photo`} onClose={closeViewer}>
-            {(close) => (
-              <PhotoViewer
-                url={url}
-                riderName={riderName}
-                registrationId={registrationId}
-                onDeleted={(nextUrl) => {
-                  afterDelete.current = { url: nextUrl };
-                }}
-                close={close}
-              />
-            )}
-          </Overlay>
-        )}
-      </>
-    );
-  }
+  const replaceFrom = (source: "files" | "camera") => {
+    if (source === "files") {
+      fileInputRef.current?.click();
+    } else {
+      takePhoto();
+    }
+  };
 
   const menuItemClass =
     "block w-full whitespace-nowrap px-4 py-2 text-left text-sm text-brown transition-colors hover:bg-parchment";
 
   return (
     <div className="flex items-center">
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={openMenu}
-        disabled={busy}
-        aria-haspopup="menu"
-        aria-expanded={Boolean(menu)}
-        aria-label={`Add a photo for ${riderName}`}
-        title={error ?? "Add a photo"}
-        className={`relative flex h-10 w-10 items-center justify-center rounded-full border border-dashed text-xs font-semibold transition-colors ${
-          error
-            ? "border-red-700 text-red-700"
-            : "border-bronze/40 text-bronze-dark hover:border-bronze hover:bg-parchment"
-        } disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent`}
-      >
-        {busy ? (
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-bronze/30 border-t-bronze" />
-        ) : (
-          <>
-            <span className="text-brown/60">{initialsOf(riderName)}</span>
-            <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-bronze-deep text-[11px] leading-none text-cream">
-              +
+      {url ? (
+        <button
+          type="button"
+          onClick={() => setViewing(true)}
+          disabled={busy}
+          title={error ?? `View ${riderName}'s photo`}
+          className={`relative block h-10 w-10 overflow-hidden rounded-full border bg-parchment transition-transform hover:scale-110 focus-visible:scale-110 disabled:cursor-not-allowed disabled:hover:scale-100 ${
+            error ? "border-red-700" : "border-bronze/30"
+          }`}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- signed URL from a private bucket */}
+          <img src={url} alt={`${riderName}'s photo`} className="h-full w-full object-cover" />
+          {busy && (
+            <span className="absolute inset-0 flex items-center justify-center bg-cream/70">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-bronze/30 border-t-bronze" />
             </span>
-          </>
-        )}
-      </button>
+          )}
+        </button>
+      ) : (
+        <button
+          ref={buttonRef}
+          type="button"
+          onClick={openMenu}
+          disabled={busy}
+          aria-haspopup="menu"
+          aria-expanded={Boolean(menu)}
+          aria-label={`Add a photo for ${riderName}`}
+          title={error ?? "Add a photo"}
+          className={`relative flex h-10 w-10 items-center justify-center rounded-full border border-dashed text-xs font-semibold transition-colors ${
+            error
+              ? "border-red-700 text-red-700"
+              : "border-bronze/40 text-bronze-dark hover:border-bronze hover:bg-parchment"
+          } disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent`}
+        >
+          {busy ? (
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-bronze/30 border-t-bronze" />
+          ) : (
+            <>
+              <span className="text-brown/60">{initialsOf(riderName)}</span>
+              <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-bronze-deep text-[11px] leading-none text-cream">
+                +
+              </span>
+            </>
+          )}
+        </button>
+      )}
+
+      {url && viewing && (
+        <Overlay label={`${riderName}'s photo`} onClose={closeViewer}>
+          {(close) => (
+            <PhotoViewer
+              url={url}
+              riderName={riderName}
+              registrationId={registrationId}
+              onRemoved={(nextUrl) => {
+                afterRemove.current = { url: nextUrl };
+              }}
+              onReplace={replaceFrom}
+              close={close}
+            />
+          )}
+        </Overlay>
+      )}
 
       {menu &&
         createPortal(

@@ -12,9 +12,8 @@ import {
 } from "@/lib/admin/server";
 import { verifyAdminRequest } from "@/lib/admin/server";
 import {
-  findProfileIdByEmail,
-  getHeadshotUrl,
-  getPaperHeadshotUrl,
+  getSoloHeadshotUrl,
+  getTeamRiderHeadshotUrl,
 } from "@/lib/admin/headshot-urls";
 import { escapeIlikePattern } from "@/lib/supabase/query";
 
@@ -250,24 +249,16 @@ const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 
 /* A photo is a help to the desk, never a requirement: any failure here leaves
    the rider without one rather than failing the lookup. */
-const headshotFor = async (
-  serviceSupabase: ServiceRoleClient,
-  profileId: string | null
-) => (profileId ? getHeadshotUrl(serviceSupabase, profileId) : null);
-
 const soloHeadshot = async (serviceSupabase: ServiceRoleClient, registrationId: string) => {
   const { data } = await serviceSupabase
     .from("solo_registrations")
-    .select("profile_id")
+    .select("id, profile_id, email, full_name")
     .eq("id", registrationId)
     .maybeSingle();
 
-  // The account's photo first; a rider with no account may have one on the
-  // registration instead.
-  return (
-    (await headshotFor(serviceSupabase, (data?.profile_id as string | null | undefined) ?? null)) ??
-    (await getPaperHeadshotUrl(serviceSupabase, registrationId))
-  );
+  // The registration's own photo first; the account's only when this is the
+  // account holder's own registration (an account may have entered others).
+  return data ? getSoloHeadshotUrl(serviceSupabase, data) : null;
 };
 
 // Generated codes are NBP- plus six characters, but stay lenient about case,
@@ -415,18 +406,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: contactError.message }, { status: 400 });
     }
 
-    // The leader registered the team, so the team's account is theirs; anyone
-    // else is found by email: a solo entry, or their own confirmed account.
+    // The leader registered the team, so the team's account may be theirs;
+    // anyone else is found by email: a solo entry, or their own confirmed
+    // account. Either way only an account with the rider's own email and
+    // name counts.
     teammates = await Promise.all(
       (teamRows ?? []).map(async ({ email, ...teammate }) => {
         let headshot_url: string | null = null;
 
         try {
-          const profileId =
-            teammate.is_leader && teamRow?.leader_profile_id
-              ? (teamRow.leader_profile_id as string)
-              : await findProfileIdByEmail(serviceSupabase, email);
-          headshot_url = await headshotFor(serviceSupabase, profileId);
+          headshot_url = await getTeamRiderHeadshotUrl(
+            serviceSupabase,
+            { email, full_name: teammate.full_name },
+            teammate.is_leader ? ((teamRow?.leader_profile_id as string | null) ?? null) : null
+          );
         } catch {
           headshot_url = null;
         }
@@ -442,8 +435,9 @@ export async function POST(request: Request) {
       : null;
   }
 
-  // The rider's own photo: their account's, through the solo entry if they
-  // have one, otherwise the one already found for their place on the team.
+  // The rider's own photo: through the solo entry if they have one (its own
+  // photo, or the account's for the holder's own entry), otherwise the one
+  // already found for their place on the team.
   const soloEntry = entries.find((entry: { source: string }) => entry.source === "solo");
   let headshotUrl: string | null = null;
 

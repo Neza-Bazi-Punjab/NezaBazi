@@ -5,9 +5,11 @@ import PageHeader from "@/components/PageHeader";
 import SectionHeading from "@/components/SectionHeading";
 import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
 import { escapeIlikePattern } from "@/lib/supabase/query";
+import { isOwnRegistration } from "@/lib/registration-identity";
 import { createClient } from "@/lib/supabase/server";
 import { site } from "@/lib/site";
 import AccountPageClient, {
+  type AccountEnteredRegistration,
   type AccountProfile,
   type AccountSoloRegistration,
   type AccountTeam,
@@ -75,20 +77,39 @@ export default async function AccountPage() {
 
   const authMetadata = user.user_metadata as AccountMetadata;
 
-  const [{ data: soloRegistration }, { data: team }] = await Promise.all([
+  /* Every solo registration this account entered: an account may enter
+     several riders, so this is a list, not one row. */
+  const [{ data: soloRows }, { data: team }] = await Promise.all([
     supabase
       .from("solo_registrations")
       .select(
         "id, full_name, father_name, mother_name, age, location, phone, email, years_experience, horse_age, horse_breed, created_at, confirmation_code, checked_in_at"
       )
       .eq("profile_id", user.id)
-      .maybeSingle(),
+      .order("created_at", { ascending: true }),
     supabase
       .from("teams")
       .select("id, team_name, created_at")
       .eq("leader_profile_id", user.id)
       .maybeSingle(),
   ]);
+
+  /* "Your registration" is the account holder's own (same email and full
+     name as the account); the rest are riders this account entered for
+     others, listed read-only. */
+  const accountSoloRows = (soloRows ?? []) as AccountSoloRegistration[];
+  const soloRegistration =
+    accountSoloRows.find((row) =>
+      isOwnRegistration(row, { email: user.email, full_name: authMetadata.full_name })
+    ) ?? null;
+  const enteredRegistrations: AccountEnteredRegistration[] = accountSoloRows
+    .filter((row) => row !== soloRegistration)
+    .map(({ id, full_name, confirmation_code, created_at }) => ({
+      id,
+      full_name,
+      confirmation_code,
+      created_at,
+    }));
 
   const { data: teamMembers } = team
     ? await supabase
@@ -184,9 +205,8 @@ export default async function AccountPage() {
                     : null,
               } as AccountProfile
             }
-            soloRegistration={
-              (soloRegistration ?? null) as AccountSoloRegistration | null
-            }
+            soloRegistration={soloRegistration}
+            enteredRegistrations={enteredRegistrations}
             team={(team ?? null) as AccountTeam | null}
             teamMembers={(teamMembers ?? []) as AccountTeamMember[]}
             memberships={memberships}

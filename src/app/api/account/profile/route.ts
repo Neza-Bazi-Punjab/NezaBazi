@@ -3,6 +3,7 @@ import { isValidEmail } from "@/lib/email-address";
 import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import {
+  REGISTRATION_EMAIL_KEY,
   syncRegistrationProfile,
   syncRegistrationProfileFromUser,
 } from "@/lib/supabase/sync-registration-profile";
@@ -159,8 +160,17 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Please enter a valid age." }, { status: 400 });
   }
 
-  // Captured before the auth update — this is what registration rows still hold.
+  // Captured before the auth update — this is what the holder's own
+  // registration rows still hold, and how they are told apart from riders
+  // this account entered for others.
   const previousEmail = user.email ?? "";
+  const previousFullName =
+    typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name : "";
+  const registrationEmail =
+    typeof user.user_metadata?.[REGISTRATION_EMAIL_KEY] === "string"
+      ? (user.user_metadata[REGISTRATION_EMAIL_KEY] as string)
+      : null;
+  const emailChanging = email.toLowerCase() !== previousEmail.trim().toLowerCase();
 
   // Update auth through the user's own session (not the service role) so the
   // secure email-change/confirmation flow still applies once it is enabled.
@@ -172,6 +182,9 @@ export async function PATCH(request: Request) {
       age,
       location,
       phone,
+      // An email change may wait for confirmation; the holder's own rows keep
+      // the old address until then, so it is remembered (see the sync).
+      ...(emailChanging ? { [REGISTRATION_EMAIL_KEY]: previousEmail } : {}),
     },
   });
 
@@ -188,6 +201,8 @@ export async function PATCH(request: Request) {
   const { syncedCount, warnings } = await syncRegistrationProfile({
     userId: user.id,
     previousEmail,
+    previousFullName,
+    registrationEmail,
     email: email.toLowerCase(),
     fullName,
     age,
