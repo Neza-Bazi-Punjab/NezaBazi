@@ -9,8 +9,9 @@
 // the photo is kept on the registration (`headshot_path`) and moves onto
 // their account if they sign up later with the email on the entry.
 //
-// Either way an administrator can only fill an empty slot — an existing photo
-// is never overwritten from here.
+// POST only fills an empty slot — an existing photo is never overwritten.
+// DELETE removes the photo shown for the rider (the account's first, as every
+// staff screen shows it), so a wrong or poor photo can be taken again.
 import { NextResponse } from "next/server";
 import {
   createServiceRoleClient,
@@ -218,3 +219,114 @@ const addPaperHeadshot = async (
   forgetPaperHeadshotUrl(registrationId);
   return NextResponse.json({ url: await signedUrlFor(serviceSupabase, path) });
 };
+
+/* Removes the photo the Solo riders list shows for this rider: the account's
+   own photo if there is one, otherwise the one kept on the registration.
+   Replies with the photo that is shown next, if any (a registration copy left
+   behind because the account already had its own), so the list stays right. */
+export async function DELETE(request: Request) {
+  const verification = await verifyAdminRequest();
+
+  if (!verification.ok) {
+    return verification.response;
+  }
+
+  let body: unknown;
+
+  try {
+    body = await request.json();
+  } catch {
+    return fail("Invalid request.", 400);
+  }
+
+  const registrationId =
+    typeof body === "object" && body !== null
+      ? (body as { registrationId?: unknown }).registrationId
+      : undefined;
+
+  if (typeof registrationId !== "string" || !uuidPattern.test(registrationId)) {
+    return fail("Invalid registration.", 400);
+  }
+
+  const serviceSupabase = createServiceRoleClient();
+  const { data: registration, error: registrationError } = await serviceSupabase
+    .from("solo_registrations")
+    .select("*")
+    .eq("id", registrationId)
+    .maybeSingle();
+
+  if (registrationError) {
+    return fail(registrationError.message, 400);
+  }
+
+  if (!registration) {
+    return fail("That registration no longer exists. Refresh the list.", 404);
+  }
+
+  const paperPath = readPaperHeadshotPath(registrationId, registration.headshot_path);
+  const profileId =
+    (registration.profile_id as string | null) ??
+    (await findProfileIdByEmail(serviceSupabase, registration.email as string));
+
+  let metadata: Record<string, unknown> | null = null;
+  let accountPath: string | null = null;
+
+  if (profileId) {
+    const { data: userData } = await serviceSupabase.auth.admin.getUserById(profileId);
+
+    if (userData?.user) {
+      metadata = (userData.user.user_metadata ?? {}) as Record<string, unknown>;
+      accountPath = readOwnHeadshotPath(profileId, metadata);
+    }
+  }
+
+  if (!accountPath && !paperPath) {
+    return fail("This rider has no photo. Refresh the list.", 404);
+  }
+
+  try {
+    await insertRequiredAuditLog(serviceSupabase, verification.actor, {
+      action: "remove_headshot",
+      target_table: "solo_registrations",
+      target_id: registrationId,
+      details: {
+        rider: registration.full_name,
+        removed_from: accountPath ? "account" : "registration (no account)",
+      },
+    });
+  } catch {
+    return fail("The photo was not removed because its audit record could not be created.", 500);
+  }
+
+  if (accountPath && profileId && metadata) {
+    const { error: metadataError } = await serviceSupabase.auth.admin.updateUserById(profileId, {
+      user_metadata: { ...metadata, headshot_path: null },
+    });
+
+    if (metadataError) {
+      return fail(metadataError.message, 500);
+    }
+
+    forgetHeadshotUrl(profileId);
+    await serviceSupabase.storage.from(HEADSHOT_BUCKET).remove([accountPath]);
+
+    return NextResponse.json({
+      url: paperPath ? await signedUrlFor(serviceSupabase, paperPath) : null,
+    });
+  }
+
+  const { error: updateError } = await serviceSupabase
+    .from("solo_registrations")
+    .update({ headshot_path: null })
+    .eq("id", registrationId)
+    .eq("headshot_path", paperPath as string);
+
+  if (updateError) {
+    return fail(updateError.message, 500);
+  }
+
+  forgetPaperHeadshotUrl(registrationId);
+  await serviceSupabase.storage.from(HEADSHOT_BUCKET).remove([paperPath as string]);
+
+  return NextResponse.json({ url: null });
+}

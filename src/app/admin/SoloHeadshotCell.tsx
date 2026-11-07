@@ -276,6 +276,105 @@ function WebcamCapture({
   );
 }
 
+/* The pop-up for a rider's photo: the photo, their name, and Delete photo
+   (asks once more before removing it, so a stray tap can't). */
+function PhotoViewer({
+  url,
+  riderName,
+  registrationId,
+  onDeleted,
+  close,
+}: {
+  url: string;
+  riderName: string;
+  registrationId: string;
+  /* The photo to show next: usually none. */
+  onDeleted: (nextUrl: string | null) => void;
+  close: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const remove = async () => {
+    setDeleting(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/admin/headshots", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ registrationId }),
+      });
+      const result = (await response.json().catch(() => ({}))) as {
+        url?: string | null;
+        error?: string;
+      };
+
+      if (!response.ok) {
+        setError(result.error ?? "The photo couldn't be deleted.");
+        return;
+      }
+
+      onDeleted(result.url ?? null);
+      close();
+    } catch {
+      setError("The photo couldn't be deleted. Check the connection and try again.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const buttonClass =
+    "rounded-lg px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] transition-colors disabled:opacity-60";
+
+  return (
+    <figure className="min-w-[min(92vw,380px)] overflow-hidden rounded-2xl bg-cream shadow-2xl">
+      {/* eslint-disable-next-line @next/next/no-img-element -- signed URL from a private bucket */}
+      <img
+        src={url}
+        alt={`${riderName}'s photo`}
+        className="mx-auto block max-h-[75vh] w-auto max-w-[92vw] object-contain"
+      />
+      <figcaption className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <span className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
+          {riderName}
+        </span>
+        {confirming ? (
+          <span className="flex flex-wrap items-center justify-end gap-2">
+            <span className="text-sm text-brown">Delete this photo?</span>
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              disabled={deleting}
+              className={`${buttonClass} border border-bronze/20 text-bronze-dark hover:border-bronze/40`}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={remove}
+              disabled={deleting}
+              className={`${buttonClass} bg-red-800 text-cream hover:bg-red-700`}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </button>
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            className={`${buttonClass} border border-red-700/30 text-red-800 hover:border-red-700/60`}
+          >
+            Delete photo
+          </button>
+        )}
+        {error && <p className="w-full text-sm text-red-800">{error}</p>}
+      </figcaption>
+    </figure>
+  );
+}
+
 export default function SoloHeadshotCell({
   registrationId,
   riderName,
@@ -409,7 +508,16 @@ export default function SoloHeadshotCell({
     }
   };
 
-  const closeViewer = useCallback(() => setViewing(false), []);
+  /* After a delete, the cell changes only once the pop-up has faded out. */
+  const afterDelete = useRef<{ url: string | null } | null>(null);
+  const closeViewer = useCallback(() => {
+    setViewing(false);
+
+    if (afterDelete.current) {
+      setUrl(afterDelete.current.url);
+      afterDelete.current = null;
+    }
+  }, []);
   const closeWebcam = useCallback(() => setWebcam(false), []);
 
   if (url) {
@@ -426,18 +534,16 @@ export default function SoloHeadshotCell({
         </button>
         {viewing && (
           <Overlay label={`${riderName}'s photo`} onClose={closeViewer}>
-            {() => (
-              <figure className="overflow-hidden rounded-2xl bg-cream shadow-2xl">
-                {/* eslint-disable-next-line @next/next/no-img-element -- signed URL from a private bucket */}
-                <img
-                  src={url}
-                  alt={`${riderName}'s photo`}
-                  className="block max-h-[80vh] w-auto max-w-[92vw] object-contain"
-                />
-                <figcaption className="px-4 py-3 font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
-                  {riderName}
-                </figcaption>
-              </figure>
+            {(close) => (
+              <PhotoViewer
+                url={url}
+                riderName={riderName}
+                registrationId={registrationId}
+                onDeleted={(nextUrl) => {
+                  afterDelete.current = { url: nextUrl };
+                }}
+                close={close}
+              />
             )}
           </Overlay>
         )}

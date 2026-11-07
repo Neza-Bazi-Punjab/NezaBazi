@@ -366,6 +366,7 @@ const auditActionLabels: Record<string, string> = {
   restore_run: "Restore Run",
   move_pool: "Change Pool",
   add_headshot: "Add Rider Photo",
+  remove_headshot: "Remove Rider Photo",
   set_live: "Update Live Display",
 };
 

@@ -54,3 +54,17 @@ test("only admin pages may use the camera", () => {
   assert.match(nextConfig, /value: "camera=\(\), microphone=\(\), geolocation=\(\)"/);
   assert.match(nextConfig, /source: "\/admin\/:path\*",\s*headers: \[\{ key: "Permissions-Policy", value: "camera=\(self\)/);
 });
+
+test("admins can delete a photo from the pop-up, after confirming, and it is audited", () => {
+  assert.match(cell, /Delete photo/);
+  assert.match(cell, /Delete this photo\?/);
+  assert.match(cell, /method: "DELETE"/);
+  assert.match(uploadRoute, /export async function DELETE/);
+  assert.match(uploadRoute, /DELETE[\s\S]*?verifyAdminRequest\(\)/);
+  assert.match(uploadRoute, /action: "remove_headshot"/);
+  // The audit record is written before anything is removed.
+  assert.ok(
+    uploadRoute.indexOf('action: "remove_headshot"') <
+      uploadRoute.indexOf("headshot_path: null")
+  );
+});
