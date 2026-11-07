@@ -325,6 +325,11 @@ begin
   end if;
 
   v_original := replace(pg_catalog.pg_get_functiondef(p_function), E'\r\n', E'\n');
+  -- The anchor and replacement are normalised the same way: a file pasted
+  -- into the SQL editor from a Windows checkout carries CR LF line endings,
+  -- and a CR in the search text matches nothing in the LF body above.
+  p_anchor := replace(p_anchor, E'\r\n', E'\n');
+  p_replacement := replace(p_replacement, E'\r\n', E'\n');
 
   if position(p_replacement in v_original) > 0 then
     raise notice '% is already patched; left unchanged.', p_function;
