@@ -418,14 +418,21 @@ export async function DELETE(request: Request) {
   }
 
   if (registrationPath) {
-    const { error: updateError } = await serviceSupabase
+    // Cleared only if the row still holds the photo this request saw, as the
+    // replace above: another administrator's newer photo is left alone.
+    const { data: cleared, error: updateError } = await serviceSupabase
       .from(tableFor(kind))
       .update({ headshot_path: null })
       .eq("id", registrationId)
-      .eq("headshot_path", registrationPath);
+      .eq("headshot_path", registrationPath)
+      .select("id");
 
     if (updateError) {
       return fail(updateError.message, 500);
+    }
+
+    if (!cleared || cleared.length === 0) {
+      return fail("This rider's photo was changed meanwhile. Refresh the list to see it.", 409);
     }
 
     forgetPaperHeadshotUrl(registrationId);

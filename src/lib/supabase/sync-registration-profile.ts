@@ -59,12 +59,14 @@ type RegistrationProfile = {
    account, so solo_registrations.profile_id is null and the update by
    profile_id below never reaches it. Once an administrator has replaced the
    placeholder with the rider's real address and the rider signs up and
-   confirms that address, the row is claimed by it — the same email-identity
-   rule that links team riders. Paper rows only (an online row always has its
-   owner), only while unclaimed, and only when the user has no solo entry of
-   their own yet (riders they entered for others don't count), so nobody ends
-   up holding two. Best effort: a failure (including the paper migration not
-   being applied yet) is logged and the sync carries on. */
+   confirms that address, the row is claimed by it. Several riders may share
+   one email (a family, a club contact), so the address alone does not say
+   which paper row is the holder's: only the row with the account's name too
+   is theirs (registration-identity.ts). Paper rows only (an online row always
+   has its owner), only while unclaimed, and only when the user has no solo
+   entry of their own yet (riders they entered for others don't count), so
+   nobody ends up holding two. Best effort: a failure (including the paper
+   migration not being applied yet) is logged and the sync carries on. */
 const claimPaperSoloRegistration = async (
   serviceSupabase: SupabaseClient,
   userId: string,
@@ -86,14 +88,38 @@ const claimPaperSoloRegistration = async (
     return;
   }
 
-  // `*` rather than naming headshot_path, so claiming still works on a
-  // database where the paper-photo migration has not been run.
+  // Every unclaimed paper row under the address, then only the holder's own
+  // by name: a sibling entered under the same email keeps no account. `*`
+  // rather than naming headshot_path, so claiming still works on a database
+  // where the paper-photo migration has not been run.
+  const { data: candidates, error: candidatesError } = await serviceSupabase
+    .from("solo_registrations")
+    .select("*")
+    .is("profile_id", null)
+    .eq("registration_source", "paper")
+    .ilike("email", escapeIlikePattern(confirmedEmail));
+
+  if (candidatesError) {
+    console.warn("Could not look up a paper registration for the account", candidatesError.code);
+    return;
+  }
+
+  const ownIds = ((candidates ?? []) as Array<RiderIdentity & { id: string }>)
+    .filter((row) => isOwnRegistration(row, { email: confirmedEmail, full_name: fullName }))
+    .map((row) => row.id);
+
+  if (ownIds.length === 0) {
+    return;
+  }
+
+  // Still unclaimed and still paper at the moment of writing, in case another
+  // sign-in claimed it meanwhile.
   const { data: claimed, error } = await serviceSupabase
     .from("solo_registrations")
     .update({ profile_id: userId })
+    .in("id", ownIds)
     .is("profile_id", null)
     .eq("registration_source", "paper")
-    .ilike("email", escapeIlikePattern(confirmedEmail))
     .select("*");
 
   if (error) {

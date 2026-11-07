@@ -25,7 +25,8 @@
 --      lookup indexes on the email and the phone digits;
 --   4. drops the four UNIQUE constraints on email and phone;
 --   5. replaces assign_confirmation_code: a code is reused only when the
---      email and the name both match an entry of the other kind;
+--      email and the name both match an entry of the other kind, and only
+--      for an insert the database can trust (see there);
 --   6. patches admin_create_paper_registration's duplicate checks to the same
 --      rule (asserted anchors, as 20261107100000 does);
 --   7. adds team_members.headshot_path, as 20261108100000 did for solo.
@@ -58,6 +59,13 @@ begin
   if pg_catalog.to_regprocedure('public.admin_create_paper_registration(text, jsonb, uuid, text, text)') is null
     or pg_catalog.to_regprocedure('public.paper_registration_phone_key(text)') is null then
     raise exception 'admin_create_paper_registration not found — apply 20261025130000_paper_registrations.sql first.';
+  end if;
+
+  -- The trigger below asks who is inserting: the request's token (Supabase's
+  -- auth.jwt()) and the project's own is_admin().
+  if pg_catalog.to_regprocedure('auth.jwt()') is null
+    or pg_catalog.to_regprocedure('public.is_admin()') is null then
+    raise exception 'auth.jwt() or public.is_admin() not found; this file is written for a Supabase project.';
   end if;
 end
 $preconditions$;
@@ -196,6 +204,19 @@ drop index if exists public.team_members_phone_key;
 -- one email get two codes, so checking one in never checks in the other.
 -- Only the other table is searched: a match in the same table is a true
 -- duplicate, which the guard above refuses under its own name.
+--
+-- And only for an insert the database can trust. The function runs as its
+-- owner, so it reads the request's token instead of current_user: no token
+-- (the SQL editor) or the service role (the server routes, the paper desk),
+-- an administrator, or a signed-in account entering a row under its own
+-- email address (its own entry; a family's shared address). Any other
+-- signed-in account could otherwise insert a row under another rider's name
+-- and email, through the team wizard or straight through the API, and be
+-- handed that rider's code and arrival state. Such a row gets a code of its
+-- own; a teammate entered by someone else's account who also holds a solo
+-- entry has two codes and is checked in with each, like a paper rider
+-- without email. Tokens exist only for confirmed addresses (the project
+-- requires email confirmation to sign in).
 
 create or replace function public.assign_confirmation_code()
 returns trigger
@@ -207,31 +228,50 @@ declare
   candidate text;
   attempts integer := 0;
   existing record;
+  found_existing boolean := false;
+  claims jsonb := auth.jwt();
+  claim_role text;
+  may_reuse boolean;
 begin
+  claim_role := claims ->> 'role';
+  may_reuse := claim_role is null
+    or claim_role = 'service_role'
+    or (
+      claim_role = 'authenticated'
+      and (
+        coalesce(public.is_admin(), false)
+        or lower(btrim(coalesce(claims ->> 'email', ''))) = lower(btrim(new.email))
+      )
+    );
+
   -- The same rider entered in the other event? Take that code, and that
   -- arrival state with it, so the two entries never disagree about whether
   -- the rider is here.
-  if tg_table_name = 'solo_registrations' then
+  if may_reuse and tg_table_name = 'solo_registrations' then
     select member.confirmation_code, member.checked_in_at, member.checked_in_by
     into existing
     from public.team_members as member
     where lower(btrim(member.email)) = lower(btrim(new.email))
       and public.rider_name_key(member.full_name) = public.rider_name_key(new.full_name)
     limit 1;
-  else
+    found_existing := found;
+  elsif may_reuse then
     select solo.confirmation_code, solo.checked_in_at, solo.checked_in_by
     into existing
     from public.solo_registrations as solo
     where lower(btrim(solo.email)) = lower(btrim(new.email))
       and public.rider_name_key(solo.full_name) = public.rider_name_key(new.full_name)
     limit 1;
+    found_existing := found;
   end if;
 
-  if existing.confirmation_code is not null then
-    new.confirmation_code := existing.confirmation_code;
-    new.checked_in_at := existing.checked_in_at;
-    new.checked_in_by := existing.checked_in_by;
-    return new;
+  if found_existing then
+    if existing.confirmation_code is not null then
+      new.confirmation_code := existing.confirmation_code;
+      new.checked_in_at := existing.checked_in_at;
+      new.checked_in_by := existing.checked_in_by;
+      return new;
+    end if;
   end if;
 
   loop
@@ -584,6 +624,11 @@ begin
 
   if position('rider_name_key' in trigger_body) = 0 then
     raise exception 'assign_confirmation_code does not match on the rider''s name.';
+  end if;
+
+  if position('auth.jwt()' in trigger_body) = 0
+    or position('public.is_admin()' in trigger_body) = 0 then
+    raise exception 'assign_confirmation_code does not check who is inserting.';
   end if;
 
   if pg_catalog.has_function_privilege('authenticated', 'public.assign_confirmation_code()', 'execute') then

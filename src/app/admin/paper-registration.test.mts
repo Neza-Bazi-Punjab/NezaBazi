@@ -486,16 +486,20 @@ test("the paper pages are reachable and the admin page is gated", () => {
   assert.match(panel, /\/api\/admin\/paper-registration\/matches/);
 });
 
-test("a paper solo rider is linked to their account by confirmed email", () => {
+test("a paper solo rider is linked to their account by confirmed email and name", () => {
   const sync = repoFile("src/lib/supabase/sync-registration-profile.ts");
   const accountRoute = repoFile("src/app/api/account/profile/route.ts");
 
-  // Claimed before the update-by-profile_id, paper rows only, unclaimed only.
+  // Claimed before the update-by-profile_id, paper rows only, unclaimed only,
+  // and only the row whose name is the account's (riders may share an email).
   const claim = sync.indexOf("await claimPaperSoloRegistration(");
   const soloUpdate = sync.indexOf('.in("id", ownSoloIds)\n      .eq("profile_id", userId)');
   assert.notEqual(claim, -1);
   assert.ok(claim < soloUpdate, "claim runs before the solo update by profile_id");
-  assert.match(sync, /\.update\(\{ profile_id: userId \}\)\s*\.is\("profile_id", null\)\s*\.eq\("registration_source", "paper"\)\s*\.ilike\("email", escapeIlikePattern\(confirmedEmail\)\)/);
+  assert.match(sync, /\.select\("\*"\)\s*\.is\("profile_id", null\)\s*\.eq\("registration_source", "paper"\)\s*\.ilike\("email", escapeIlikePattern\(confirmedEmail\)\)/);
+  assert.match(sync, /\.filter\(\(row\) => isOwnRegistration\(row, \{ email: confirmedEmail, full_name: fullName \}\)\)/);
+  assert.match(sync, /\.update\(\{ profile_id: userId \}\)\s*\.in\("id", ownIds\)\s*\.is\("profile_id", null\)\s*\.eq\("registration_source", "paper"\)/);
+  assert.doesNotMatch(sync, /\.update\(\{ profile_id: userId \}\)[\s\S]{0,200}\.ilike\("email"/);
 
   // Both callers pass the address the session has already confirmed.
   assert.match(sync, /if \(!hasConfirmedEmail\(user\)\)[\s\S]*confirmedEmail: user\.email,/);

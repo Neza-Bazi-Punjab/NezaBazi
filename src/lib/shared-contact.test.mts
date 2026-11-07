@@ -125,9 +125,8 @@ test("a code is reused only when the email and the name both match, in the other
     migration.indexOf("-- Trigger-only function")
   );
 
-  assert.match(assignment, /if tg_table_name = 'solo_registrations' then[\s\S]*?from public\.team_members as member/);
-  assert.match(assignment, /else[\s\S]*?from public\.solo_registrations as solo/);
-  assert.equal(occurrences(assignment, "lower(btrim(new.email))"), 2);
+  assert.match(assignment, /if may_reuse and tg_table_name = 'solo_registrations' then[\s\S]*?from public\.team_members as member/);
+  assert.match(assignment, /elsif may_reuse then[\s\S]*?from public\.solo_registrations as solo/);
   assert.equal(occurrences(assignment, "= public.rider_name_key(new.full_name)"), 2);
   // Email alone no longer hands over a code.
   assert.doesNotMatch(assignment, /union all/);
@@ -136,6 +135,21 @@ test("a code is reused only when the email and the name both match, in the other
   assert.match(assignment, /new\.checked_in_at := null;/);
   assert.match(assignment, /security definer\s+set search_path = ''/);
   assert.match(migration, /revoke execute on function public\.assign_confirmation_code\(\) from anon, authenticated;/);
+
+  // A code is handed over only for an insert the database can trust: no
+  // token or the service role, an administrator, or an account entering a
+  // row under its own email. Any other signed-in account could otherwise
+  // insert another rider's name and email and be handed their code.
+  assert.match(assignment, /claims jsonb := auth\.jwt\(\);/);
+  assert.match(
+    assignment,
+    /may_reuse := claim_role is null\s+or claim_role = 'service_role'\s+or \(\s+claim_role = 'authenticated'\s+and \(\s+coalesce\(public\.is_admin\(\), false\)\s+or lower\(btrim\(coalesce\(claims ->> 'email', ''\)\)\) = lower\(btrim\(new\.email\)\)\s+\)\s+\);/
+  );
+  // The record is read only after a lookup ran (an unassigned record raises).
+  assert.match(assignment, /found_existing := found;[\s\S]*?found_existing := found;/);
+  assert.match(assignment, /if found_existing then\s+if existing\.confirmation_code is not null then/);
+  assert.match(migration, /to_regprocedure\('auth\.jwt\(\)'\) is null/);
+  assert.match(quoted(migration, "verify")[0], /position\('auth\.jwt\(\)' in trigger_body\) = 0/);
 });
 
 test("the paper function's anchors are in its source once and the patch drops the cross-kind phone refusal", () => {
@@ -312,11 +326,43 @@ test("the desk keeps two riders on one email and phone as two rows", () => {
 });
 
 // ---------------------------------------------------------------------------
+// An email alone never decides whose entry a row is
+
+test("a shared email neither claims nor gates another rider's entry", () => {
+  const sync = repoFile("src/lib/supabase/sync-registration-profile.ts");
+  const teamPage = repoFile("src/app/register-team/page.tsx");
+
+  // The paper claim: every unclaimed paper row under the address is read,
+  // only the holder's own (same name) is written, by id.
+  const claim = sync.slice(
+    sync.indexOf("const claimPaperSoloRegistration"),
+    sync.indexOf("const movePaperHeadshotToAccount")
+  );
+  assert.match(claim, /isOwnRegistration\(row, \{ email: confirmedEmail, full_name: fullName \}\)/);
+  assert.match(claim, /\.update\(\{ profile_id: userId \}\)\s*\.in\("id", ownIds\)/);
+  assert.doesNotMatch(claim, /\.update\([^)]*\)[\s\S]*?\.ilike\(/);
+
+  // The team page's "already on a team" notice: only the holder's own row,
+  // so a parent whose email is on a child's team row can still lead a team.
+  assert.match(teamPage, /import \{ isOwnRegistration \} from "@\/lib\/registration-identity";/);
+  assert.match(teamPage, /\.select\("team_id, full_name, email"\)\s*\.ilike\("email", escapeIlikePattern\(user\.email\)\)\s*\.eq\("is_leader", false\);/);
+  assert.match(teamPage, /isOwnRegistration\(row, \{ email: user\.email, full_name: authMetadata\?\.full_name \}\)/);
+  assert.doesNotMatch(teamPage, /\.eq\("is_leader", false\)\s*\.limit\(1\)/);
+});
+
+// ---------------------------------------------------------------------------
 // Wording
 
-test("the paper desk and the runbook say what is refused now", () => {
+test("the paper desk, the runbook and the change log say what is refused now", () => {
+  const changeLog = repoFile("docs/supabase-changes.md");
+
   assert.match(paperPanel, /Saving still refuses the same name with the\s+same email or phone\./);
   assert.doesNotMatch(runbook, /A paper rider without email can enter only one event/);
   assert.doesNotMatch(runbook, /under a different \(or no\) email/);
   assert.match(runbook, /the same full name is already entered in the same kind of entry/);
+  // Migration 20's entry still describes its rules as they were, marked as
+  // superseded, so nobody applies the old limitation on the day.
+  assert.match(changeLog, /\*Superseded by migration 27:\*/);
+  assert.match(changeLog, /\*\*One limitation, lifted by migration 27\.\*\*/);
+  assert.doesNotMatch(changeLog, /checks duplicate emails and phones/);
 });
