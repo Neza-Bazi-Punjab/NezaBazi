@@ -131,7 +131,7 @@ Nobody with a recorded result can be moved or removed; clear their results first
 ### 4.6 Set the round live and call Pool A
 
 1. **Set live** on the round. The judges' panel, the public scoreboard and the stream overlays all switch to it. Nobody is on course yet.
-2. **Call Pool A** on Pool A's header (or let the head judge do it from `/judge`). Every screen — scoreboard, overlays, commentary — switches to Pool A's roster with "get ready", and the first rider of Pool A still to ride goes on course. The commentator reads the names out.
+2. **Call Pool A** on Pool A's header (or let the head judge do it from `/judge`). Every screen — scoreboard, overlays, commentary — switches to Pool A's roster with "get ready", and nobody is on course until the judge taps **Start** for Pool A's first rider. The commentator reads the names out.
 3. The first result recorded returns every screen to the scoreboard.
 
 ### 4.7 Finish the round
