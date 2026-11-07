@@ -93,15 +93,31 @@ const getAccountHeadshot = async (
 /* The account's photo, but only for the account holder's own registration
    (same email and full name, see registration-identity.ts). An account that
    entered several riders has one account id on all of them; its holder's
-   photo must never be shown as those riders'. */
+   photo must never be shown as those riders'. `onlyRegistration`: the caller
+   knows this is the account's only registration, so the name may differ. */
 export const getOwnAccountHeadshotUrl = async (
   client: ServiceRoleClient,
   profileId: string,
-  registration: RiderIdentity
+  registration: RiderIdentity,
+  { onlyRegistration = false }: { onlyRegistration?: boolean } = {}
 ): Promise<string | null> => {
   const { url, account } = await getAccountHeadshot(client, profileId);
 
-  return url && isOwnRegistration(registration, account) ? url : null;
+  return url && isOwnRegistration(registration, account, { onlyRegistration }) ? url : null;
+};
+
+/* True when this account has entered exactly one solo registration. A failed
+   count is "not known", which keeps the stricter name check. */
+export const isOnlySoloRegistration = async (
+  client: ServiceRoleClient,
+  profileId: string
+): Promise<boolean> => {
+  const { count, error } = await client
+    .from("solo_registrations")
+    .select("id", { count: "exact", head: true })
+    .eq("profile_id", profileId);
+
+  return !error && count === 1;
 };
 
 /* Auth accounts by email address, for team riders who made their own
@@ -339,7 +355,9 @@ export const getSoloHeadshotUrl = async (
 ): Promise<string | null> =>
   (await getPaperHeadshotUrl(client, registration.id)) ??
   (registration.profile_id
-    ? await getOwnAccountHeadshotUrl(client, registration.profile_id, registration)
+    ? await getOwnAccountHeadshotUrl(client, registration.profile_id, registration, {
+        onlyRegistration: await isOnlySoloRegistration(client, registration.profile_id),
+      })
     : null);
 
 export type SoloHeadshot = { url: string | null };
@@ -413,6 +431,19 @@ export const matchSoloHeadshots = async (
 
   const { accountById } = index;
 
+  // How many registrations each account entered: the list is every solo
+  // registration, so an account with one can only hold its own.
+  const rowsByProfile = new Map<string, number>();
+
+  for (const registration of registrations) {
+    if (registration.profile_id) {
+      rowsByProfile.set(
+        registration.profile_id,
+        (rowsByProfile.get(registration.profile_id) ?? 0) + 1
+      );
+    }
+  }
+
   try {
     const pathByRegistration = new Map<string, string>();
 
@@ -422,7 +453,12 @@ export const matchSoloHeadshots = async (
         : undefined;
       const path =
         readPaperHeadshotPath(registration.id, registration.headshot_path) ??
-        (account && isOwnRegistration(registration, account) ? account.path : null);
+        (account &&
+        isOwnRegistration(registration, account, {
+          onlyRegistration: rowsByProfile.get(registration.profile_id ?? "") === 1,
+        })
+          ? account.path
+          : null);
 
       result[registration.id] = { url: null };
 

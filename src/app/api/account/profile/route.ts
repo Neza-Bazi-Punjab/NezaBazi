@@ -184,7 +184,11 @@ export async function PATCH(request: Request) {
       phone,
       // An email change may wait for confirmation; the holder's own rows keep
       // the old address until then, so it is remembered (see the sync).
-      ...(emailChanging ? { [REGISTRATION_EMAIL_KEY]: previousEmail } : {}),
+      // A second change before a sync keeps the oldest address: that is the
+      // one the rows still hold.
+      ...(emailChanging && !registrationEmail
+        ? { [REGISTRATION_EMAIL_KEY]: previousEmail }
+        : {}),
     },
   });
 

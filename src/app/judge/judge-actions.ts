@@ -163,9 +163,20 @@ export const needsConfirmation = (action: JudgeAction) => action.kind !== "start
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+/* A judge write that has not answered in this long is given up on, so a
+   phone on a weak signal never sits on a spinner. */
+export const JUDGE_WRITE_TIMEOUT_MS = 12_000;
+
+/* The write may still have reached the server. Tapping again is safe (a
+   second score for the same run is refused; Start for the rider already on
+   course changes nothing), but the judge should look first. */
+export const TIMED_OUT_WRITE_MESSAGE =
+  "Not sure it saved — check Last result before tapping again.";
+
 /* POSTs JSON and returns the parsed body. Throws an Error whose message is
-   the server's own `error` text (shown verbatim to the judge), or a plain
-   connection message when the request never reached the server. */
+   the server's own `error` text (shown verbatim to the judge), a plain
+   connection message when the request never reached the server, or
+   TIMED_OUT_WRITE_MESSAGE when it did not answer in time. */
 export const postJson = async (url: string, body: unknown): Promise<unknown> => {
   let response: Response;
 
@@ -176,8 +187,13 @@ export const postJson = async (url: string, body: unknown): Promise<unknown> => 
       body: JSON.stringify(body),
       credentials: "same-origin",
       cache: "no-store",
+      signal: AbortSignal.timeout(JUDGE_WRITE_TIMEOUT_MS),
     });
-  } catch {
+  } catch (caught) {
+    if (caught instanceof DOMException && caught.name === "TimeoutError") {
+      throw new Error(TIMED_OUT_WRITE_MESSAGE);
+    }
+
     throw new Error("Could not reach the server. Check the connection and try again.");
   }
 
@@ -261,10 +277,16 @@ export const sendAction = async (
         })
       );
     case "current":
-    case "start":
-      // The judge's Start: the one way a rider comes on course.
+      // "Put on course" from the start list: may replace the rider on course
+      // (the judge confirmed it first).
       return stateFromResponse(
         await post("/api/judge/live", { current_run_id: action.run.id })
+      );
+    case "start":
+      // The big Start button: the server refuses it if another rider is
+      // already on course, so a stale panel can't silently replace them.
+      return stateFromResponse(
+        await post("/api/judge/live", { current_run_id: action.run.id, start: true })
       );
     case "round":
       return stateFromResponse(

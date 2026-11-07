@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import ConfirmationCode from "@/components/ConfirmationCode";
 import PageHeader from "@/components/PageHeader";
+import { isOwnRegistration } from "@/lib/registration-identity";
 import { createClient } from "@/lib/supabase/server";
 import { site } from "@/lib/site";
 
@@ -19,15 +20,25 @@ export default async function RegisterSuccessPage() {
   // Read the code back rather than passing it through the URL: a confirmation
   // code in a query string ends up in browser history, logs and shared links.
   // An account may enter several riders, so this is the newest one.
-  const { data: registration } = user
+  const { data: rows } = user
     ? await supabase
         .from("solo_registrations")
-        .select("confirmation_code")
+        .select("full_name, email, confirmation_code, created_at")
         .eq("profile_id", user.id)
         .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle()
     : { data: null };
+  const accountRows = rows ?? [];
+  const registration = accountRows[0] ?? null;
+  // Only the account holder's own code is emailed (see
+  // /api/registration/confirmation-code); another rider's is on /account.
+  const emailed =
+    registration !== null &&
+    user !== null &&
+    isOwnRegistration(
+      registration,
+      { email: user.email, full_name: user.user_metadata?.full_name },
+      { onlyRegistration: accountRows.length === 1 }
+    );
 
   return (
     <>
@@ -59,7 +70,9 @@ export default async function RegisterSuccessPage() {
               </div>
 
               <p className="leading-7 text-brown/85">
-                {`We have emailed this code to you. You can also find it any time on your account page.`}
+                {emailed
+                  ? `We have emailed this code to you. You can also find it any time on your account page.`
+                  : `This rider's code is not emailed. It is shown on your account page, under Registrations You Entered, whenever you need it.`}
               </p>
             </>
           ) : (

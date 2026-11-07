@@ -100,7 +100,13 @@ export default async function AccountPage() {
   const accountSoloRows = (soloRows ?? []) as AccountSoloRegistration[];
   const soloRegistration =
     accountSoloRows.find((row) =>
-      isOwnRegistration(row, { email: user.email, full_name: authMetadata.full_name })
+      isOwnRegistration(
+        row,
+        { email: user.email, full_name: authMetadata.full_name },
+        // One registration can only be the holder's own, even after an
+        // administrator corrected the spelling of the name on it.
+        { onlyRegistration: accountSoloRows.length === 1 }
+      )
     ) ?? null;
   const enteredRegistrations: AccountEnteredRegistration[] = accountSoloRows
     .filter((row) => row !== soloRegistration)

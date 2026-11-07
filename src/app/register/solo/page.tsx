@@ -124,9 +124,13 @@ export default async function SoloRegisterPage() {
                     only for the account holder's first entry. Another rider's
                     photo is added by the organisers from the admin list. */}
                 <RegisterForm
-                  lockProfileFields={!isAdmin && !enteringAnotherRider}
+                  lockContactFields={!isAdmin && !enteringAnotherRider}
+                  holderName={
+                    !isAdmin && !enteringAnotherRider ? authMetadata?.full_name ?? "" : null
+                  }
                   initialDraft={(draftRow?.data ?? null) as SoloDraftData | null}
                   showHeadshot={!isAdmin && !enteringAnotherRider}
+                  ownContactNote={enteringAnotherRider}
                   initialHeadshotPath={
                     typeof authMetadata?.headshot_path === "string"
                       ? authMetadata.headshot_path
@@ -136,8 +140,10 @@ export default async function SoloRegisterPage() {
                     isAdmin
                       ? undefined
                       : enteringAnotherRider
-                        ? // Another rider: only the contact details carry over.
-                          { email: user.email, phone: authMetadata?.phone }
+                        ? // Another rider starts blank: the database still refuses
+                          // an email or phone already registered (UNIQUE on
+                          // each) until a later migration.
+                          {}
                         : {
                           full_name: authMetadata?.full_name,
                           age: getMetadataNumber(authMetadata?.age),

@@ -75,10 +75,23 @@ const findOwnHolder = async (
   }
 
   const metadata = (data.user.user_metadata ?? {}) as Record<string, unknown>;
-  const own = isOwnRegistration(registration, {
-    email: data.user.email,
-    full_name: metadata.full_name,
-  });
+  // An account that entered exactly one registration can only hold its own,
+  // so a name an administrator corrected still counts. The count is read by
+  // profile_id, never by email; a failed count is an error, not a guess.
+  const { count, error: countError } = await serviceSupabase
+    .from("solo_registrations")
+    .select("id", { count: "exact", head: true })
+    .eq("profile_id", profileId);
+
+  if (countError) {
+    return { ok: false };
+  }
+
+  const own = isOwnRegistration(
+    registration,
+    { email: data.user.email, full_name: metadata.full_name },
+    { onlyRegistration: count === 1 }
+  );
 
   return { ok: true, holder: own ? { profileId, metadata } : null };
 };

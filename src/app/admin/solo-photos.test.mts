@@ -51,6 +51,17 @@ test("a registration is the holder's own only when email and full name both matc
   assert.equal(isOwnRegistration({ email: "", full_name: "" }, { email: "", full_name: "" }), false);
   assert.equal(isOwnRegistration({ email: "rider@example.com", full_name: "Gurpreet Singh" }, { email: "rider@example.com" }), false);
   assert.equal(isOwnRegistration({ email: null, full_name: 42 }, account), false);
+
+  // The account's only registration: the email must still match, the name
+  // need not (an administrator may have corrected its spelling).
+  const only = { onlyRegistration: true };
+  assert.equal(isOwnRegistration({ email: "RIDER@example.com", full_name: "Gurpreet Singh Gill" }, account, only), true);
+  assert.equal(isOwnRegistration({ email: "rider@example.com", full_name: "" }, account, only), true);
+  assert.equal(isOwnRegistration({ email: "other@example.com", full_name: "Gurpreet Singh" }, account, only), false);
+  assert.equal(isOwnRegistration({ email: "", full_name: "Gurpreet Singh" }, { email: "", full_name: "Gurpreet Singh" }, only), false);
+  // Without the option (several registrations, a team row, or any write)
+  // the name counts.
+  assert.equal(isOwnRegistration({ email: "rider@example.com", full_name: "Gurpreet Singh Gill" }, account), false);
   // Loadable by the tests on its own: no imports.
   assert.doesNotMatch(identity, /^import /m);
 });
@@ -97,7 +108,10 @@ test("an upload goes onto the account only for the holder's own registration", (
   const holder = sectionOf(uploadRoute, "const findOwnHolder");
   assert.match(holder, /registration\.profile_id/);
   assert.match(holder, /auth\.admin\.getUserById\(profileId\)/);
-  assert.match(holder, /isOwnRegistration\(registration, \{\s*email: data\.user\.email,\s*full_name: metadata\.full_name,/);
+  assert.match(holder, /isOwnRegistration\(\s*registration,\s*\{ email: data\.user\.email, full_name: metadata\.full_name \},\s*\{ onlyRegistration: count === 1 \}/);
+  // The count is by profile_id, and a failed count refuses rather than guesses.
+  assert.match(holder, /\.select\("id", \{ count: "exact", head: true \}\)\s*\.eq\("profile_id", profileId\)/);
+  assert.match(holder, /if \(countError\) \{\s*return \{ ok: false \};/);
   assert.match(holder, /holder: own \? \{ profileId, metadata \} : null/);
 
   // A photo already on the registration is the one replaced; otherwise the
@@ -166,7 +180,7 @@ test("staff screens show the registration's photo first, the account's only for 
   const match = sectionOf(headshotUrls, "export const matchSoloHeadshots");
   assert.match(
     match,
-    /readPaperHeadshotPath\(registration\.id, registration\.headshot_path\) \?\?\s*\(account && isOwnRegistration\(registration, account\) \? account\.path : null\)/
+    /readPaperHeadshotPath\(registration\.id, registration\.headshot_path\) \?\?\s*\(account &&\s*isOwnRegistration\(registration, account, \{\s*onlyRegistration: rowsByProfile\.get\(registration\.profile_id \?\? ""\) === 1,/
   );
   assert.doesNotMatch(match, /email\?\.trim\(\)/);
 
@@ -175,8 +189,9 @@ test("staff screens show the registration's photo first, the account's only for 
   assert.ok(solo.indexOf("getPaperHeadshotUrl(") < solo.indexOf("getOwnAccountHeadshotUrl("));
   assert.match(
     sectionOf(headshotUrls, "export const getOwnAccountHeadshotUrl"),
-    /url && isOwnRegistration\(registration, account\) \? url : null/
+    /url && isOwnRegistration\(registration, account, \{ onlyRegistration \}\) \? url : null/
   );
+  assert.match(solo, /onlyRegistration: await isOnlySoloRegistration\(client, registration\.profile_id\)/);
   assert.match(checkInRoute, /getSoloHeadshotUrl\(serviceSupabase, data\)/);
   assert.match(riderDetail, /getSoloHeadshotUrl\(client, solo\)/);
 
@@ -184,7 +199,9 @@ test("staff screens show the registration's photo first, the account's only for 
   // the rider's counts.
   const team = sectionOf(headshotUrls, "export const getTeamRiderHeadshotUrl");
   assert.match(team, /findProfileIdByEmail\(client, rider\.email\)/);
-  assert.match(team, /getOwnAccountHeadshotUrl\(client, profileId, rider\)/);
+  // No onlyRegistration for team riders: they have no account id, so the
+  // name is always required.
+  assert.match(team, /getOwnAccountHeadshotUrl\(client, profileId, rider\);/);
   assert.match(checkInRoute, /getTeamRiderHeadshotUrl\(/);
   assert.match(riderDetail, /getTeamRiderHeadshotUrl\(/);
   for (const source of [checkInRoute, riderDetail]) {
@@ -194,13 +211,15 @@ test("staff screens show the registration's photo first, the account's only for 
 
 test("account edits reach only the holder's own registration rows", () => {
   const body = sectionOf(sync, "export const syncRegistrationProfile = async");
+  // Solo: the account's rows, filtered by the rule, then only those ids. A
+  // write never relaxes the name, not even for the account's only row.
   assert.match(body, /isOwnRegistration\(row, \{ email: address, full_name: previousFullName \}\)/);
-  // Solo: the account's rows, filtered by the rule, then only those ids.
-  assert.match(body, /\.filter\(isHoldersOwn\)/);
+  assert.match(body, /\.filter\(isHoldersOwnSolo\)/);
+  assert.doesNotMatch(sync, /onlyRegistration/);
   assert.match(body, /\.update\(soloUpdates\)\s*\.in\("id", ownSoloIds\)\s*\.eq\("profile_id", userId\)/);
   assert.doesNotMatch(body, /\.update\(soloUpdates\)\s*\.eq\("profile_id", userId\)/);
   // Team: found by email, written only for the holder's own row.
-  assert.match(body, /if \(isHoldersOwn\(row\)\) \{\s*memberIds\.add\(row\.id\);/);
+  assert.match(body, /if \(isHoldersOwnTeam\(row\)\) \{\s*memberIds\.add\(row\.id\);/);
   assert.match(body, /\.update\(memberUpdates\)\s*\.in\("id", \[\.\.\.memberIds\]\)/);
   assert.doesNotMatch(body, /\.update\(memberUpdates\)\s*\.ilike\(/);
 
@@ -217,7 +236,7 @@ test("the account page lists every registration the account entered", () => {
     /from\("solo_registrations"\)\s*\.select\([^)]*\)\s*\.eq\("profile_id", user\.id\)\s*\.maybeSingle\(\)/
   );
   assert.match(accountLoader, /\.eq\("profile_id", user\.id\)\s*\.order\("created_at"/);
-  assert.match(accountLoader, /isOwnRegistration\(row, \{ email: user\.email, full_name: authMetadata\.full_name \}\)/);
+  assert.match(accountLoader, /\{ email: user\.email, full_name: authMetadata\.full_name \},[\s\S]{0,200}\{ onlyRegistration: accountSoloRows\.length === 1 \}/);
   assert.match(accountLoader, /enteredRegistrations=\{enteredRegistrations\}/);
   assert.match(accountPage, /Registrations You Entered/);
   assert.match(accountPage, /edited by an\s+administrator/);
@@ -230,19 +249,66 @@ test("any account may enter several solo riders; later riders start blank, with 
   assert.doesNotMatch(soloPage, /!isAdmin && existingRegistration/);
   assert.match(soloPage, /Registering another rider\? Enter their details below\./);
   assert.match(soloPage, /href="\/account"/);
-  // Another rider: only email and phone carry over, fields unlocked.
-  assert.match(soloPage, /lockProfileFields=\{!isAdmin && !enteringAnotherRider\}/);
-  assert.match(soloPage, /\{ email: user\.email, phone: authMetadata\?\.phone \}/);
+  // Another rider starts blank and unlocked, email and phone included (the
+  // database still refuses a repeated one), with a line saying so.
+  assert.match(soloPage, /lockContactFields=\{!isAdmin && !enteringAnotherRider\}/);
+  assert.match(soloPage, /\? \/\/ Another rider starts blank[\s\S]*?\{\}\s*: \{/);
+  assert.doesNotMatch(soloPage, /email: user\.email, phone: authMetadata\?\.phone/);
+  assert.match(soloPage, /ownContactNote=\{enteringAnotherRider\}/);
+  assert.match(soloForm, /\{ownContactNote && \([\s\S]*?For now each rider needs their own email address and phone number\./);
   // The photo box (the account's own photo) only for the holder's first entry.
   assert.match(soloPage, /showHeadshot=\{!isAdmin && !enteringAnotherRider\}/);
-  assert.match(soloForm, /\{showHeadshot && \(\s*<div[^>]*>\s*<HeadshotUpload/);
+  assert.match(soloForm, /\{headshotShown && \(\s*<div[^>]*>\s*<HeadshotUpload/);
   assert.match(soloForm, /This rider is already registered with this email or phone\./);
   // Finishing a registration clears the draft, so the next rider starts blank.
   assert.match(soloForm, /await deleteRegistrationDraft\("solo"\);/);
   // Success shows the newest entry and offers another.
   assert.match(soloSuccess, /Register Another Rider/);
   assert.match(soloSuccess, /href="\/register\/solo"/);
-  for (const source of [soloSuccess, soloCodeRoute]) {
-    assert.match(source, /\.order\("created_at", \{ ascending: false \}\)\s*\.limit\(1\)\s*\.maybeSingle\(\)/);
+  assert.match(soloSuccess, /\.order\("created_at", \{ ascending: false \}\)/);
+  assert.doesNotMatch(soloSuccess, /\.maybeSingle\(\)/);
+});
+
+test("the code email goes only to the account holder's own registration", () => {
+  // The holder's own row, chosen by the rule against the verified user, never
+  // "the newest": an account can type any name and address into the form.
+  assert.doesNotMatch(soloCodeRoute, /\.maybeSingle\(\)|\.limit\(1\)/);
+  assert.match(soloCodeRoute, /isOwnRegistration\(\s*row,\s*\{ email: user\.email, full_name: user\.user_metadata\?\.full_name \},\s*\{ onlyRegistration: accountRows\.length === 1 \}/);
+  assert.match(soloCodeRoute, /return NextResponse\.json\(\{ sent: false, reason: "shown_on_account" \}\);/);
+  assert.ok(
+    soloCodeRoute.indexOf('reason: "shown_on_account"') < soloCodeRoute.indexOf("sendEmail("),
+    "another rider is answered before anything is sent"
+  );
+  // The success page says where that rider's code is instead.
+  assert.match(soloSuccess, /emailed\s*\?[\s\S]*?: `This rider's code is not emailed\. It is shown on your account page/);
+});
+
+test("team rows are found only by confirmed addresses, never the remembered one", () => {
+  const body = sectionOf(sync, "export const syncRegistrationProfile = async");
+  const teamEmails = body.match(/const teamEmails = ([^;]+);/)?.[1] ?? "";
+  assert.match(teamEmails, /previousEmail, syncEmail \? email : null/);
+  assert.doesNotMatch(teamEmails, /registrationEmail/);
+  assert.match(body, /for \(const address of teamEmails\) \{/);
+  assert.doesNotMatch(body, /from\("team_members"\)[\s\S]*?registrationEmail/);
+  // The remembered address reaches solo rows only.
+  assert.match(body, /const soloEmails = \[previousEmail, registrationEmail\]/);
+
+  // A second pending change keeps the oldest remembered address.
+  assert.match(accountRoute, /emailChanging && !registrationEmail\s*\? \{ \[REGISTRATION_EMAIL_KEY\]: previousEmail \}/);
+});
+
+test("a first entry starts with the account's details, editable, photo box only for the holder", () => {
+  // Name, age and location are prefilled but never locked: a parent may be
+  // entering a child. Email and phone still follow the account.
+  assert.doesNotMatch(soloForm, /lockProfileFields/);
+  for (const field of ["full_name", "age", "location"]) {
+    assert.match(soloForm, new RegExp(`restore\\(false, [^\\n]*initialValues\\?\\.${field}`));
   }
+  assert.match(soloForm, /restore\(lockContactFields, initialValues\?\.phone/);
+  assert.match(soloForm, /restore\(lockContactFields, initialValues\?\.email/);
+  assert.match(soloForm, /These are your account details\. Registering someone else\? Change them to the\s+rider&apos;s\./);
+  assert.match(soloPage, /holderName=\{\s*!isAdmin && !enteringAnotherRider \? authMetadata\?\.full_name \?\? "" : null\s*\}/);
+  // The photo box follows the name as it is typed, normalised.
+  assert.match(soloForm, /normaliseIdentityText\(fullName\) === normaliseIdentityText\(holderName\)/);
+  assert.match(soloForm, /const headshotShown = showHeadshot && riderIsHolder;/);
 });

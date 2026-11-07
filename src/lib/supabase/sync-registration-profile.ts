@@ -25,12 +25,17 @@ export const REGISTRATION_EMAIL_KEY = "registration_email";
 
 type RegistrationProfile = {
   userId: string;
+  // The account's current address as Supabase Auth holds it. Both callers
+  // pass the verified user's email after checking hasConfirmedEmail, so it is
+  // the only address trusted to find team rows (see below).
   previousEmail: string;
   // The account's full name before this edit: with previousEmail, what the
   // holder's own registration rows still hold.
   previousFullName: string;
   // The older address the holder's own rows may still hold after an email
-  // change (REGISTRATION_EMAIL_KEY above), or null.
+  // change (REGISTRATION_EMAIL_KEY above), or null. It lives in user_metadata,
+  // which the user can write from the browser, so it is used only for solo
+  // rows, where `profile_id` already limits it to rows this account entered.
   registrationEmail?: string | null;
   email: string;
   fullName: string;
@@ -71,6 +76,7 @@ const claimPaperSoloRegistration = async (
     .select("id, email, full_name")
     .eq("profile_id", userId);
 
+  // A write decision, so the name must match too (registration-identity.ts).
   if (
     readError ||
     ((accountRows ?? []) as RiderIdentity[]).some((row) =>
@@ -271,13 +277,29 @@ export const syncRegistrationProfile = async ({
     await claimPaperSoloRegistration(serviceSupabase, userId, confirmedEmail.trim(), previousFullName);
   }
 
-  // The addresses the holder's own rows may hold, each with the name the
-  // account had before this edit.
-  const previousEmails = [previousEmail, registrationEmail].filter(
-    (address): address is string => typeof address === "string" && address.trim() !== ""
-  );
-  const isHoldersOwn = (row: RiderIdentity) =>
-    previousEmails.some((address) =>
+  const present = (address: string | null | undefined): address is string =>
+    typeof address === "string" && address.trim() !== "";
+
+  // Solo rows: the account's confirmed address or the remembered older one,
+  // each with the name the account had before this edit. Safe for the
+  // remembered address only because every solo row read here already belongs
+  // to this account (profile_id).
+  const soloEmails = [previousEmail, registrationEmail].filter(present);
+  // Writes never relax the name, not even for the account's only row: that
+  // row may be a child entered under a parent's email (registration-identity.ts).
+  const isHoldersOwnSolo = (row: RiderIdentity) =>
+    soloEmails.some((address) =>
+      isOwnRegistration(row, { email: address, full_name: previousFullName })
+    );
+
+  // Team rows have no account id, so the email is all that ties them to a
+  // person. Only addresses Supabase Auth has confirmed for this account may
+  // find them, never the remembered registration_email: that is user-writable
+  // metadata, and with it anyone who knew a rider's email and name could have
+  // that rider's team row rewritten with their own details.
+  const teamEmails = [...new Set([previousEmail, syncEmail ? email : null].filter(present))];
+  const isHoldersOwnTeam = (row: RiderIdentity) =>
+    teamEmails.some((address) =>
       isOwnRegistration(row, { email: address, full_name: previousFullName })
     );
 
@@ -291,7 +313,7 @@ export const syncRegistrationProfile = async ({
     .select("id, email, full_name")
     .eq("profile_id", userId);
   const ownSoloIds = ((accountRows ?? []) as Array<RiderIdentity & { id: string }>)
-    .filter(isHoldersOwn)
+    .filter(isHoldersOwnSolo)
     .map((row) => row.id);
 
   if (accountRowsError) {
@@ -321,7 +343,7 @@ export const syncRegistrationProfile = async ({
   // the new address is confirmed.
   const memberIds = new Set<string>();
 
-  for (const address of previousEmails) {
+  for (const address of teamEmails) {
     const { data: candidates, error: candidatesError } = await serviceSupabase
       .from("team_members")
       .select("id, email, full_name")
@@ -335,7 +357,7 @@ export const syncRegistrationProfile = async ({
     }
 
     for (const row of (candidates ?? []) as Array<RiderIdentity & { id: string }>) {
-      if (isHoldersOwn(row)) {
+      if (isHoldersOwnTeam(row)) {
         memberIds.add(row.id);
       }
     }

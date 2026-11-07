@@ -1,6 +1,7 @@
-// Solo registration form: prefilled from the account (locked for a regular
-// player's own first entry; blank apart from email and phone when the account
-// is entering another rider), autosaved to registration_drafts while typing,
+// Solo registration form: a regular player's first entry is prefilled from
+// the account (name, age and location editable, so a parent can enter a
+// child; email and phone locked to the account), blank when the account is
+// entering another rider, autosaved to registration_drafts while typing, and
 // submitted straight to solo_registrations under RLS.
 "use client";
 
@@ -14,6 +15,7 @@ import {
   type SoloDraftData,
 } from "@/lib/registration-drafts";
 import { isValidEmail } from "@/lib/email-address";
+import { normaliseIdentityText } from "@/lib/registration-identity";
 import { createClient } from "@/lib/supabase/client";
 import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
 
@@ -83,17 +85,28 @@ const draftStatusText = {
 
 export default function RegisterForm({
   initialValues,
-  lockProfileFields = false,
+  lockContactFields = false,
+  holderName = null,
   initialDraft,
   initialHeadshotPath = null,
   showHeadshot = true,
+  ownContactNote = false,
 }: {
   initialValues?: InitialValues;
-  lockProfileFields?: boolean;
+  /* Email and phone follow the account on a regular player's first entry. */
+  lockContactFields?: boolean;
+  /* The account holder's name, when the form starts with the account's
+     details. Name, age and location stay editable (the rider may be someone
+     else); the photo box, which writes the account's own photo, shows only
+     while the name is still the holder's. */
+  holderName?: string | null;
   initialDraft?: SoloDraftData | null;
   /* False when this rider is not the account holder: the photo box writes
      the account's own photo, which would then belong to the wrong rider. */
   showHeadshot?: boolean;
+  /* True for another rider: the database still refuses an email or phone that
+     is already registered, so each rider needs their own for now. */
+  ownContactNote?: boolean;
   /* The headshot lives on the account rather than the registration, so it is
      not part of the autosaved draft — it is already uploaded and recorded in
      Auth metadata by the time the form is submitted. */
@@ -111,22 +124,22 @@ export default function RegisterForm({
   ) => (locked ? accountValue : draftValue ?? accountValue);
 
   const [fullName, setFullName] = useState(() =>
-    restore(lockProfileFields, initialValues?.full_name ?? "", initialDraft?.fullName)
+    restore(false, initialValues?.full_name ?? "", initialDraft?.fullName)
   );
   // Not account fields, so never locked: always resume from the draft.
   const [fatherName, setFatherName] = useState(() => initialDraft?.fatherName ?? "");
   const [motherName, setMotherName] = useState(() => initialDraft?.motherName ?? "");
   const [age, setAge] = useState(() =>
-    restore(lockProfileFields, numberToInputValue(initialValues?.age), initialDraft?.age)
+    restore(false, numberToInputValue(initialValues?.age), initialDraft?.age)
   );
   const [location, setLocation] = useState(() =>
-    restore(lockProfileFields, initialValues?.location ?? "", initialDraft?.location)
+    restore(false, initialValues?.location ?? "", initialDraft?.location)
   );
   const [phone, setPhone] = useState(() =>
-    restore(lockProfileFields, initialValues?.phone ?? "", initialDraft?.phone)
+    restore(lockContactFields, initialValues?.phone ?? "", initialDraft?.phone)
   );
   const [email, setEmail] = useState(() =>
-    restore(lockProfileFields, initialValues?.email ?? "", initialDraft?.email)
+    restore(lockContactFields, initialValues?.email ?? "", initialDraft?.email)
   );
   const [yearsExperience, setYearsExperience] = useState(
     () =>
@@ -372,16 +385,26 @@ export default function RegisterForm({
     </div>
   );
 
+  // Compared as the user types, normalised like the own-registration rule.
+  const riderIsHolder =
+    holderName === null || normaliseIdentityText(fullName) === normaliseIdentityText(holderName);
+  const headshotShown = showHeadshot && riderIsHolder;
+
   const renderRiderDetails = () => (
     <div className="space-y-6">
       <div>
+        {holderName !== null && (
+          <p className="mb-4 text-sm leading-6 text-brown/85">
+            These are your account details. Registering someone else? Change them to the
+            rider&apos;s.
+          </p>
+        )}
         <label className={labelClassName}>Full Name</label>
         <input
           type="text"
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
-          readOnly={lockProfileFields}
-          className={lockProfileFields ? lockedInputClassName : inputClassName}
+          className={inputClassName}
         />
       </div>
 
@@ -422,35 +445,30 @@ export default function RegisterForm({
           value={age}
           onChange={(e) => setAge(e.target.value)}
           min={1}
-          readOnly={lockProfileFields}
-          className={lockProfileFields ? lockedInputClassName : inputClassName}
+          className={inputClassName}
         />
       </div>
 
       <div>
         <label className={labelClassName}>Location</label>
-        {lockProfileFields ? (
-          <input
-            type="text"
-            value={location}
-            readOnly
-            className={lockedInputClassName}
-          />
-        ) : (
-          <div className="mt-2">
-            <LocationPicker value={location} onChange={setLocation} />
-          </div>
-        )}
+        <div className="mt-2">
+          <LocationPicker value={location} onChange={setLocation} />
+        </div>
       </div>
 
       <div>
+        {ownContactNote && (
+          <p className="mb-4 text-sm leading-6 text-brown/85">
+            For now each rider needs their own email address and phone number.
+          </p>
+        )}
         <label className={labelClassName}>Phone Number</label>
         <input
           type="tel"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
-          readOnly={lockProfileFields}
-          className={lockProfileFields ? lockedInputClassName : inputClassName}
+          readOnly={lockContactFields}
+          className={lockContactFields ? lockedInputClassName : inputClassName}
         />
       </div>
 
@@ -460,12 +478,12 @@ export default function RegisterForm({
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          readOnly={lockProfileFields}
-          className={lockProfileFields ? lockedInputClassName : inputClassName}
+          readOnly={lockContactFields}
+          className={lockContactFields ? lockedInputClassName : inputClassName}
         />
       </div>
 
-      {showHeadshot && (
+      {headshotShown && (
         <div className="rounded-lg border border-bronze/25 bg-sand p-5">
           <HeadshotUpload
             initialPath={initialHeadshotPath}

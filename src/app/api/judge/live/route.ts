@@ -7,6 +7,12 @@
 // called_pool_label, display_mode, message) are applied, and the database
 // checks that a run belongs to the live round and is still to ride. Returns
 // the new live state and the fresh judge state.
+//
+// `start: true` (the big Start button, never "Put on course") is refused with
+// 409 when a different rider is already on course: the panel that sent it was
+// out of date, and replacing that rider silently would lose their ride.
+// Starting the rider who is already on course changes nothing, so a retried
+// Start after a timeout is safe.
 import { createServiceRoleClient } from "@/lib/admin/server";
 import { verifyRoleRequest } from "@/lib/scoring/auth";
 import {
@@ -15,6 +21,7 @@ import {
   jsonNoStore,
   readJsonBody,
 } from "@/lib/scoring/http";
+import { SampleRefusal } from "@/lib/scoring/sample-engine";
 import { resolveSampleAccess, sampleWriteResponse } from "@/lib/scoring/sample-mode";
 import { setLive, sampleJudgeState } from "@/lib/scoring/sample-session";
 import { buildJudgeStateAfterWrite } from "@/lib/scoring/server";
@@ -28,12 +35,57 @@ const changesScreens = (value: LiveUpdateRequest) =>
   Object.prototype.hasOwnProperty.call(value, "display_mode") ||
   Object.prototype.hasOwnProperty.call(value, "message");
 
+/* The Start flag rides alongside the update and is never sent to the
+   database function. */
+const isStartRequest = (raw: unknown) =>
+  typeof raw === "object" && raw !== null && (raw as { start?: unknown }).start === true;
+
+const alreadyOnCourse = (name: string) => `${name} is already on course. Refresh and check.`;
+
+/* The rider a Start would replace, or null when it is safe. */
+const startBlockedBy = (
+  start: boolean,
+  update: LiveUpdateRequest,
+  onCourseRunId: string | null | undefined
+) =>
+  start &&
+  typeof update.current_run_id === "string" &&
+  onCourseRunId != null &&
+  onCourseRunId !== update.current_run_id
+    ? onCourseRunId
+    : null;
+
+/* The same Start check on the practice session: refused like the real route
+   (a 409 through SampleRefusal), otherwise the update to apply. */
+const checkTrainingStart = async (
+  session: string,
+  { update, start }: { update: LiveUpdateRequest; start: boolean }
+) => {
+  if (start) {
+    const before = await sampleJudgeState(session);
+
+    if (startBlockedBy(start, update, before.live?.current_run_id)) {
+      throw new SampleRefusal(
+        "22023",
+        alreadyOnCourse(before.current_run?.rider_name ?? "Another rider")
+      );
+    }
+  }
+
+  return update;
+};
+
 /* Training is the judges' panel only, so it never changes the screens. */
 const parseJudgeLiveUpdate = (raw: unknown) => {
   const parsed = parseLiveUpdateRequest(raw);
-  return parsed.ok && changesScreens(parsed.value)
+
+  if (!parsed.ok) {
+    return parsed;
+  }
+
+  return changesScreens(parsed.value)
     ? { ok: false as const, error: JUDGE_SCREENS_REFUSAL }
-    : parsed;
+    : { ok: true as const, value: { update: parsed.value, start: isStartRequest(raw) } };
 };
 
 export const dynamic = "force-dynamic";
@@ -54,7 +106,11 @@ export async function POST(request: Request) {
 
   if (training.kind === "training") {
     return sampleWriteResponse(request, parseJudgeLiveUpdate, async (value) => ({
-      live: await setLive(training.session, value, training.actor ?? null),
+      live: await setLive(
+        training.session,
+        await checkTrainingStart(training.session, value),
+        training.actor ?? null
+      ),
       state: await sampleJudgeState(training.session),
     }));
   }
@@ -82,6 +138,39 @@ export async function POST(request: Request) {
   }
 
   const serviceSupabase = createServiceRoleClient();
+
+  // Start: read who is on course first (see the top of this file).
+  if (isStartRequest(body.body)) {
+    const { data: liveRow, error: liveError } = await serviceSupabase
+      .from("scoring_live_state")
+      .select("current_run_id")
+      .eq("id", true)
+      .maybeSingle();
+
+    if (liveError) {
+      return databaseErrorResponse(liveError, "read live");
+    }
+
+    const blockingRunId = startBlockedBy(
+      true,
+      parsed.value,
+      (liveRow?.current_run_id as string | null | undefined) ?? null
+    );
+
+    if (blockingRunId) {
+      const { data: blockingRun } = await serviceSupabase
+        .from("scoring_runs")
+        .select("rider_name")
+        .eq("id", blockingRunId)
+        .maybeSingle();
+
+      return jsonError(
+        alreadyOnCourse((blockingRun?.rider_name as string | undefined) ?? "Another rider"),
+        409
+      );
+    }
+  }
+
   const { data, error } = await serviceSupabase.rpc("scoring_set_live", {
     p_payload: parsed.value,
     p_actor_id: access.actor.id,
