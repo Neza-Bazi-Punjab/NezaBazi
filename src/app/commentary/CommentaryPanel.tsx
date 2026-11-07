@@ -4,9 +4,16 @@
    in landscape at the commentary table. Who is on course with everything an
    announcer needs to introduce them, how their pool stands, how far the round
    has got, and who and which pool come next. Read-only. Below 1280px the
-   three columns stack into one. */
+   three columns stack into one.
+
+   Stacked (below `xl`), the columns' blocks are reordered with CSS order
+   classes into what a commentator reads between runs: on course, next
+   riders, round progress, recent results, standings, all pools; the
+   standings keep to one pool with a "Show all pools" toggle. On a phone
+   (below `sm`) the name and the standings rows are sized so a full name fits.
+   From `xl` up nothing changes. */
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   DISPLAY_MODE_CHOICES,
   normalizeCommentaryState,
@@ -45,6 +52,17 @@ const COMMENTARY_STATE_URL = "/api/commentary/state";
 
 const label = "mono text-[11px] uppercase text-[var(--ledger-muted)]";
 const sectionTitle = "border-t-[3px] border-[var(--ledger-rule)] pt-2 text-[16px] font-bold uppercase";
+
+/* Where each block sits when the columns stack (below `xl`); at `xl` every
+   block goes back to its place in its column. */
+const STACK_ORDER = {
+  next: "order-1 xl:order-none",
+  progress: "order-2 xl:order-none",
+  recent: "order-3 xl:order-none",
+  standings: "order-4 xl:order-none",
+  pools: "order-5 xl:order-none",
+  practice: "order-6 xl:order-none",
+} as const;
 
 /* Result colours on this screen: carried green, struck ink, miss faded. */
 const RESULT_COLOUR: Record<RunResult, string> = {
@@ -156,6 +174,8 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
   const stateUrl = training ? `${COMMENTARY_STATE_URL}?sample=1` : COMMENTARY_STATE_URL;
   const { data, error, connection, refetch } = useLiveState<CommentaryState>(stateUrl);
   const state = useMemo(() => normalizeCommentaryState(data), [data]);
+  /* Stacked layout only: the standings of every pool, not just the current one. */
+  const [allPools, setAllPools] = useState(false);
 
   /* Derived view of the round ------------------------------------------- */
 
@@ -218,6 +238,15 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
       (firstRide.get(b.entrant_key) ?? Number.MAX_SAFE_INTEGER)
   );
   const upNext = (state?.up_next ?? []).filter((run) => run.id !== currentRun?.id).slice(0, 3);
+  /* Stacked layout: the one pool the standings show until "Show all pools":
+     the pool riding or called, else the next one, else the first listed.
+     When a pool is riding the full list is that pool already, so nothing is
+     hidden; when none is, the full list is every pool. */
+  const stackedPool = standingsPool ?? nextBlock?.pool ?? standings[0]?.pool_label ?? null;
+  const hiddenWhenStacked = (row: { pool_label: string | null }) =>
+    !allPools && stackedPool !== null && row.pool_label !== stackedPool;
+  const stackedHides = standings.some(hiddenWhenStacked);
+  const nextEntrant = upNext[0]?.entrant_key ?? null;
   const roundText = (attempt: number | null | undefined) =>
     manyAttempts && attempt ? `Round ${attempt}` : null;
   const where = (run: Pick<ScoringRun, "pool_label" | "attempt_number">, short = false) =>
@@ -310,10 +339,21 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
       ["Horse", horse || null],
     ];
     const roundComplete = runs.length > 0 && done === total;
-    /* Rider | R1 R2 R3 | Status, or Rider | Pts | Status. */
+    /* Rider | R1 R2 R3 | Status, or Rider | Pts | Status. On a phone the
+       boxes shrink to 26px and the status to a short tag, so the name gets
+       the room. Both go in as CSS variables for the grid classes below. */
     const standingColumns = manyAttempts
       ? `22px minmax(0,1fr) repeat(${attempts},34px) minmax(0,130px)`
       : "22px minmax(0,1fr) 48px minmax(0,130px)";
+    const phoneStandingColumns = manyAttempts
+      ? `22px minmax(0,1fr) repeat(${attempts},26px) auto`
+      : "22px minmax(0,1fr) 26px auto";
+    const standingGrid = {
+      "--standing-cols": standingColumns,
+      "--standing-cols-phone": phoneStandingColumns,
+    } as React.CSSProperties;
+    const standingGridClass =
+      "grid-cols-[var(--standing-cols-phone)] gap-1.5 sm:grid-cols-[var(--standing-cols)] sm:gap-2";
     const rule = round.event_type === "single"
       ? "Carried (4) = through"
       : round.target_points !== null
@@ -321,7 +361,7 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
         : null;
 
     body = (
-      <div className="grid min-h-0 flex-1 gap-8 xl:grid-cols-[1.15fr_1fr_320px]">
+      <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[1.15fr_1fr_320px] xl:gap-8">
         {/* Rider on course ------------------------------------------------ */}
         <section
           aria-labelledby="rider-name"
@@ -334,7 +374,7 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
           </span>
           <h1
             id="rider-name"
-            className="break-words text-[48px] font-bold uppercase leading-[0.92] tracking-[-0.02em] sm:text-[60px] xl:text-[72px]"
+            className="break-words text-[36px] font-bold uppercase leading-[0.92] tracking-[-0.02em] sm:text-[60px] xl:text-[72px]"
           >
             {currentRun
               ? (rider?.full_name ?? currentRun.rider_name)
@@ -377,20 +417,31 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
         </section>
 
         {/* Pool standings and round progress ------------------------------ */}
+        {/* Stacked, this column's blocks join the page's grid (contents) so
+            the order classes can place them among the others. */}
         <section
           aria-labelledby="standings-title"
-          className="flex min-w-0 flex-col gap-3 xl:overflow-y-auto xl:pb-6"
+          className="flex min-w-0 flex-col gap-3 max-xl:contents xl:overflow-y-auto xl:pb-6"
         >
-          <div className="flex items-baseline justify-between gap-3 border-b-[3px] border-[var(--ledger-rule)] pb-1.5">
+          <div className={`flex items-baseline justify-between gap-3 border-b-[3px] border-[var(--ledger-rule)] pb-1.5 ${STACK_ORDER.standings}`}>
             <h2 id="standings-title" className="text-[22px] font-bold uppercase">
-              {standingsPool ? `Pool ${standingsPool} standings` : "Standings"}
+              {standingsPool ? (
+                `Pool ${standingsPool} standings`
+              ) : stackedHides ? (
+                <>
+                  <span className="xl:hidden">Pool {stackedPool} standings</span>
+                  <span className="max-xl:hidden">Standings</span>
+                </>
+              ) : (
+                "Standings"
+              )}
             </h2>
             {rule && <span className="mono text-[11px] uppercase text-[var(--ledger-muted)]">{rule}</span>}
           </div>
 
           <div
-            className="mono grid gap-2 px-1 text-[10px] uppercase text-[var(--ledger-muted)]"
-            style={{ gridTemplateColumns: standingColumns }}
+            className={`mono grid px-1 text-[10px] uppercase text-[var(--ledger-muted)] ${standingGridClass} ${STACK_ORDER.standings}`}
+            style={standingGrid}
           >
             <span className="text-right">#</span>
             <span>{standings.some((row) => row.entrant_key.startsWith("team:")) ? "Team" : "Rider"}</span>
@@ -400,35 +451,38 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
             <span>Status</span>
           </div>
 
-          <div className="flex flex-col">
+          <div id="standings-rows" className={`flex flex-col ${STACK_ORDER.standings}`}>
             {standings.length === 0 && (
               <p className="px-1 py-2 text-[var(--ledger-muted)]">No standings yet.</p>
             )}
             {standings.map((row, index) => {
               const onCourse = currentRun?.entrant_key === row.entrant_key;
-              const [status, colour] =
+              /* [words, phone tag, colour]: the tag is what fits a phone. */
+              const [status, tag, colour] =
                 row.advanced === true
-                  ? ["Through", "text-[var(--ledger-green)]"]
+                  ? ["Through", "Through", "text-[var(--ledger-green)]"]
                   : row.advanced === false
-                    ? ["Out", "text-[var(--ledger-red)]"]
+                    ? ["Out", "Out", "text-[var(--ledger-red)]"]
                     : onCourse
-                      ? ["Riding now", "text-[var(--ledger-bronze)]"]
-                      : ["Still riding", "text-[var(--ledger-ink)]"];
+                      ? ["Riding now", "Riding", "text-[var(--ledger-bronze)]"]
+                      : nextEntrant === row.entrant_key
+                        ? ["Still riding", "Next", "text-[var(--ledger-ink)]"]
+                        : ["Still riding", "—", "text-[var(--ledger-ink)]"];
 
               return (
                 <div
                   key={row.entrant_key}
-                  className={`grid items-center gap-2 border-b border-[var(--ledger-hair)] px-1 py-1.5 ${
+                  className={`grid items-center border-b border-[var(--ledger-hair)] px-1 py-1.5 ${standingGridClass} ${
                     onCourse ? "bg-[var(--ledger-hl)]" : ""
-                  }`}
-                  style={{ gridTemplateColumns: standingColumns }}
+                  } ${hiddenWhenStacked(row) ? "max-xl:hidden" : ""}`}
+                  style={standingGrid}
                 >
                   {/* Riding order in the pool (standings are listed in it). */}
                   <span className="mono text-right text-[13px] text-[var(--ledger-muted)]">{index + 1}</span>
                   <span className="flex min-w-0 flex-col">
-                    <span className="truncate text-[18px] font-semibold">{row.name}</span>
+                    <span className="truncate text-[15px] font-semibold sm:text-[18px]">{row.name}</span>
                     {row.team_name && row.team_name !== row.name && (
-                      <span className="truncate text-[13px] text-[var(--ledger-muted)]">{row.team_name}</span>
+                      <span className="truncate text-[12px] text-[var(--ledger-muted)] sm:text-[13px]">{row.team_name}</span>
                     )}
                   </span>
                   {manyAttempts ? (
@@ -438,24 +492,42 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
                       return (
                         <span
                           key={index}
-                          className={`mono flex h-[34px] items-center justify-center border text-[15px] font-semibold ${cell.className}`}
+                          className={`mono flex h-[26px] items-center justify-center border text-[13px] font-semibold sm:h-[34px] sm:text-[15px] ${cell.className}`}
                         >
                           {cell.text}
                         </span>
                       );
                     })
                   ) : (
-                    <span className="mono flex h-[34px] items-center justify-center border border-[var(--ledger-chip)] bg-[var(--ledger-panel)] text-[15px] font-semibold">
+                    <span className="mono flex h-[26px] items-center justify-center border border-[var(--ledger-chip)] bg-[var(--ledger-panel)] text-[13px] font-semibold sm:h-[34px] sm:text-[15px]">
                       {row.points}
                     </span>
                   )}
-                  <span className={`mono text-[12px] font-semibold uppercase ${colour}`}>{status}</span>
+                  <span className={`mono text-[10px] font-semibold uppercase sm:text-[12px] ${colour}`}>
+                    <span aria-hidden="true" className="sm:hidden">
+                      {tag}
+                    </span>
+                    <span className="max-sm:sr-only">{status}</span>
+                  </span>
                 </div>
               );
             })}
           </div>
 
-          <div className="mt-auto flex flex-col gap-1.5 border-t-[3px] border-[var(--ledger-rule)] pt-2.5">
+          {/* Stacked only: the other pools' standings on request. */}
+          {(stackedHides || allPools) && (
+            <button
+              type="button"
+              aria-expanded={allPools}
+              aria-controls="standings-rows"
+              onClick={() => setAllPools((open) => !open)}
+              className={`mono min-h-11 border-2 border-[var(--ledger-ink)] bg-transparent px-4 text-[13px] font-semibold uppercase xl:hidden ${STACK_ORDER.standings}`}
+            >
+              {allPools ? `Show Pool ${stackedPool} only` : "Show all pools"}
+            </button>
+          )}
+
+          <div className={`mt-auto flex flex-col gap-1.5 border-t-[3px] border-[var(--ledger-rule)] pt-2.5 ${STACK_ORDER.progress}`}>
             <span id="progress-title" className={label}>
               Round progress
             </span>
@@ -485,8 +557,10 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
         </section>
 
         {/* Next riders, next pool, recent results, all pools -------------- */}
-        <aside className="-mx-4 flex min-w-0 flex-col gap-3 border-t-[3px] border-[var(--ledger-rule)] bg-[var(--ledger-side)] px-4 pb-6 pt-4 xl:-mr-9 xl:ml-0 xl:overflow-y-auto xl:border-l-[3px] xl:border-t-0 xl:pl-6 xl:pr-9 xl:pt-0">
-          <div className="flex flex-col gap-1">
+        {/* Stacked, like the standings column: its blocks join the page's
+            grid and take their places by order. */}
+        <aside className="-mx-4 flex min-w-0 flex-col gap-3 border-t-[3px] border-[var(--ledger-rule)] bg-[var(--ledger-side)] px-4 pb-6 pt-4 max-xl:contents xl:-mr-9 xl:ml-0 xl:overflow-y-auto xl:border-l-[3px] xl:border-t-0 xl:pl-6 xl:pr-9 xl:pt-0">
+          <div className={`flex flex-col gap-1 border-t-[3px] border-[var(--ledger-rule)] pt-2.5 xl:border-t-0 xl:pt-0 ${STACK_ORDER.next}`}>
             <span className={label}>
               {["Next riders", upNext[0] ? where(upNext[0]) : null].filter(Boolean).join(" · ")}
             </span>
@@ -512,7 +586,7 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
             )}
           </div>
 
-          <div className="flex items-baseline justify-between gap-3 border-t border-[var(--ledger-rule)] pt-2.5">
+          <div className={`flex items-baseline justify-between gap-3 border-t border-[var(--ledger-rule)] pt-2.5 ${STACK_ORDER.next}`}>
             <span className={label}>
               Next pool
               {roundText(nextBlock?.attempt) && (
@@ -527,11 +601,11 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
             </span>
           </div>
 
-          <h2 className={sectionTitle}>Recent results</h2>
+          <h2 className={`${sectionTitle} ${STACK_ORDER.recent}`}>Recent results</h2>
           {state.recent_results.length === 0 && (
-            <p className="text-[13px] text-[var(--ledger-muted)]">No results yet in this round.</p>
+            <p className={`text-[13px] text-[var(--ledger-muted)] ${STACK_ORDER.recent}`}>No results yet in this round.</p>
           )}
-          <div className="flex flex-col">
+          <div className={`flex flex-col ${STACK_ORDER.recent}`}>
             {state.recent_results.slice(0, 5).map((run) => (
               <div
                 key={run.id}
@@ -551,13 +625,15 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
 
           {poolRows.length > 0 && (
             <>
-              <h2 className={sectionTitle}>All pools</h2>
-              <PoolList pools={poolRows} rounds={manyAttempts} compact openPool={riding?.pool ?? null} />
+              <h2 className={`${sectionTitle} ${STACK_ORDER.pools}`}>All pools</h2>
+              <div className={`flex flex-col ${STACK_ORDER.pools}`}>
+                <PoolList pools={poolRows} rounds={manyAttempts} compact openPool={riding?.pool ?? null} />
+              </div>
             </>
           )}
 
           {/* Practise from home before event day; back again afterwards. */}
-          <p className="mt-auto pt-4">
+          <p className={`mt-auto pt-4 ${STACK_ORDER.practice}`}>
             <Link
               href={training ? "/commentary" : "/commentary/demo"}
               className="mono inline-flex min-h-11 items-center text-[12px] uppercase text-[var(--ledger-muted)] underline underline-offset-4"
@@ -608,6 +684,7 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
             round && total > 0 ? `${done}/${plural(total, "run")}` : null,
             screensText,
           ]}
+          phoneItems={[round && total > 0 ? `${done}/${plural(total, "run")}` : null]}
           connection={connection}
           liveWord="Live"
         />

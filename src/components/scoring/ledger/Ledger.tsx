@@ -4,7 +4,7 @@
    the top strip, the brown status bar, the round chips and the all-pools
    list. Layout, sizes and colours follow the design; the words come from
    the app. */
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { PoolState, PoolSummary, RoundChip } from "@/lib/scoring/blocks";
 import type { LiveConnection } from "@/lib/scoring/use-live-state";
 import { ledgerFontVariables } from "./fonts";
@@ -33,7 +33,8 @@ export function TopStrip({
   );
 }
 
-/* Small mono button in the top strip (Start list, Rounds, Screens). */
+/* Small mono button in the top strip (Start list, Rounds, Screens). 44px tall
+   on small screens so a thumb can hit it; the design's 32px from `sm` up. */
 export function StripButton({
   children,
   onClick,
@@ -48,7 +49,7 @@ export function StripButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="mono h-8 border border-[var(--ledger-ink)] bg-transparent px-3 text-[12px] uppercase active:bg-[var(--ledger-pick)] disabled:opacity-35"
+      className="mono min-h-11 border border-[var(--ledger-ink)] bg-transparent px-3 text-[12px] uppercase active:bg-[var(--ledger-pick)] disabled:opacity-35 sm:h-8 sm:min-h-0"
     >
       {children}
     </button>
@@ -70,32 +71,46 @@ function Clock() {
   return <span suppressHydrationWarning>{now ?? ""}</span>;
 }
 
-/* The brown bar along the bottom. */
+/* The brown bar along the bottom. `phoneItems`, when given, is the short list
+   small screens show instead of `items` (below `sm`), so the bar stays on one line
+   on a 375px screen; `items` then show from `sm` up. Without it the bar is
+   the same at every width. */
 export function StatusBar({
   role,
   items,
+  phoneItems,
   connection,
   liveWord = "Online",
   offlineNote,
 }: {
   role: string;
   items: (string | null | undefined | false)[];
+  phoneItems?: (string | null | undefined | false)[];
   connection: LiveConnection;
   liveWord?: string;
   offlineNote?: string;
 }) {
   const offline = connection === "offline";
+  const short = phoneItems !== undefined;
 
   return (
     <div
-      className={`mono flex min-h-8 flex-wrap items-center gap-x-7 gap-y-1 px-5 py-1.5 text-[12px] uppercase text-[var(--ledger-paper)] ${
-        offline ? "bg-[var(--ledger-red)]" : "bg-[var(--ledger-rule)]"
-      }`}
+      className={`mono flex min-h-8 flex-wrap items-center gap-y-1 py-1.5 text-[12px] uppercase text-[var(--ledger-paper)] ${
+        short ? "gap-x-3 px-3 sm:gap-x-7 sm:px-5" : "gap-x-7 px-5"
+      } ${offline ? "bg-[var(--ledger-red)]" : "bg-[var(--ledger-rule)]"}`}
     >
       <span className="text-[#f2b07a]">{role}</span>
       {items.filter(Boolean).map((item) => (
-        <span key={item as string}>{item}</span>
+        <span key={item as string} className={short ? "hidden sm:inline" : undefined}>
+          {item}
+        </span>
       ))}
+      {short &&
+        phoneItems.filter(Boolean).map((item) => (
+          <span key={`short-${item as string}`} className="sm:hidden">
+            {item}
+          </span>
+        ))}
       <span className="ml-auto" role="status">
         {/* "polling" still reaches the server, every few seconds instead of
             at once (training always polls), so it counts as connected. */}
@@ -172,29 +187,93 @@ const RIDER_STATUS: Record<NonNullable<PoolSummary["entrants"][number]["status"]
 };
 
 /* All pools: "Pool A 1/6 through" and its state, then the riders. `compact`
-   is the commentary column (smaller type; only `openPool` lists its riders). */
+   is the commentary column (smaller type; only `openPool` lists its riders).
+
+   `collapsible` is the judges' panel on small screens: below `lg` each pool's
+   heading becomes a full-width button (aria-expanded) that shows or hides its
+   riders, so thirty riders do not make the page endless. `openPool` (the pool
+   on course, or the called pool) starts open and the rest closed; a tap
+   overrides that for the pool tapped. From `lg` up the button is not shown and
+   the list is exactly the plain one, every pool's riders listed. */
 export function PoolList({
   pools,
   rounds,
   compact = false,
   openPool,
+  collapsible = false,
 }: {
   pools: PoolSummary[];
   rounds: boolean;
   compact?: boolean;
   openPool?: string | null;
+  collapsible?: boolean;
 }) {
+  /* Pools a judge has opened or closed by hand; the rest follow `openPool`. */
+  const [toggled, setToggled] = useState<Record<string, boolean>>({});
+  const listId = useId();
+
   return (
     <div className="flex flex-col gap-3.5">
       {pools.map((summary) => {
         const showRiders = !compact || summary.pool === openPool;
+        const expanded = toggled[summary.pool] ?? summary.pool === openPool;
+        const ridersId = `${listId}-pool-${summary.pool}`;
+        const riderRows =
+          showRiders &&
+          summary.entrants.map((entrant, index) => {
+            const [text, colour] = entrant.status ? RIDER_STATUS[entrant.status] : ["", ""];
+
+            return (
+              <div
+                key={entrant.entrant_key}
+                className={`grid gap-2 ${compact ? "grid-cols-[18px_minmax(0,1fr)_auto]" : "grid-cols-[22px_minmax(0,1fr)_auto]"} ${
+                  compact ? "py-px text-[12px]" : "px-1 py-[3px] text-[14px]"
+                } ${entrant.status === "riding" ? "bg-[var(--ledger-hl)]" : ""}`}
+              >
+                {/* Riding order in the pool: the same on every panel. */}
+                <span className="mono self-center text-right text-[11px] text-[var(--ledger-muted)]">
+                  {index + 1}
+                </span>
+                <span className="truncate">{entrant.name}</span>
+                <span
+                  className={`mono font-semibold uppercase ${compact ? "text-[10px]" : "text-[11px]"} ${colour}`}
+                >
+                  {text}
+                </span>
+              </div>
+            );
+          });
 
         return (
           <section key={summary.pool} aria-label={`Pool ${summary.pool}`} className="flex flex-col">
+            {collapsible && (
+              <button
+                type="button"
+                aria-expanded={expanded}
+                aria-controls={ridersId}
+                onClick={() => setToggled((current) => ({ ...current, [summary.pool]: !expanded }))}
+                className="flex min-h-11 w-full items-center justify-between gap-2 border-b border-[var(--ledger-rule)] bg-transparent py-1 text-left text-[15px] lg:hidden"
+              >
+                <span className="font-bold uppercase">
+                  Pool {summary.pool}{" "}
+                  <span className="mono text-[11px] font-medium text-[var(--ledger-green)]">
+                    {summary.through}/{summary.size} through
+                  </span>
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className={`mono text-[11px] uppercase ${poolStateColour(summary.state)}`}>
+                    {poolStateText(summary.state, rounds)}
+                  </span>
+                  <span aria-hidden="true" className="mono text-[13px]">
+                    {expanded ? "▾" : "▸"}
+                  </span>
+                </span>
+              </button>
+            )}
             <div
               className={`flex items-baseline justify-between gap-2 ${
                 compact ? "text-[13px]" : "border-b border-[var(--ledger-rule)] pb-[3px] text-[15px]"
-              }`}
+              } ${collapsible ? "max-lg:hidden" : ""}`}
             >
               <span className="font-bold uppercase">
                 Pool {summary.pool}{" "}
@@ -208,30 +287,13 @@ export function PoolList({
                 {poolStateText(summary.state, rounds)}
               </span>
             </div>
-            {showRiders &&
-              summary.entrants.map((entrant, index) => {
-                const [text, colour] = entrant.status ? RIDER_STATUS[entrant.status] : ["", ""];
-
-                return (
-                  <div
-                    key={entrant.entrant_key}
-                    className={`grid gap-2 ${compact ? "grid-cols-[18px_minmax(0,1fr)_auto]" : "grid-cols-[22px_minmax(0,1fr)_auto]"} ${
-                      compact ? "py-px text-[12px]" : "px-1 py-[3px] text-[14px]"
-                    } ${entrant.status === "riding" ? "bg-[var(--ledger-hl)]" : ""}`}
-                  >
-                    {/* Riding order in the pool: the same on every panel. */}
-                    <span className="mono self-center text-right text-[11px] text-[var(--ledger-muted)]">
-                      {index + 1}
-                    </span>
-                    <span className="truncate">{entrant.name}</span>
-                    <span
-                      className={`mono font-semibold uppercase ${compact ? "text-[10px]" : "text-[11px]"} ${colour}`}
-                    >
-                      {text}
-                    </span>
-                  </div>
-                );
-              })}
+            {collapsible ? (
+              <div id={ridersId} className={`flex flex-col ${expanded ? "" : "max-lg:hidden"}`}>
+                {riderRows}
+              </div>
+            ) : (
+              riderRows
+            )}
           </section>
         );
       })}
