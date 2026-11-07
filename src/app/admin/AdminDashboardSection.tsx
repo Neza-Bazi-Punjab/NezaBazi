@@ -14,7 +14,11 @@ import AdminDashboard, {
   type TeamMember,
 } from "./AdminDashboard";
 import { AdminAccessMessage, getAdminAccess } from "./admin-access";
-import { loadSoloHeadshots, type SoloHeadshot } from "@/lib/admin/headshot-urls";
+import {
+  loadAuthUserIndex,
+  matchSoloHeadshots,
+  type SoloHeadshot,
+} from "@/lib/admin/headshot-urls";
 
 const getMetadataString = (metadata: object | null | undefined, key: string) => {
   if (!metadata || !(key in metadata)) {
@@ -67,6 +71,45 @@ export default async function AdminDashboardSection({
   };
   const none = Promise.resolve({ data: [] as unknown[] });
 
+  /* The account listing (up to 1000 users, from the Auth server) does not
+     depend on the rows, so it starts now, alongside the database reads,
+     instead of waiting for them. Only after the administrator check above,
+     and only on the pages that use it. Neither load ever rejects: a failure
+     only means no thumbnails or no actor names. */
+  const soloService = needs.solo ? createServiceRoleClient() : null;
+  const authUserIndexLoad = soloService ? loadAuthUserIndex(soloService) : null;
+
+  // The account list only puts names to the audit log's actors. A thrown
+  // failure is caught like a returned one, so starting it early can never
+  // leave an unhandled rejection behind.
+  const auditActorsLoad = (async (): Promise<AuditActor[]> => {
+    if (needs.audit) {
+      const { data: usersData, error: usersError } =
+        await createServiceRoleClient().auth.admin.listUsers({
+          page: 1,
+          perPage: 1000,
+        });
+
+      if (usersError) {
+        console.error("Unable to load admin audit actor lookup", usersError);
+      }
+
+      return (
+        usersData?.users.map((authUser) => ({
+          id: authUser.id,
+          email: authUser.email ?? "",
+          full_name: getMetadataString(authUser.user_metadata, "full_name"),
+          phone: getMetadataString(authUser.user_metadata, "phone"),
+        })) ?? []
+      );
+    }
+
+    return [];
+  })().catch((error: unknown): AuditActor[] => {
+    console.error("Unable to load admin audit actor lookup", error);
+    return [];
+  });
+
   const [
     { data: soloRegistrations },
     { data: teams },
@@ -101,35 +144,15 @@ export default async function AdminDashboardSection({
      signing goes through the service role like every other staff screen. */
   let soloHeadshots: Record<string, SoloHeadshot> = {};
 
-  if (needs.solo) {
-    soloHeadshots = await loadSoloHeadshots(
-      createServiceRoleClient(),
-      (soloRegistrations ?? []) as SoloRegistration[]
+  if (soloService && authUserIndexLoad) {
+    soloHeadshots = await matchSoloHeadshots(
+      await authUserIndexLoad,
+      (soloRegistrations ?? []) as SoloRegistration[],
+      soloService
     );
   }
 
-  // The account list only puts names to the audit log's actors.
-  let auditActors: AuditActor[] = [];
-
-  if (needs.audit) {
-    const { data: usersData, error: usersError } =
-      await createServiceRoleClient().auth.admin.listUsers({
-        page: 1,
-        perPage: 1000,
-      });
-
-    if (usersError) {
-      console.error("Unable to load admin audit actor lookup", usersError);
-    }
-
-    auditActors =
-      usersData?.users.map((authUser) => ({
-        id: authUser.id,
-        email: authUser.email ?? "",
-        full_name: getMetadataString(authUser.user_metadata, "full_name"),
-        phone: getMetadataString(authUser.user_metadata, "phone"),
-      })) ?? [];
-  }
+  const auditActors = await auditActorsLoad;
 
   return (
     <>

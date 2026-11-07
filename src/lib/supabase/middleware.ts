@@ -24,8 +24,18 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // This call refreshes the token if it's expired
-  await supabase.auth.getUser()
+  // Refreshes the session if its token has expired (getClaims reads the
+  // session through getSession, which swaps an expired token for a new one
+  // and writes the new cookies through setAll above). The token itself is
+  // then checked locally against the project's cached signing key, so a
+  // menu click no longer waits on a round trip to the Auth server here.
+  // Nothing is decided from the result: every page and route checks the
+  // session again itself. A malformed token must not break the request.
+  try {
+    await supabase.auth.getClaims()
+  } catch {
+    // Treated as signed out by the page or route that checks it.
+  }
 
   return supabaseResponse
 }
