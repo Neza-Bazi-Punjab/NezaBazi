@@ -4,7 +4,7 @@ A record of speed work on the site: what changed, how it was measured, and the r
 
 ## Admin clicks stop waiting on the Auth server (6 Nov 2026)
 
-**Branch:** `feat/phone-panels-admin-speed` · **Files:** `src/lib/supabase/middleware.ts`, `src/app/admin/admin-access.tsx`, `src/lib/admin/server.ts`, `src/lib/scoring/auth.ts`, `src/app/admin/loading.tsx`, `src/app/admin/AdminDashboardSection.tsx`, `src/lib/admin/headshot-urls.ts`, `vercel.json`
+**Branch:** `feat/phone-panels-admin-speed` · **Files:** `src/lib/supabase/middleware.ts`, `src/app/admin/admin-access.tsx`, `src/lib/admin/server.ts`, `src/lib/scoring/auth.ts`, `src/app/admin/loading.tsx`, `src/app/admin/AdminDashboardSection.tsx`, `src/lib/admin/headshot-urls.ts`
 
 The organisers reported about two seconds between each click on the admin dashboard.
 
@@ -25,7 +25,6 @@ On a full load or after a save (`router.refresh()`), the admin layout made its o
 - **One check per request.** `getAdminAccess` is wrapped in React's `cache()`, so the layout and the page share one check and one `profiles` read.
 - **An instant loading state.** `src/app/admin/loading.tsx` shows the page heading's outline and three muted bars (no words or numbers) the moment a menu item is clicked, while the menu stays put.
 - **The account listing starts with the page's reads.** On Solo riders and Audit log the listing no longer waits for the rows to arrive; it runs alongside them. Results are the same (`loadSoloHeadshots` is now `loadAuthUserIndex` + `matchSoloHeadshots`).
-- **Functions run next to the database.** `vercel.json` pins the site's server functions to Vercel's `pdx1` (Portland), the region of the Supabase database (AWS us-west-2). Deleting the file undoes it.
 - **Unchanged on purpose:** saves still refresh the page from the database (`router.refresh()`), so several desks stay in step; it now costs one `profiles` read plus the page's reads instead of three calls to the Auth server first. Every other `getUser()` in the site (account pages, registration, sign-in callbacks, the browser) is as it was.
 
 ### Results
@@ -56,7 +55,7 @@ So a Solo riders click waited on roughly 78 + 78 + 116 ms (two Auth checks and t
 | Check-in, Staff | 3 (Auth, Auth, role), then their own data request: 4 more | 1 (role), then their own data request: 2 more | 4 → **0** |
 | A judge's tap, a staff panel's poll, a dashboard save | 3 before the work (Auth, Auth, role) | 1 before the work (role) | 2 → **0** |
 
-**After (expected; to be confirmed from the same gateway query after deploy):** per admin click, the proxy checks the token locally (no call), the page makes one `profiles` read, then its own data. Server-side `/auth/v1/user` calls should fall to just those made by the account pages, registration and sign-in, which still use `getUser()`, `profiles` calls should roughly halve on full loads and refreshes (the layout and page now share one), and every remaining call's time should drop once the functions run in `pdx1`, next to the database.
+**After (expected; to be confirmed from the same gateway query after deploy):** per admin click, the proxy checks the token locally (no call), the page makes one `profiles` read, then its own data. Server-side `/auth/v1/user` calls should fall to just those made by the account pages, registration and sign-in, which still use `getUser()`, `profiles` calls should roughly halve on full loads and refreshes (the layout and page now share one).
 
 A full load or `router.refresh()` also drops the layout's duplicate `getUser()` and `profiles` calls (they ran alongside the page's, so they cost load rather than waiting). An expired session (about once an hour) still costs one refresh call, before and after. The local check needs the public key once per server instance every 10 minutes.
 
@@ -71,7 +70,7 @@ A full load or `router.refresh()` also drops the layout's duplicate `getUser()` 
 - **The call counts are read from the code**, following one admin menu click through `src/proxy.ts`, the admin layout, `getAdminAccess` and each page (`AdminDashboardSection.tsx`, `page.tsx`), before and after the change. `src/app/admin/admin-speed.test.mts` checks the "after" shape so it cannot quietly come back.
 - **The signature check** was timed in Node on the development laptop with a freshly made P-256 key and the same Web Crypto calls the library uses (import the key, verify the signature), median of 50 runs after one warm-up. The project's published key set holds one EC key (ES256, P-256).
 - **Not measured on the dev server:** it compiles pages as they are visited, so timing clicks on it says nothing about the live site.
-- **To confirm after deploy:** run the same gateway query over the 24 hours after the deploy and compare the four rows above; in the Vercel dashboard, check that the deployment's functions show region `pdx1`.
+- **To confirm after deploy:** run the same gateway query over the 24 hours after the deploy and compare the four rows above.
 
 ### Tried and dropped
 

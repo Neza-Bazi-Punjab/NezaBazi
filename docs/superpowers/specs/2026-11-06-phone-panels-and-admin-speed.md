@@ -175,9 +175,9 @@ Required changes:
 5. **Keep `router.refresh()` after saves** (several desks must stay in step;
    that was Mani's explicit choice). With 1–2 the refresh costs one
    `profiles` query plus the page's reads instead of three Auth hops.
-6. **`vercel.json`** with `{ "regions": ["pdx1"] }` so functions run next to
-   the database (Supabase: AWS us-west-2 = Vercel `pdx1`). One line, reverts
-   by deleting the file; call it out in the PR for the organisers to accept.
+6. ~~A `vercel.json` region pin to `pdx1`.~~ Dropped the same evening at the
+   organisers' request: they do not think the region is the problem, and the
+   functions stay where Vercel puts them.
 7. **Document it** in `docs/performance.md` in the existing style (what
    changed, how measured, results): measure the dev-server data-loading step
    before/after is not meaningful (dev compiles), so measure what is: the
@@ -203,8 +203,7 @@ virtualising tables, caching registration data between visits.
 - `src/app/admin/admin-speed.test.mts` (new): the four session checks call
   `getClaims()` and not `getUser()`; `getAdminAccess` is wrapped in `cache(`;
   `src/app/admin/loading.tsx` exists and renders no data; the Solo and Audit
-  pages start the account listing before awaiting rows; `vercel.json` pins
-  `pdx1`.
+  pages start the account listing before awaiting rows.
 - Every existing test keeps passing (`npm test`), including
   `live-pages.test.mts` and `scoring-routes.test.mts`.
 
@@ -213,5 +212,5 @@ virtualising tables, caching registration data between visits.
 | Worker | Files |
 | --- | --- |
 | UI — panels | `src/app/judge/JudgePanel.tsx`, `src/app/commentary/CommentaryPanel.tsx`, `src/components/scoring/ledger/Ledger.tsx`, `src/components/scoring/ledger/ledger.css`, `src/app/judge/panel-phone.test.mts`, `src/app/commentary/panel-phone.test.mts` |
-| PERF — admin | `src/lib/supabase/middleware.ts`, `src/app/admin/admin-access.tsx`, `src/lib/admin/server.ts`, `src/lib/scoring/auth.ts`, `src/app/admin/loading.tsx`, `src/app/admin/AdminDashboardSection.tsx`, `src/lib/admin/headshot-urls.ts`, `vercel.json`, `docs/performance.md`, `src/app/admin/admin-speed.test.mts` |
+| PERF — admin | `src/lib/supabase/middleware.ts`, `src/app/admin/admin-access.tsx`, `src/lib/admin/server.ts`, `src/lib/scoring/auth.ts`, `src/app/admin/loading.tsx`, `src/app/admin/AdminDashboardSection.tsx`, `src/lib/admin/headshot-urls.ts`, `docs/performance.md`, `src/app/admin/admin-speed.test.mts` |
 | PM (this session) | `package.json` test script (both new test files), `.gitattributes`, README, runbook, browser verification |

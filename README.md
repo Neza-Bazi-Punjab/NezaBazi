@@ -149,7 +149,6 @@ scripts/
   build-paper-forms.mts  Generates the printable registration PDFs (npm run build:forms)
   vmix-bridge.mjs      Pushes the live feed into a vMix title (stream team, optional)
 supabase/migrations/   Committed SQL migrations (from registration_drafts onward)
-vercel.json            Runs the server functions in pdx1, next to the database (us-west-2)
 .gitattributes         LF line endings for every text file, on Windows too (the tests
                        match source files on newlines)
 public/                Static assets: images/, flags/, brand/, documents/
