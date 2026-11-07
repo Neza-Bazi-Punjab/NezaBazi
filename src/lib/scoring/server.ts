@@ -18,6 +18,7 @@ import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { createServiceRoleClient, type ServiceRoleClient } from "@/lib/admin/server";
 import { nextPoolBlock } from "@/lib/scoring/blocks";
+import { upNextRuns } from "@/lib/scoring/next-to-ride";
 import { loadRiderDetails } from "@/lib/scoring/rider-detail";
 import {
   toPublicLeaderboardRow,
@@ -246,7 +247,10 @@ export const listPools = (runs: ScoringRun[]) =>
    across the pools (src/lib/scoring/blocks.ts), so after Round 1 · Pool C the
    next pool is Round 2 · Pool A, and a pool whose riders have all carried is
    passed over. Before any pool is called, the first pool with riders to go is
-   "next" — that is the one the judge will call first. */
+   "next" — that is the one the judge will call first. Between riders, once
+   the called pool's block has been ridden to the end, "next" is worked out as
+   if nothing were called, from the furthest result (blocks.ts), the same as
+   the judges' panel. */
 export const nextPoolLabel = (
   runs: ScoringRun[],
   called: string | null,
@@ -369,10 +373,10 @@ export const loadLiveSnapshot = async (client: ScoringDbClient): Promise<LiveSna
   const currentRun = live?.current_run_id
     ? runs.find((run) => run.id === live.current_run_id) ?? null
     : null;
-  const after = currentRun ? currentRun.run_order : 0;
-  const upNext = runs
-    .filter((run) => run.status === "pending" && run.run_order > after)
-    .slice(0, UP_NEXT_LIMIT);
+  /* With a rider on course: the riders after them. Between riders (the judge
+     has not tapped Start yet): the rider the judges' Start button names, then
+     the riders after them (next-to-ride.ts). */
+  const upNext = upNextRuns(runs, live, UP_NEXT_LIMIT);
   const pools = listPools(runs);
 
   return {

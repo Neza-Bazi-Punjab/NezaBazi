@@ -151,7 +151,7 @@ You can **Redraw…** as often as you like until the first result of the round i
 ## Run the round
 
 1. Press **Set Live** on the round. Every screen switches to it. Nobody is on course yet.
-2. Press **Call Pool A** on Pool A's header. Every screen shows Pool A's riders with "get ready", and the first rider of Pool A goes on course.
+2. Press **Call Pool A** on Pool A's header. Every screen shows Pool A's riders with "get ready", and nobody is on course until you tap **Start** for Pool A's first rider.
 3. The judges take over from here. The first result returns every screen to the scoreboard.
 4. To put a particular rider on course, type their name in **Find a rider**, then press **Put on course** in their row.
 5. When a pool has finished, call the next one: here, or from a judge's phone.
@@ -215,7 +215,7 @@ Use your phone, fully charged. Sign in and open {site.url}/judge (or tap **Judge
 1. Tap **CARRIED 4**, **STRUCK 2** or **MISS 0**.
 2. A bar at the bottom asks, for example, "Record Carried (4) for Amandeep Singh Randhawa?". Check the name.
 3. Tap **Confirm Carried** (or **Confirm Struck**, **Confirm Miss**). Tap **Cancel** if you chose wrong.
-4. A green note says the result was recorded, and the next rider comes on course by themselves.
+4. The result is recorded and the rider leaves the course: nobody is on course, and the panel shows "Last: <name> — Carried 4" above one large **Start <next rider>** button. When the next rider is at the start, tap it (no question asked) and score them the same way.
 
 While a result is being sent the buttons are greyed out. A red message means nothing was changed: read it and tap again.
 <!-- /side -->
@@ -223,7 +223,7 @@ While a result is being sent the buttons are greyed out. A red message means not
 ## Calling the next pool
 
 1. When the called pool has finished, a large **Call Pool B** button appears in the Called and Next box (before then, a smaller **Call Pool B early**).
-2. Tap it and confirm. Every screen shows Pool B's riders with "get ready", and Pool B's first rider goes on course.
+2. Tap it and confirm. Every screen shows Pool B's riders with "get ready"; tap **Start** when Pool B's first rider is ready.
 3. The first result returns the screens to the scoreboard. **Show scoreboard now** ends the call-up early.
 
 ## Qualification: one carry is enough
@@ -234,7 +234,7 @@ In the qualification one carry puts a rider through, so recording a carry skips 
 
 - **Undo last result** removes the last result and puts that rider back on course. Record the right one.
 - **Change result** shows the recorded result; choose the correct one and confirm. For an older run: Start list, tap the run, **Change result**.
-- **Skip run** is for a rider who does not ride: the run is not scored and the next rider comes on course. **Restore this run** brings it back.
+- **Skip run** is for a rider who does not ride: the run is not scored and nobody is on course until you tap **Start** for the next rider. **Restore this run** brings it back.
 - "This run already has a result. Use Change result to replace it." means another judge recorded it first. Nothing was overwritten; check **Last result**.
 - **Not sure a result went through?** If the panel has moved on and Last result is right, it did. If the same rider is still on course, tapping again is safe. Never tap again once the next rider shows: the buttons always score the rider on course.
 

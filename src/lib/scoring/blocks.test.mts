@@ -7,11 +7,15 @@ import test from "node:test";
 
 import {
   blockPosition,
+  calledBlockRidden,
   calledPoolAfter,
   nextPoolBlock,
+  poolSummaries,
   ridingPoolBlock,
   runBlocks,
+  shownCalledPool,
 } from "./blocks.ts";
+import { lastRiddenRun, nextToRide, upNextRuns } from "./next-to-ride.ts";
 import { sampleCalledPoolAfter } from "./sample-engine.ts";
 import type { RunStatus } from "./types.ts";
 
@@ -185,4 +189,119 @@ test("a run is numbered within its pool and round, not the whole list", () => {
   assert.deepEqual(blockPosition(runs, byId("A1-1")), { index: 1, size: 2 });
   assert.deepEqual(blockPosition(runs, byId("B2-1")), { index: 2, size: 2 }, "a skipped ride still counts");
   assert.deepEqual(blockPosition(runs, byId("C2-3")), { index: 2, size: 2 });
+});
+
+/* Between riders (20261107130000_scoring_judge_starts_each_rider.sql): nobody
+   is on course until the judge taps Start, and every screen names the rider
+   the Start button names. */
+
+const ids = (runs: readonly { id: string }[]) => runs.map((run) => run.id);
+const live = (called: string | null, current: string | null = null) => ({
+  current_run_id: current,
+  called_pool_label: called,
+});
+
+test("before anything is scored, the called pool's first rider (or the list's first) rides next", () => {
+  assert.equal(nextToRide(list(), live(null))?.id, "A1-1");
+  assert.equal(nextToRide(list(), live("B"))?.id, "B1-1", "a pool called before the first result");
+  assert.equal(lastRiddenRun(list()), null);
+});
+
+test("nobody rides next while a rider is on course", () => {
+  const runs = list((attempt, pool, rider) => (attempt === 1 && pool === "A" && rider === 1 ? "on_course" : "pending"));
+  assert.equal(nextToRide(runs, live("A", "A1-1")), null);
+});
+
+test("between riders, the next rider after the furthest result rides next", () => {
+  const runs = list((attempt, pool, rider) => (attempt === 1 && pool === "A" && rider === 1 ? "scored" : "pending"));
+  assert.equal(nextToRide(runs, live("A"))?.id, "A2-1");
+  assert.deepEqual(ids(upNextRuns(runs, live("A"), 3)), ["A2-1", "B1-1", "B2-1"]);
+});
+
+test("a rider passed over earlier in the list is not named up next", () => {
+  // A1 was passed over (still pending); A2 has ridden and left the course.
+  const runs = list((attempt, pool, rider) => (attempt === 1 && pool === "A" && rider === 2 ? "scored" : "pending"));
+  assert.equal(nextToRide(runs, live("A"))?.id, "B1-1");
+  assert.deepEqual(ids(upNextRuns(runs, live("A"), 3)), ["B1-1", "B2-1", "C1-1"]);
+
+  // Nobody left after the furthest result: nobody is named, not the rider
+  // passed over.
+  const end = list((attempt, pool, rider) => (attempt === 1 && pool === "A" && rider === 1 ? "pending" : "scored"));
+  assert.equal(nextToRide(end, live("C")), null);
+  assert.deepEqual(upNextRuns(end, live("C"), 5), []);
+});
+
+test("a pool called ahead rides next from its first rider still to ride", () => {
+  // Pool A rode its first rider; Pool B has been called ahead of A2.
+  const runs = list((attempt, pool, rider) => (attempt === 1 && pool === "A" && rider === 1 ? "scored" : "pending"));
+  assert.equal(nextToRide(runs, live("B"))?.id, "B1-1");
+  assert.deepEqual(ids(upNextRuns(runs, live("B"), 3)), ["B1-1", "B2-1", "C1-1"]);
+});
+
+test("with a rider on course, up next is unchanged: the riders after them", () => {
+  const runs = list((attempt, pool, rider) =>
+    attempt === 1 && pool === "A" ? (rider === 1 ? "pending" : "on_course") : "pending"
+  );
+  const old = runs.filter((run) => run.status === "pending" && run.run_order > 2).slice(0, 5);
+  assert.deepEqual(ids(upNextRuns(runs, live("A", "A2-1"), 5)), ids(old));
+});
+
+test("once the called pool's block has ridden, Next is the pool after it, not its next round", () => {
+  // Round 1 has ridden to the end; Pool C (the last to ride) is still called.
+  const runs = list((attempt) => (attempt === 1 ? "scored" : "pending"));
+  assert.equal(calledBlockRidden(runs, "C", null), true);
+  assert.equal(shownCalledPool(runs, "C", null), null);
+  assert.deepEqual(nextPoolBlock(runs, "C", null), { pool: "A", attempt: 2 });
+  assert.equal(nextToRide(runs, live("C"))?.id, "A1-2", "the same pool the Start button names");
+
+  // Not while a rider is on course, nor while the called block has riders to go.
+  assert.equal(calledBlockRidden(runs, "C", "A1-2"), false);
+  const midBlock = list((attempt, pool, rider) => (attempt === 1 && (pool !== "C" || rider === 1) ? "scored" : "pending"));
+  assert.equal(calledBlockRidden(midBlock, "C", null), false);
+  assert.deepEqual(nextPoolBlock(midBlock, "C", null), { pool: "A", attempt: 2 });
+});
+
+test("a rider passed over earlier does not pull Next back to their pool", () => {
+  // A1 was passed over in Round 1; the rest of Round 1 has ridden.
+  const runs = list((attempt, pool, rider) => (attempt === 1 && !(pool === "A" && rider === 1) ? "scored" : "pending"));
+  assert.deepEqual(nextPoolBlock(runs, "C", null), { pool: "A", attempt: 2 });
+  assert.deepEqual(nextPoolBlock(runs, null, null), { pool: "A", attempt: 2 }, "the judges' panel passes null");
+});
+
+test("the pool list marks the rider Start names as up next, between riders", () => {
+  const panel = (runs: Run[]) =>
+    runs.map((run) => ({
+      ...run,
+      entrant_key: `solo:${run.id.split("-")[0]}`,
+      rider_name: run.id.split("-")[0],
+      team_name: null,
+      result: run.status === "scored" ? ("miss" as const) : null,
+      points: run.status === "scored" ? 0 : null,
+    }));
+  const upNextOf = (summaries: ReturnType<typeof poolSummaries>) =>
+    summaries.flatMap((pool) => pool.entrants.filter((entrant) => entrant.status === "up_next").map((entrant) => entrant.name));
+  const nobodyThrough = new Map<string, boolean | null>();
+
+  // A1 passed over, A2 ridden: B1 is up next, not A1.
+  const passed = panel(list((attempt, pool, rider) => (attempt === 1 && pool === "A" && rider === 2 ? "scored" : "pending")));
+  assert.deepEqual(upNextOf(poolSummaries(passed, nobodyThrough, "A", null)), ["B1"]);
+
+  // Round 1 done with Pool C still called: Pool A (Round 2) is the "Next" pool.
+  const roundDone = panel(list((attempt) => (attempt === 1 ? "scored" : "pending")));
+  const summaries = poolSummaries(roundDone, nobodyThrough, "C", null);
+  assert.deepEqual(
+    summaries.map((pool) => `${pool.pool}:${pool.state.kind}`),
+    ["A:up_next", "B:waiting", "C:waiting"]
+  );
+  assert.deepEqual(upNextOf(summaries), ["A1"]);
+});
+
+test("the public state names the same next rider as the judges' Start", () => {
+  const server = repoFile("src/lib/scoring/server.ts");
+  assert.match(server, /import \{ upNextRuns \} from "@\/lib\/scoring\/next-to-ride";/);
+  assert.match(server, /const upNext = upNextRuns\(runs, live, UP_NEXT_LIMIT\);/);
+  assert.doesNotMatch(server, /run\.run_order > after/);
+
+  // Loadable by node --test and by the browser panels alike: no imports.
+  assert.doesNotMatch(repoFile("src/lib/scoring/next-to-ride.ts"), /^import /m);
 });

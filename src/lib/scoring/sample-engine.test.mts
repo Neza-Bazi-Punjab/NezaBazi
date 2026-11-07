@@ -178,6 +178,23 @@ const refusal = (code: "P0002" | "22023", message: string) => (error: unknown) =
   return true;
 };
 
+/* The next rider in order, as the judges' panel offers Start for it: the
+   first pending run after the rider on course or, with nobody on course,
+   after the last run ridden. */
+const upNext = (snapshot: SampleSeed, roundId = QUAL) => {
+  const roundRuns = snapshot.runs
+    .filter((item) => item.round_id === roundId)
+    .sort((a, b) => a.run_order - b.run_order);
+  const current = roundRuns.find((item) => item.id === snapshot.live.current_run_id);
+  const after =
+    current?.run_order ??
+    Math.max(0, ...roundRuns.filter((item) => item.status === "scored").map((item) => item.run_order));
+  return roundRuns.find((item) => item.status === "pending" && item.run_order > after)?.id ?? null;
+};
+
+const onCourse = (snapshot: SampleSeed) =>
+  snapshot.runs.filter((item) => item.status === "on_course").map((item) => item.id);
+
 const qualificationRows = (snapshot: SampleSeed) =>
   computeSampleLeaderboard(
     snapshot.rounds.find((item) => item.id === QUAL) as ScoringRound,
@@ -195,11 +212,20 @@ test("points match RESULT_POINTS and the database's generated column", () => {
   }
 });
 
-test("scoring the current run puts the next pending run on course", () => {
+test("scoring the rider on course leaves nobody on course; the next rider waits for Start", () => {
   const session = engine();
   session.recordResult(id("9101", 1), "strike", false);
   let snapshot = session.snapshot();
 
+  assert.equal(snapshot.live.current_run_id, null);
+  assert.equal(runAt(snapshot, QUAL, 2).status, "pending");
+  assert.deepEqual(onCourse(snapshot), []);
+  assert.equal(upNext(snapshot), id("9101", 2), "up next names the next rider");
+  assert.equal(snapshot.live.called_pool_label, "A", "a result leaves the called pool alone");
+
+  // Start: the judge puts the next rider on course.
+  session.setLive({ current_run_id: id("9101", 2) });
+  snapshot = session.snapshot();
   assert.equal(snapshot.live.current_run_id, id("9101", 2));
   assert.equal(runAt(snapshot, QUAL, 2).status, "on_course");
 
@@ -208,10 +234,15 @@ test("scoring the current run puts the next pending run on course", () => {
   snapshot = session.snapshot();
   assert.equal(snapshot.live.current_run_id, id("9101", 2));
 
-  // Skipping the current run moves on like a score, past runs already scored.
+  // Skipping the rider on course leaves the course empty too; up next is the
+  // next run still to ride after the last one ridden (run 4 was scored out of
+  // order, so run 3 waits in the panel's Skipped box).
   session.setRunStatus(id("9101", 2), "void");
   snapshot = session.snapshot();
-  assert.equal(snapshot.live.current_run_id, id("9101", 3));
+  assert.equal(snapshot.live.current_run_id, null);
+  assert.deepEqual(onCourse(snapshot), []);
+  assert.equal(runAt(snapshot, QUAL, 3).status, "pending");
+  assert.equal(upNext(snapshot), id("9101", 5));
 });
 
 test("the called pool follows the rider into the next pool; the end of the round leaves nobody on course", () => {
@@ -220,6 +251,14 @@ test("the called pool follows the rider into the next pool; the end of the round
   session.recordResult(id("9101", 6), "miss", false);
   let snapshot = session.snapshot();
 
+  // Pool A's last ride: nobody on course and A still called until Start.
+  assert.equal(snapshot.live.current_run_id, null);
+  assert.equal(snapshot.live.called_pool_label, "A");
+  assert.equal(upNext(snapshot), id("9101", 7));
+
+  // Start Pool B's first rider: the called pool follows.
+  session.setLive({ current_run_id: id("9101", 7) });
+  snapshot = session.snapshot();
   assert.equal(snapshot.live.current_run_id, id("9101", 7));
   assert.equal(snapshot.live.called_pool_label, "B");
 
@@ -278,13 +317,16 @@ test("a qualifying carry voids the rider's other attempts and the pointer skips 
 
   assert.equal(runAt(snapshot, QUAL, 3).status, "void");
   assert.equal(runAt(snapshot, QUAL, 5).status, "void");
-  assert.equal(snapshot.live.current_run_id, id("9101", 2));
+  assert.equal(snapshot.live.current_run_id, null);
+  assert.equal(upNext(snapshot), id("9101", 2));
 
-  // Bir (run 2) misses: the pointer goes to run 4 (Bir's attempt 2), past
-  // Asa's voided run 3.
+  // Bir (run 2) misses: up next is run 4 (Bir's attempt 2), past Asa's
+  // voided run 3.
+  session.setLive({ current_run_id: id("9101", 2) });
   session.recordResult(id("9101", 2), "miss", false);
   snapshot = session.snapshot();
-  assert.equal(snapshot.live.current_run_id, id("9101", 4));
+  assert.equal(snapshot.live.current_run_id, null);
+  assert.equal(upNext(snapshot), id("9101", 4));
 
   // The carry stands even though runs remain: through at once.
   const asa = qualificationRows(snapshot).find((row) => row.name === "Asa Singh");
@@ -308,14 +350,16 @@ test("a qualifying carry voids the rider's other attempts and the pointer skips 
   assert.equal(runAt(snapshot, QUAL, 1).status, "pending");
 });
 
-test("a carry while the rider is on course for a later attempt moves the pointer past it", () => {
+test("a carry while the rider is on course for a later attempt takes them off the course", () => {
   const session = engine();
   session.setLive({ current_run_id: id("9101", 3) }); // Asa, attempt 2
   session.recordResult(id("9101", 1), "carry", true); // attempt 1 changed to a carry
   const snapshot = session.snapshot();
 
   assert.equal(runAt(snapshot, QUAL, 3).status, "void");
-  assert.equal(snapshot.live.current_run_id, id("9101", 4));
+  assert.equal(snapshot.live.current_run_id, null);
+  assert.deepEqual(onCourse(snapshot), []);
+  assert.equal(upNext(snapshot), id("9101", 2));
 });
 
 test("with a second carry, clearing one keeps the attempts voided under the other", () => {
@@ -333,7 +377,7 @@ test("with a second carry, clearing one keeps the attempts voided under the othe
 test("Undo last result puts the rider back on course and the next rider back to waiting", () => {
   const session = engine();
   session.recordResult(id("9101", 1), "miss", false);
-  assert.equal(session.snapshot().live.current_run_id, id("9101", 2));
+  session.setLive({ current_run_id: id("9101", 2) }); // the judge started the next rider
 
   const cleared = session.clearResult(id("9101", 1), true);
   const snapshot = session.snapshot();
@@ -344,29 +388,40 @@ test("Undo last result puts the rider back on course and the next rider back to 
   assert.equal(runAt(snapshot, QUAL, 2).status, "pending");
 });
 
-test("Call Pool brings the pool's first rider still to ride on course and shows the roster", () => {
+test("Call Pool brings the pool to the start and shows the roster; nobody is on course until Start", () => {
   const session = engine();
   const live = session.callPool(QUAL, "B");
   let snapshot = session.snapshot();
 
   assert.equal(live.display_mode, "pool_call");
   assert.equal(live.called_pool_label, "B");
-  assert.equal(live.current_run_id, id("9101", 7));
-  assert.equal(runAt(snapshot, QUAL, 7).status, "on_course");
+  assert.equal(live.current_run_id, null);
+  assert.equal(runAt(snapshot, QUAL, 7).status, "pending", "Pool B's first rider waits for Start");
   assert.equal(runAt(snapshot, QUAL, 1).status, "pending", "the rider leaving the course waits again");
-  assert.equal(
-    snapshot.runs.filter((item) => item.round_id === QUAL && item.status === "on_course").length,
-    1
-  );
+  assert.deepEqual(onCourse(snapshot), []);
 
-  // Calling again does not skip the rider already on course.
-  assert.equal(session.callPool(QUAL, "B").current_run_id, id("9101", 7));
+  // Calling again changes nothing.
+  assert.equal(session.callPool(QUAL, "B").current_run_id, null);
+
+  // Start: Pool B's first rider on course, Pool B still called.
+  session.setLive({ current_run_id: id("9101", 7) });
+  snapshot = session.snapshot();
+  assert.equal(snapshot.live.current_run_id, id("9101", 7));
+  assert.equal(snapshot.live.called_pool_label, "B");
+  assert.equal(snapshot.live.display_mode, "pool_call");
+  assert.deepEqual(onCourse(snapshot), [id("9101", 7)]);
+
+  // Calling the pool while its rider rides takes them off the course too.
+  session.callPool(QUAL, "B");
+  assert.deepEqual(onCourse(session.snapshot()), []);
+  session.setLive({ current_run_id: id("9101", 7) });
 
   // The first fresh result returns the screens to the scoreboard…
   session.recordResult(id("9101", 7), "strike", false);
   snapshot = session.snapshot();
   assert.equal(snapshot.live.display_mode, "scoreboard");
-  assert.equal(snapshot.live.current_run_id, id("9101", 8));
+  assert.equal(snapshot.live.current_run_id, null);
+  assert.equal(upNext(snapshot), id("9101", 8));
 
   // …but changing a result does not.
   session.callPool(QUAL, "B");
@@ -535,9 +590,9 @@ test("the engine owns its copy: the seed is never changed and snapshots are deep
 
   const snapshot = session.snapshot();
   snapshot.runs[0].result = "miss";
-  snapshot.live.current_run_id = null;
+  snapshot.live.current_run_id = id("9101", 2);
   assert.equal(runAt(session.snapshot(), QUAL, 1).result, "carry");
-  assert.notEqual(session.snapshot().live.current_run_id, null);
+  assert.equal(session.snapshot().live.current_run_id, null);
 });
 
 test("a result recorded in training is newer than every seeded one", () => {
@@ -663,7 +718,8 @@ const liveRound = (engine: ReturnType<typeof createSampleEngine>) => {
   return snap.rounds.find((candidate) => candidate.id === snap.live.current_round_id)!;
 };
 
-/* Calls the next pool when nobody is on course and scores whoever is. */
+/* When nobody is on course: calls the next rider's pool if the riding has
+   moved to a new pool, taps Start for them, and scores whoever is on course. */
 const rideRound = (
   engine: ReturnType<typeof createSampleEngine>,
   decide: (run: ScoringRun) => RunResult
@@ -688,7 +744,11 @@ const rideRound = (
         break;
       }
 
-      engine.callPool(roundId, open[0].pool_label!);
+      if (snap.live.called_pool_label !== open[0].pool_label) {
+        engine.callPool(roundId, open[0].pool_label!);
+      }
+
+      engine.setLive({ current_run_id: open[0].id });
       current = engine.snapshot().runs.find((candidate) => candidate.id === open[0].id)!;
     }
 
@@ -801,16 +861,20 @@ test("without progression a finished round stays as it is", () => {
 
 /* Take out and Bring back (scoring_take_out) ------------------------------------ */
 
-test("Take out skips the rider's rides still to come, marks them out and brings the next rider on", () => {
+test("Take out skips the rider's rides still to come, marks them out and leaves the course empty", () => {
   const engine = createSampleEngine(daySeed(), () => T0);
   engine.callPool(QUAL, "A");
   const asa = dayRider(0);
+  const asaFirst = engine.snapshot().runs.find((candidate) => candidate.entrant_key === asa)!;
+  engine.setLive({ current_run_id: asaFirst.id }); // Start
 
   engine.takeOut(QUAL, asa, true);
   let snap = engine.snapshot();
   const asaRuns = snap.runs.filter((candidate) => candidate.entrant_key === asa);
   assert.deepEqual(asaRuns.map((candidate) => candidate.status), ["void", "void", "void"]);
-  assert.equal(snap.runs.find((candidate) => candidate.id === snap.live.current_run_id)?.rider_name, "Rider 2");
+  assert.equal(snap.live.current_run_id, null);
+  assert.deepEqual(onCourse(snap), []);
+  assert.equal(snap.runs.find((candidate) => candidate.id === upNext(snap))?.rider_name, "Rider 2");
   assert.deepEqual(snap.overrides, [
     { round_id: QUAL, entrant_key: asa, advanced: false, note: "Taken out on the judges' panel" },
   ]);
@@ -830,7 +894,7 @@ test("Take out skips the rider's rides still to come, marks them out and brings 
     ["pending", "pending", "pending"]
   );
   assert.deepEqual(snap.overrides, []);
-  assert.equal(snap.runs.find((candidate) => candidate.id === snap.live.current_run_id)?.rider_name, "Rider 2");
+  assert.equal(snap.live.current_run_id, null);
   assert.throws(() => engine.takeOut(QUAL, asa, false), /Rider 1 is not taken out\./);
 });
 
@@ -839,7 +903,9 @@ test("Take out is refused after a carry; Bring back never undoes the person in c
   seed.overrides = [{ round_id: QUAL, entrant_key: dayRider(2), advanced: false, note: "DQ" }];
   const engine = createSampleEngine(seed, () => T0);
   engine.callPool(QUAL, "A");
-  engine.recordResult(engine.snapshot().live.current_run_id!, "carry", false);
+  const first = engine.snapshot().runs.find((candidate) => candidate.entrant_key === dayRider(0))!;
+  engine.setLive({ current_run_id: first.id }); // Start
+  engine.recordResult(first.id, "carry", false);
 
   assert.throws(
     () => engine.takeOut(QUAL, dayRider(0), true),
@@ -850,4 +916,35 @@ test("Take out is refused after a carry; Bring back never undoes the person in c
     /The person in control marked Rider 3 out\. Ask them to bring the rider back\./
   );
   assert.throws(() => engine.takeOut(QUAL, `solo:${id("7002", 99)}`, true), /That rider is not in this round\./);
+});
+
+/* The database twin (20261107130000_scoring_judge_starts_each_rider.sql) ------- */
+
+test("the judge-starts migration patches the four functions, each substitution asserted, and can be reverted", async () => {
+  const { readFileSync } = await import("node:fs");
+  const read = (path: string) => readFileSync(new URL(`../../../${path}`, import.meta.url), "utf8");
+  const forward = read("supabase/migrations/20261107130000_scoring_judge_starts_each_rider.sql");
+  const revert = read("supabase/migrations/revert/20261107130000_scoring_judge_starts_each_rider.revert.sql");
+  const patched = (sql: string) =>
+    [...sql.matchAll(/select pg_temp\.scoring_patch_body\(\n  pg_catalog\.to_regprocedure\('public\.(\w+)\(/g)].map(
+      (match) => match[1]
+    );
+
+  assert.deepEqual(patched(forward), [
+    "scoring_record_result",
+    "scoring_record_result",
+    "scoring_set_run_status",
+    "scoring_take_out",
+    "scoring_call_pool",
+    "scoring_call_pool",
+  ]);
+  assert.deepEqual(patched(revert), patched(forward));
+  assert.match(forward, /expected its anchor once, found it % times/);
+  assert.match(forward, /create or replace function public\.scoring_leave_course\(/);
+  assert.match(forward, /revoke execute on function public\.scoring_leave_course\(uuid, integer\)\n  from public, anon, authenticated;/);
+  assert.match(forward, /current_run_id = null, -- the judge taps Start/);
+  assert.doesNotMatch(forward, /scoring_set_live\(jsonb/, "Start (scoring_set_live) is unchanged");
+  assert.match(forward, /notify pgrst, 'reload schema';\s*$/);
+  assert.match(revert, /drop function if exists public\.scoring_leave_course\(uuid, integer\);/);
+  assert.match(revert, /notify pgrst, 'reload schema';\s*$/);
 });
