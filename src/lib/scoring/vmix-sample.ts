@@ -8,8 +8,10 @@
 // timestamps on event day) so a title looks the same on every refresh.
 //
 // Two rounds:
-//   Qualification  Single, three attempts, Pools A and B, live. Pool A has
-//                  ridden; Pool B is on its second pass with a rider on course.
+//   Qualification  Single, three attempts ("Round 1/2/3"), Pools A and B,
+//                  live. Ridden round by round across the pools: Round 1 is
+//                  done for both pools, Round 2 is done for Pool A and Pool B
+//                  has a rider on course; Round 3 is still to ride.
 //                  A carry makes the rider's remaining attempts void, as the
 //                  database does.
 //   Section 1      Section, target 8, complete: two sides of four riders.
@@ -90,8 +92,8 @@ type SoloSpec = {
 const SOLO: SoloSpec[] = [
   { name: "Harpreet Singh Sandhu", horse: "Toofan", location: "Ladhewali, Jalandhar, Punjab, India", pool: "A", attempts: ["carry", "void", "void"] },
   { name: "Gurjeet Singh Brar", horse: "Badal", location: "Kotkapura, Faridkot, Punjab, India", pool: "A", attempts: ["strike", "carry", "void"] },
-  { name: "Manpreet Kaur Gill", horse: "Sultan", location: "Jagraon, Ludhiana, Punjab, India", pool: "A", attempts: ["miss", "strike", "strike"] },
-  { name: "Jaswinder Singh Dhillon", horse: "Heera", location: "Patti, Tarn Taran, Punjab, India", pool: "A", attempts: ["miss", "miss", "miss"] },
+  { name: "Manpreet Kaur Gill", horse: "Sultan", location: "Jagraon, Ludhiana, Punjab, India", pool: "A", attempts: ["miss", "strike", "wait"] },
+  { name: "Jaswinder Singh Dhillon", horse: "Heera", location: "Patti, Tarn Taran, Punjab, India", pool: "A", attempts: ["miss", "miss", "wait"] },
   { name: "Amandeep Singh Randhawa", horse: "Chetak", location: "Batala, Gurdaspur, Punjab, India", pool: "B", attempts: ["strike", "on", "wait"] },
   { name: "Kulwant Singh Virk", horse: "Raja", location: "Nabha, Patiala, Punjab, India", pool: "B", attempts: ["carry", "void", "void"] },
   { name: "Balraj Singh Sidhu", horse: "Moti", location: "Dharamkot, Moga, Punjab, India", pool: "B", attempts: ["miss", "wait", "wait"] },
@@ -157,18 +159,18 @@ const baseRun = (
 const statusOf = (attempt: SoloSpec["attempts"][number]): RunStatus =>
   attempt === "on" ? "on_course" : attempt === "wait" ? "pending" : attempt === "void" ? "void" : "scored";
 
-/* Pool A's passes, then Pool B's; within a pool attempt 1 for everyone, then
-   attempt 2, then attempt 3 — the database's layout. */
+/* Round by round across the pools — Round 1 for Pool A then Pool B, then
+   Round 2, then Round 3 — the database's layout (20261107100000). */
 const qualificationRuns = (): ScoringRun[] => {
   const round = ROUNDS[0];
   const runs: ScoringRun[] = [];
   let order = 0;
   let minute = 0;
 
-  for (const pool of ["A", "B"] as const) {
-    const riders = SOLO.map((spec, index) => ({ spec, index })).filter(({ spec }) => spec.pool === pool);
+  for (let attempt = 0; attempt < round.attempts_per_rider; attempt += 1) {
+    for (const pool of ["A", "B"] as const) {
+      const riders = SOLO.map((spec, index) => ({ spec, index })).filter(({ spec }) => spec.pool === pool);
 
-    for (let attempt = 0; attempt < round.attempts_per_rider; attempt += 1) {
       for (const { spec, index } of riders) {
         order += 1;
         const outcome = spec.attempts[attempt];
@@ -375,7 +377,7 @@ export const samplePublicLiveState = (): PublicLiveState => {
     leaderboard: sampleLeaderboardForRound(round.id),
     pools,
     pool_rosters: buildPoolRosters(runs),
-    next_pool_label: nextPoolLabel(pools, current?.pool_label ?? null),
+    next_pool_label: nextPoolLabel(runs, current?.pool_label ?? null, current?.id ?? null),
     rounds: sampleRounds(),
   };
 };

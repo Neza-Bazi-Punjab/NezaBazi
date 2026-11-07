@@ -68,10 +68,39 @@ export const samplePoolIndex = (label: string) =>
     ? label.charCodeAt(0) - 65
     : (label.charCodeAt(0) - 64) * 26 + (label.charCodeAt(1) - 65);
 
-/* True when the riding has moved past `called` into `next` (or nothing has
-   been called yet): the called pool then follows the rider. */
-const poolIsBehind = (called: string | null, next: string | null) =>
-  next !== null && (called === null || samplePoolIndex(called) < samplePoolIndex(next));
+
+/* What "called" becomes when the live pointer moves from one run to another:
+   public.scoring_called_pool_after (20261107100000), and calledPoolAfter in
+   blocks.ts (kept local so this file has no runtime import; a test keeps the
+   two in step). Rounds are ridden round by round across the pools, so the
+   called pool follows the riding by where it moved, not by pool letter. */
+export const sampleCalledPoolAfter = (
+  roundRuns: readonly Pick<ScoringRun, "id" | "pool_label" | "status">[],
+  called: string | null,
+  fromRun: Pick<ScoringRun, "pool_label"> | null,
+  toRun: Pick<ScoringRun, "id" | "pool_label"> | null
+): string | null => {
+  if (!toRun || toRun.pool_label === null) {
+    return called;
+  }
+
+  if (called === null || called === toRun.pool_label || !fromRun) {
+    return toRun.pool_label;
+  }
+
+  if (fromRun.pool_label === called) {
+    return toRun.pool_label;
+  }
+
+  const calledHasRiders = roundRuns.some(
+    (run) =>
+      run.pool_label === called &&
+      run.id !== toRun.id &&
+      (run.status === "pending" || run.status === "on_course")
+  );
+
+  return calledHasRiders ? called : toRun.pool_label;
+};
 
 const clone = <T>(value: T): T => structuredClone(value);
 
@@ -85,10 +114,13 @@ const compareNames = (first: string, second: string) => first.localeCompare(seco
    once; otherwise null until every counted run is scored, then Single: a
    carry, Section: points >= target, null target -> null), rank and pool rank
    by points desc, runs scored asc, name asc (ties share a rank, like rank()),
-   and Section members in run order. Training mode has no overrides. */
+   and Section members in run order. `overrides` (entrant key -> through or
+   not) win over the rule, like scoring_advance_overrides; in training only
+   the judges' Take out writes one. */
 export const computeSampleLeaderboard = (
   round: ScoringRound,
-  roundRuns: readonly ScoringRun[]
+  roundRuns: readonly ScoringRun[],
+  overrides: ReadonlyMap<string, boolean> = new Map()
 ): LeaderboardRow[] => {
   const groups = new Map<string, ScoringRun[]>();
 
@@ -125,7 +157,7 @@ export const computeSampleLeaderboard = (
       .map((run) => run.pool_label)
       .filter((label): label is string => label !== null)
       .sort();
-    const advanced =
+    const ruled =
       !section && best === "carry"
         ? true
         : scored.length < counted.length
@@ -135,6 +167,8 @@ export const computeSampleLeaderboard = (
             : round.target_points === null
               ? null
               : points >= round.target_points;
+    const overridden = overrides.has(entrantKey);
+    const advanced = overridden ? (overrides.get(entrantKey) as boolean) : ruled;
 
     const row: LeaderboardRow = {
       entrant_key: entrantKey,
@@ -150,7 +184,7 @@ export const computeSampleLeaderboard = (
       runs_scored: scored.length,
       runs_total: counted.length,
       advanced,
-      advanced_overridden: false,
+      advanced_overridden: overridden,
     };
 
     if (section) {
@@ -197,13 +231,45 @@ export const computeSampleLeaderboard = (
 
 /* Engine ----------------------------------------------------------------------- */
 
+/* Training only: what happens when a Single round has been ridden to the
+   end. On event day an administrator creates the next round and draws its
+   start list; in training the engine does it, so a practice session runs
+   from Qualification through the Aarhi rounds to the Final on its own. */
+export type SampleProgression = {
+  /* Riders per pool in each Aarhi round, balanced like the database draw. */
+  poolSize: number;
+  /* When this many riders or fewer go through, the next round is the Final. */
+  finalAt: number;
+};
+
+/* A row of scoring_advance_overrides. */
+export type SampleOverride = {
+  round_id: string;
+  entrant_key: string;
+  advanced: boolean;
+  note: string | null;
+};
+
+/* The note scoring_take_out writes, and the only override Bring back undoes. */
+export const TAKE_OUT_NOTE = "Taken out on the judges' panel";
+
 export type SampleSeed = {
   rounds: ScoringRound[];
   runs: ScoringRun[];
   live: LiveState;
+  overrides?: SampleOverride[];
+  progression?: SampleProgression;
 };
 
-export type SampleSnapshot = SampleSeed;
+/* One round's overrides as computeSampleLeaderboard takes them. */
+export const overridesFor = (overrides: readonly SampleOverride[] | undefined, roundId: string) =>
+  new Map(
+    (overrides ?? [])
+      .filter((override) => override.round_id === roundId)
+      .map((override) => [override.entrant_key, override.advanced])
+  );
+
+export type SampleSnapshot = Omit<SampleSeed, "progression"> & { overrides: SampleOverride[] };
 
 export type SampleEngine = {
   /* scoring_record_result */
@@ -216,8 +282,37 @@ export type SampleEngine = {
   setLive: (payload: LiveUpdateRequest) => LiveState;
   /* scoring_call_pool */
   callPool: (roundId: string, poolLabel: string) => LiveState;
+  /* scoring_take_out: Take out (out = true) or Bring back. */
+  takeOut: (roundId: string, entrantKey: string, out: boolean) => { entrant_key: string; out: boolean };
   /* A deep copy of everything, safe to hand to a response. */
   snapshot: () => SampleSnapshot;
+};
+
+export const FINAL_ROUND_NAME = "Final";
+
+/* balancedPoolSizes and poolLabelForIndex in types.ts, kept local so this
+   file has no runtime import (a test keeps them in step). */
+const balancedSizes = (count: number, poolSize: number): number[] => {
+  if (count <= 0 || poolSize <= 0) {
+    return [];
+  }
+
+  const pools = Math.ceil(count / poolSize);
+  const base = Math.floor(count / pools);
+  const remainder = count % pools;
+  return new Array<number>(pools).fill(base).map((size, index) => size + (index < remainder ? 1 : 0));
+};
+
+const poolLabel = (index: number) => {
+  let label = "";
+  let remaining = index;
+
+  do {
+    label = String.fromCharCode(65 + (remaining % 26)) + label;
+    remaining = Math.floor(remaining / 26) - 1;
+  } while (remaining >= 0);
+
+  return label;
 };
 
 const isMultiAttemptSingle = (round: ScoringRound | undefined) =>
@@ -256,6 +351,7 @@ export const createSampleEngine = (
   const rounds = clone(seed.rounds);
   const runs = clone(seed.runs);
   let live = clone(seed.live);
+  const overrides = clone(seed.overrides ?? []);
   let lastStamp = latestTimestamp(seed);
 
   /* auto_voided_by: run id -> the carry that made it unnecessary. Rebuilt
@@ -293,6 +389,13 @@ export const createSampleEngine = (
     return new Date(lastStamp).toISOString();
   };
 
+  /* Training progression: round id -> the round the engine built from it. */
+  const progression = seed.progression ?? null;
+  const followerOf = new Map<string, string>();
+  let idSeq = 0;
+  const newId = (kind: "9e01" | "9e02") =>
+    `5a3b1e00-0000-4000-${kind}-${String(++idSeq).padStart(12, "0")}`;
+
   const touchRun = (run: ScoringRun, changes: Partial<ScoringRun>) => {
     Object.assign(run, changes, { updated_at: stamp() });
   };
@@ -325,9 +428,12 @@ export const createSampleEngine = (
 
     updateLive({
       current_run_id: next?.id ?? null,
-      called_pool_label: poolIsBehind(live.called_pool_label, next?.pool_label ?? null)
-        ? (next?.pool_label ?? null)
-        : live.called_pool_label,
+      called_pool_label: sampleCalledPoolAfter(
+        runsOfRound(roundId),
+        live.called_pool_label,
+        live.current_run_id ? (findRun(live.current_run_id) ?? null) : null,
+        next
+      ),
     });
 
     return next?.id ?? null;
@@ -367,6 +473,148 @@ export const createSampleEngine = (
     }
 
     return restored;
+  };
+
+  const isOpen = (run: ScoringRun) => run.status === "pending" || run.status === "on_course";
+
+  /* Training: after a result or a skip in a Single round. When the round has
+     been ridden to the end, the riders who carried (everyone, if nobody did)
+     go into the next round: "Aarhi Round n", or the Final once few enough are
+     left, in balanced pools in the order they rode, and the live round moves
+     there. A round built this way is rebuilt when an earlier result changes,
+     as long as nobody has ridden in it yet; after the Final, or once one
+     rider is left, nothing more is built. */
+  const progressFrom = (roundId: string) => {
+    const round = findRound(roundId);
+
+    if (!progression || !round || round.event_type !== "single") {
+      return;
+    }
+
+    const followerId = followerOf.get(roundId) ?? null;
+    let replaced: string | null = null;
+
+    if (followerId !== null) {
+      const followerStarted =
+        followerOf.has(followerId) ||
+        runsOfRound(followerId).some((run) => run.status !== "pending") ||
+        (live.current_run_id !== null && findRun(live.current_run_id)?.round_id === followerId);
+
+      if (followerStarted) {
+        return;
+      }
+
+      // Not ridden yet: take it down and build it again from the results now.
+      for (let index = runs.length - 1; index >= 0; index -= 1) {
+        if (runs[index].round_id === followerId) {
+          runs.splice(index, 1);
+        }
+      }
+
+      rounds.splice(rounds.findIndex((other) => other.id === followerId), 1);
+      followerOf.delete(roundId);
+      replaced = followerId;
+
+      if (round.status === "complete") {
+        Object.assign(round, { status: "live", updated_at: stamp() });
+      }
+    }
+
+    const roundRuns = runsOfRound(roundId);
+    const finished = roundRuns.length > 0 && !roundRuns.some(isOpen);
+    const liveHere = live.current_round_id === roundId || (replaced !== null && live.current_round_id === replaced);
+
+    if (!finished) {
+      if (replaced !== null && live.current_round_id === replaced) {
+        updateLive({ current_round_id: roundId, current_run_id: null, called_pool_label: null });
+      }
+
+      return;
+    }
+
+    // Each entrant once, in the order they first rode.
+    const entrants: ScoringRun[] = [];
+
+    for (const run of roundRuns) {
+      if (!entrants.some((other) => other.entrant_key === run.entrant_key)) {
+        entrants.push(run);
+      }
+    }
+
+    const through = new Set(
+      computeSampleLeaderboard(round, roundRuns, overridesFor(overrides, roundId))
+        .filter((row) => row.advanced === true)
+        .map((row) => row.entrant_key)
+    );
+    const going = through.size > 0 ? entrants.filter((run) => through.has(run.entrant_key)) : entrants;
+
+    Object.assign(round, { status: "complete", updated_at: stamp() });
+
+    if (round.name === FINAL_ROUND_NAME || going.length < 2) {
+      if (replaced !== null && live.current_round_id === replaced) {
+        updateLive({ current_round_id: roundId, current_run_id: null, called_pool_label: null });
+      }
+
+      return;
+    }
+
+    const createdAt = stamp();
+    const next: ScoringRound = {
+      id: newId("9e01"),
+      event_type: "single",
+      name:
+        going.length <= progression.finalAt
+          ? FINAL_ROUND_NAME
+          : `Aarhi Round ${round.round_number + 1}`,
+      round_number: round.round_number + 1,
+      attempts_per_rider: 1,
+      target_points: null,
+      status: liveHere ? "live" : "upcoming",
+      sort_order: Math.max(0, ...rounds.map((other) => other.sort_order)) + 1,
+      pool_size: progression.poolSize,
+      podium: null,
+      created_at: createdAt,
+      updated_at: createdAt,
+    };
+    const labels = balancedSizes(going.length, progression.poolSize).flatMap((size, index) =>
+      new Array<string>(size).fill(poolLabel(index))
+    );
+
+    rounds.push(next);
+    going.forEach((source, index) => {
+      runs.push({
+        id: newId("9e02"),
+        round_id: next.id,
+        run_order: index + 1,
+        attempt_number: 1,
+        pool_label: labels[index] ?? null,
+        entrant_key: source.entrant_key,
+        solo_registration_id: source.solo_registration_id,
+        team_member_id: null,
+        team_id: null,
+        rider_name: source.rider_name,
+        horse_name: source.horse_name,
+        team_name: source.team_name,
+        rider_location: source.rider_location,
+        status: "pending",
+        result: null,
+        points: null,
+        scored_by: null,
+        scored_at: null,
+        created_at: createdAt,
+        updated_at: createdAt,
+      });
+    });
+    followerOf.set(roundId, next.id);
+
+    if (liveHere) {
+      updateLive({
+        current_round_id: next.id,
+        current_run_id: null,
+        called_pool_label: null,
+        display_mode: live.display_mode === "pool_call" ? "scoreboard" : live.display_mode,
+      });
+    }
   };
 
   const recordResult: SampleEngine["recordResult"] = (runId, result, override) => {
@@ -439,6 +687,7 @@ export const createSampleEngine = (
       updateLive({ display_mode: "scoreboard" });
     }
 
+    progressFrom(run.round_id);
     return clone(run);
   };
 
@@ -492,12 +741,16 @@ export const createSampleEngine = (
         called_pool_label:
           live.current_round_id !== run.round_id
             ? run.pool_label
-            : poolIsBehind(live.called_pool_label, run.pool_label)
-              ? run.pool_label
-              : live.called_pool_label,
+            : sampleCalledPoolAfter(
+                runsOfRound(run.round_id),
+                live.called_pool_label,
+                live.current_run_id ? (findRun(live.current_run_id) ?? null) : null,
+                run
+              ),
       });
     }
 
+    progressFrom(run.round_id);
     return clone(run);
   };
 
@@ -537,6 +790,7 @@ export const createSampleEngine = (
       autoVoidedBy.delete(run.id);
     }
 
+    progressFrom(run.round_id);
     return clone(run);
   };
 
@@ -624,9 +878,12 @@ export const createSampleEngine = (
     } else if (roundChanged) {
       called = run?.pool_label ?? null;
     } else {
-      called = poolIsBehind(before.called_pool_label, run?.pool_label ?? null)
-        ? (run?.pool_label ?? null)
-        : before.called_pool_label;
+      called = sampleCalledPoolAfter(
+        roundId === null ? [] : runsOfRound(roundId),
+        before.called_pool_label,
+        before.current_run_id ? (findRun(before.current_run_id) ?? null) : null,
+        run ?? null
+      );
     }
 
     // Display mode.
@@ -763,12 +1020,99 @@ export const createSampleEngine = (
     return clone(live);
   };
 
+  const takeOut: SampleEngine["takeOut"] = (roundId, entrantKey, out) => {
+    if (typeof out !== "boolean") {
+      throw notAllowed("Choose Take out or Bring back.");
+    }
+
+    const before = { ...live };
+    const round = findRound(roundId);
+
+    if (!round) {
+      throw notFound(ROUND_GONE);
+    }
+
+    const entrantRuns = runsOfRound(roundId).filter((run) => run.entrant_key === entrantKey);
+
+    if (entrantRuns.length === 0) {
+      throw notFound("That rider is not in this round.");
+    }
+
+    const name =
+      entrantKey.startsWith("team:") ? (entrantRuns[0].team_name ?? entrantRuns[0].rider_name) : entrantRuns[0].rider_name;
+    const index = overrides.findIndex(
+      (override) => override.round_id === roundId && override.entrant_key === entrantKey
+    );
+    const existing = index >= 0 ? overrides[index] : null;
+
+    if (out) {
+      if (existing && !existing.advanced) {
+        throw notAllowed(`${name} is already out.`);
+      }
+
+      if (entrantRuns.some((run) => run.result === "carry")) {
+        throw notAllowed(`${name} has already carried in this round. Ask the person in control.`);
+      }
+
+      if (entrantRuns.every((run) => run.status === "scored")) {
+        throw notAllowed(`${name} has finished this round. Ask the person in control.`);
+      }
+
+      const current = entrantRuns.find((run) => run.id === before.current_run_id) ?? null;
+
+      for (const run of entrantRuns) {
+        if (isOpen(run)) {
+          setStatus(run, "void");
+          autoVoidedBy.delete(run.id);
+        }
+      }
+
+      const saved: SampleOverride = { round_id: roundId, entrant_key: entrantKey, advanced: false, note: TAKE_OUT_NOTE };
+
+      if (index >= 0) {
+        overrides[index] = saved;
+      } else {
+        overrides.push(saved);
+      }
+
+      if (current) {
+        advanceLivePointer(roundId, current.run_order);
+      }
+    } else {
+      if (!existing || existing.advanced) {
+        throw notAllowed(`${name} is not taken out.`);
+      }
+
+      if (existing.note !== TAKE_OUT_NOTE) {
+        throw notAllowed(`The person in control marked ${name} out. Ask them to bring the rider back.`);
+      }
+
+      overrides.splice(index, 1);
+
+      for (const run of entrantRuns) {
+        if (run.status === "void") {
+          setStatus(run, "pending");
+          autoVoidedBy.delete(run.id);
+        }
+      }
+    }
+
+    progressFrom(roundId);
+    return { entrant_key: entrantKey, out };
+  };
+
   return {
     recordResult,
     clearResult,
     setRunStatus,
     setLive,
     callPool,
-    snapshot: () => ({ rounds: clone(rounds), runs: clone(runs), live: clone(live) }),
+    takeOut,
+    snapshot: () => ({
+      rounds: clone(rounds),
+      runs: clone(runs),
+      live: clone(live),
+      overrides: clone(overrides),
+    }),
   };
 };

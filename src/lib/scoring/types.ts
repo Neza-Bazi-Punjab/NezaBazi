@@ -292,6 +292,9 @@ export type CommentaryState = PublicLiveState & {
   up_next_riders: (ScoringRun & { rider: RiderDetail })[];
   /* Standings for every round, keyed by round id, for the "earlier today" column. */
   leaderboards_by_round: Record<string, LeaderboardRow[]>;
+  /* The full start list of the current round, in run order: every rider's
+     Round 1 / 2 / 3 marks and the state of every pool. Staff only. */
+  runs: ScoringRun[];
 };
 
 /* GET /api/judge/state — judge or admin. */
@@ -313,6 +316,10 @@ export type ScoreRequest = {
 export type ClearScoreRequest = { run_id: string; make_current?: boolean };
 
 export type RunStatusRequest = { run_id: string; status: "pending" | "void" };
+
+/* "Take out" (out: true) an entrant for the rest of a round — an injured
+   horse, a disqualification — or "Bring back" a judge's Take out. */
+export type TakeOutRequest = { round_id: string; entrant_key: string; out: boolean };
 
 /* Partial update: only the keys present are applied. */
 export type LiveUpdateRequest = {

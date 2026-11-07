@@ -86,25 +86,15 @@ export const attemptTextIfMany = (
 /* Which pool is riding and which is next.
    Riding: the pool of the rider on course, or the called pool when nobody is
    on course yet. Next: the called pool when it has been called ahead of the
-   riding one ("Call Pool C" while Pool B finishes), otherwise the pool after
-   it as computed by the server. */
+   riding one ("Call Pool C" while Pool B finishes), otherwise the server's
+   next pool, which already follows the round-first order (after Round 1 ·
+   Pool C comes Round 2 · Pool A; src/lib/scoring/blocks.ts). */
 export const nowAndNextPools = (
-  state: Pick<PublicLiveState, "live" | "current_run" | "next_pool_label" | "pools">
+  state: Pick<PublicLiveState, "live" | "current_run" | "next_pool_label">
 ) => {
   const called = state.live?.called_pool_label ?? null;
   const riding = state.current_run?.pool_label ?? called;
-  const ridingIndex = riding ? state.pools.indexOf(riding) : -1;
-  const calledIndex = called ? state.pools.indexOf(called) : -1;
-  let next: string | null = null;
-
-  if (riding && riding === called) {
-    next =
-      state.next_pool_label ?? (ridingIndex >= 0 ? state.pools[ridingIndex + 1] : null) ?? null;
-  } else if (called && ridingIndex >= 0 && calledIndex > ridingIndex) {
-    next = called;
-  } else if (ridingIndex >= 0) {
-    next = state.pools[ridingIndex + 1] ?? null;
-  }
+  const next = called && riding !== called ? called : state.next_pool_label;
 
   return { riding, next };
 };
@@ -177,6 +167,25 @@ export const rosterFor = (
   label: string | null | undefined
 ) => rosters[label ?? ""] ?? [];
 
+/* Who a pool call-up lists. When riders have more than one attempt (Round
+   1 / 2 / 3), only those still riding: a rider who has carried, or is out,
+   is not called back for a later round. */
+export const callUpRoster = (
+  state: Pick<PublicLiveState, "pool_rosters" | "leaderboard" | "current_round">,
+  label: string | null | undefined
+) => {
+  const entries = rosterFor(state.pool_rosters, label);
+
+  if ((state.current_round?.attempts_per_rider ?? 1) < 2) {
+    return entries;
+  }
+
+  const decided = new Set(
+    state.leaderboard.filter((row) => row.advanced !== null).map((row) => row.entrant_key)
+  );
+  return entries.filter((entry) => !decided.has(entry.entrant_key));
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -228,6 +237,7 @@ export const normalizeCommentaryState = (
     current_rider: isRecord(base.current_rider) ? base.current_rider : null,
     up_next_riders: asArray<CommentaryState["up_next_riders"][number]>(base.up_next_riders),
     leaderboards_by_round: asRecord<LeaderboardRow[]>(base.leaderboards_by_round),
+    runs: asArray<ScoringRun>(base.runs),
   };
 };
 

@@ -1,35 +1,47 @@
 "use client";
 
-/* The judges' panel: a phone at the track, in bright sun, often with gloves.
-   Two taps per result (choose, then confirm), huge targets, high contrast,
-   nothing that depends on hover. Every write's response carries the fresh
-   start list, which is applied at once — the panel never waits on realtime
-   to show its own action. */
+/* The judges' panel ("Live Scoring 6e", screen 7a): a laptop at the track,
+   or a phone, in bright sun. Pick Carried 4 / Struck 2 / Miss 0, then
+   Confirm — two taps per result, big targets, high contrast, nothing that
+   depends on hover. Every write's response carries the fresh start list,
+   which is applied at once — the panel never waits on realtime to show its
+   own action. Below 1024px the two columns stack into one.
+
+   Kept simple for judges who are not at home with technology: score, Skip
+   (the rider waits in the Skipped box until "Ride now"), Take out (an injured
+   horse, a disqualification; "Bring back" undoes it), Undo last and Call next
+   pool. Rounds, the full start list and what the screens show belong to the
+   person in control on /admin/scoring. */
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import ConnectionBadge from "@/components/scoring/ConnectionBadge";
-import ResultBadge, { ResultMark } from "@/components/scoring/ResultBadge";
 import {
-  ALREADY_QUALIFIED_NOTE,
-  DISPLAY_MODE_CHOICES,
-  attemptText,
   carriedEntrantKeys,
-  eventTypeName,
-  groupRunsByPool,
   normalizeJudgeState,
   poolName,
-  runSubtitle,
 } from "@/components/scoring/format";
+import {
+  LEDGER_ROOT,
+  PoolList,
+  RoundChips,
+  StatusBar,
+  TopStrip,
+} from "@/components/scoring/ledger/Ledger";
+import {
+  blockPosition,
+  isOpenRun,
+  nextPoolBlock,
+  poolSummaries,
+  ridingPoolBlock,
+  roundChips,
+} from "@/lib/scoring/blocks";
 import {
   RESULT_LABELS,
   RESULT_POINTS,
   RUN_RESULTS,
   type JudgeState,
   type RunResult,
-  type ScoringRound,
   type ScoringRun,
 } from "@/lib/scoring/types";
-import { startListMatcher } from "@/lib/scoring/start-list-search";
 import { TRAINING_BANNER, TRAINING_LABEL, type TrainingScope } from "@/lib/scoring/training";
 import { useLiveState } from "@/lib/scoring/use-live-state";
 import {
@@ -43,31 +55,22 @@ import {
 const JUDGE_STATE_URL = "/api/judge/state";
 
 type Toast = { id: number; tone: "error" | "success"; message: string };
-type RunSheet = { runId: string; mode: "actions" | "change" };
+type Saved = { name: string; result: RunResult; at: number };
 
-const RESULT_BUTTON: Record<RunResult, string> = {
-  carry: "bg-emerald-400 text-ink",
-  strike: "bg-amber-300 text-ink",
-  miss: "bg-stone-200 text-ink",
+/* The big number on each result card (the design's colours). */
+const RESULT_NUMBER: Record<RunResult, string> = {
+  carry: "text-[var(--ledger-carry)]",
+  strike: "text-[var(--ledger-ink)]",
+  miss: "text-[var(--ledger-miss)]",
 };
 
-const CONFIRM_BUTTON: Record<RunResult, string> = {
-  carry: "bg-emerald-700 text-cream",
-  strike: "bg-amber-700 text-cream",
-  miss: "bg-ink text-cream",
-};
+const SAVED_FOR_MS = 5000;
 
-const ROUND_STATUS_TEXT: Record<ScoringRound["status"], string> = {
-  upcoming: "Upcoming",
-  live: "Live",
-  complete: "Complete",
-};
-
-const label = "font-display text-xs font-semibold uppercase tracking-[0.18em] text-cream/70";
+const label = "mono text-[11px] uppercase text-[var(--ledger-muted)]";
 const secondaryButton =
-  "min-h-14 rounded-xl border-2 border-cream/40 px-4 font-display text-base font-semibold uppercase tracking-[0.1em] text-cream active:bg-white/10 disabled:opacity-40";
+  "mono min-h-12 border-2 border-[var(--ledger-ink)] bg-transparent px-4 text-[13px] font-semibold uppercase text-[var(--ledger-ink)] active:bg-[var(--ledger-pick)] disabled:opacity-40";
 const primaryButton =
-  "min-h-16 w-full rounded-xl bg-bronze px-4 font-display text-xl font-bold uppercase tracking-[0.1em] text-cream active:bg-bronze-dark disabled:opacity-40";
+  "min-h-14 w-full bg-[var(--ledger-ink)] px-4 text-[19px] font-bold uppercase text-[var(--ledger-paper)] active:opacity-90 disabled:opacity-40";
 
 const latestScored = (runs: ScoringRun[]) => {
   let latest: ScoringRun | null = null;
@@ -85,7 +88,29 @@ const latestScored = (runs: ScoringRun[]) => {
   return latest;
 };
 
-const isOpenRun = (run: ScoringRun) => run.status === "pending" || run.status === "on_course";
+/* 14:31:52 in the browser's time zone. */
+const clockTime = (iso: string | null) => {
+  if (!iso) {
+    return "";
+  }
+
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "" : date.toTimeString().slice(0, 8);
+};
+
+/* One labelled cell of the facts row under the rider's name. */
+function FactCell({ term, value, first = false }: { term: string; value: string; first?: boolean }) {
+  return (
+    <div
+      className={`flex min-w-0 flex-col gap-0.5 px-3.5 py-[9px] ${
+        first ? "" : "border-l border-[var(--ledger-rule)]"
+      }`}
+    >
+      <span className={label}>{term}</span>
+      <span className="truncate text-[21px] font-semibold">{value}</span>
+    </div>
+  );
+}
 
 /* `sample`: training mode (/judge/demo). Every read and write goes to a
    practice session on the server (?sample=1) instead of the database, and a
@@ -95,19 +120,18 @@ const isOpenRun = (run: ScoringRun) => run.status === "pending" || run.status ==
 export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
   const training = sample !== undefined;
   const stateUrl = training ? withTrainingFlag(JUDGE_STATE_URL) : JUDGE_STATE_URL;
-  const { data, error, connection, lastUpdated, refetch, setData } =
+  const { data, error, connection, refetch, setData } =
     useLiveState<JudgeState>(stateUrl);
   const state = useMemo(() => normalizeJudgeState(data), [data]);
 
   const [pending, setPending] = useState<JudgeAction | null>(null);
   const [busy, setBusy] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [roundsOpen, setRoundsOpen] = useState(false);
-  const [screensOpen, setScreensOpen] = useState(false);
-  const [messageDraft, setMessageDraft] = useState<string | null>(null);
-  const [runSheet, setRunSheet] = useState<RunSheet | null>(null);
-  const [startListQuery, setStartListQuery] = useState("");
+  /* The result picked on the 4 / 2 / 0 cards, waiting for Confirm. */
+  const [selected, setSelected] = useState<RunResult | null>(null);
+  /* "Change" in the log: the run whose result the cards now change. */
+  const [editRunId, setEditRunId] = useState<string | null>(null);
+  const [saved, setSaved] = useState<Saved | null>(null);
   const busyRef = useRef(false);
   const toastSeq = useRef(0);
 
@@ -126,56 +150,82 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
   const pools = state?.pools ?? [];
   const calledPool = live?.called_pool_label ?? null;
   const lastScored = latestScored(runs);
-  const scoredCount = runs.filter((run) => run.status === "scored").length;
-  const groups = useMemo(() => groupRunsByPool(runs), [runs]);
-  /* The start-list drawer's search: rider, team, horse or pool. */
-  const shownGroups = useMemo(() => {
-    const matches = startListMatcher(startListQuery, state?.pools ?? []);
-
-    return groups
-      .map((group) => ({
-        ...group,
-        shown: group.runs.filter((run) =>
-          matches({ texts: [run.rider_name, run.team_name, run.horse_name], pool: run.pool_label })
-        ),
-      }))
-      .filter((group) => group.shown.length > 0);
-  }, [groups, startListQuery, state]);
-  const searching = startListQuery.trim() !== "";
   const carried = useMemo(() => carriedEntrantKeys(runs, round), [runs, round]);
-  /* A voided attempt of a rider who has already carried in a qualification
-     round: the database skipped it, and the judge should know why. */
-  const alreadyQualified = (run: ScoringRun) =>
-    run.status === "void" && carried.has(run.entrant_key);
-  const sheetRun = runSheet ? (runs.find((run) => run.id === runSheet.runId) ?? null) : null;
   const nextRider = state?.up_next.find((run) => run.id !== currentRun?.id) ?? null;
 
-  const poolHasOpenRuns = (pool: string) =>
-    runs.some((run) => run.pool_label === pool && isOpenRun(run));
+  /* Round 1 / 2 / 3 (riders with more than one attempt). */
+  const manyAttempts = (round?.attempts_per_rider ?? 1) > 1;
+  const riding = useMemo(
+    () => ridingPoolBlock(runs, calledPool, currentRunId),
+    [runs, calledPool, currentRunId]
+  );
+  const nextBlock = useMemo(
+    () => nextPoolBlock(runs, calledPool, currentRunId),
+    [runs, calledPool, currentRunId]
+  );
+  const chips = useMemo(() => roundChips(runs, riding?.attempt ?? null), [runs, riding]);
+  const advanced = useMemo(
+    () => new Map((state?.leaderboard ?? []).map((row) => [row.entrant_key, row.advanced])),
+    [state]
+  );
+  const poolRows = useMemo(
+    () => poolSummaries(runs, advanced, calledPool, currentRunId),
+    [runs, advanced, calledPool, currentRunId]
+  );
+  const roundComplete = runs.length > 0 && !runs.some(isOpenRun);
 
-  /* The pool to call next: after the called one, or the first with riders
-     still to go when nothing has been called yet. */
-  const nextPoolToCall = (() => {
-    if (pools.length === 0) {
-      return null;
+  /* The Out box: riders a judge took out ("Bring back" undoes it). The
+     database records Take out as an override to Out and skips the rides
+     still to come; an administrator's own Mark Out does not show here. */
+  const takenOut = useMemo(() => {
+    const keys = new Set<string>();
+
+    for (const row of state?.leaderboard ?? []) {
+      if (
+        row.advanced === false &&
+        row.advanced_overridden &&
+        !carried.has(row.entrant_key) &&
+        runs.some((run) => run.entrant_key === row.entrant_key && run.status === "void")
+      ) {
+        keys.add(row.entrant_key);
+      }
     }
 
-    if (!calledPool) {
-      return pools.find(poolHasOpenRuns) ?? null;
-    }
+    return keys;
+  }, [state, runs, carried]);
+  const outRows = (state?.leaderboard ?? []).filter((row) => takenOut.has(row.entrant_key));
 
-    const index = pools.indexOf(calledPool);
-    const after = index >= 0 ? pools.slice(index + 1) : pools;
-    return state?.next_pool_label ?? after.find(poolHasOpenRuns) ?? after[0] ?? null;
-  })();
-  const calledPoolDone = calledPool ? !poolHasOpenRuns(calledPool) : true;
+  /* The Skipped box: rides skipped on this panel, and rides still to come
+     that the riding has already passed (a rider brought back, or put back on
+     the list). Not the attempts a carry made unnecessary, nor a taken-out
+     rider's. */
+  const lastRidden = Math.max(0, ...runs.filter((run) => run.status === "scored").map((run) => run.run_order));
+  const passedOrder = currentRun ? currentRun.run_order : lastRidden;
+  const skippedRuns = runs.filter(
+    (run) =>
+      run.id !== currentRun?.id &&
+      !takenOut.has(run.entrant_key) &&
+      ((run.status === "void" && !carried.has(run.entrant_key)) ||
+        (run.status === "pending" && run.run_order < passedOrder))
+  );
 
-  /* A result armed from the big buttons belongs to one rider: if someone
-     else comes on course (another judge, an administrator) it is dropped. */
-  const visiblePending =
-    pending && pending.kind === "score" && pending.fromMain && pending.run.id !== currentRun?.id
-      ? null
-      : pending;
+  /* The run the result cards act on: the one being changed from the log, or
+     the rider on course. */
+  const editRun = editRunId ? (runs.find((run) => run.id === editRunId) ?? null) : null;
+  const targetRun = editRun ?? currentRun;
+  const editing = editRun !== null;
+
+  /* A result picked for one rider is dropped if someone else comes on course
+     (another judge, an administrator). */
+  const [pickedFor, setPickedFor] = useState<string | null>(null);
+  const shownSelected = selected && pickedFor === targetRun?.id ? selected : null;
+
+  /* Who Take out applies to: the rider, or their team in a Section round. */
+  const entrantName = (run: ScoringRun) =>
+    run.entrant_key.startsWith("team:") ? (run.team_name ?? run.rider_name) : run.rider_name;
+
+  const roundText = (attempt: number | null | undefined) =>
+    manyAttempts && attempt ? `Round ${attempt}` : null;
 
   /* Toasts -------------------------------------------------------------- */
 
@@ -195,6 +245,16 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
     },
     [dismissToast]
   );
+
+  /* "Saved · Name · Carried 4" fades after a few seconds. */
+  useEffect(() => {
+    if (!saved) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setSaved(null), SAVED_FOR_MS);
+    return () => window.clearTimeout(timer);
+  }, [saved]);
 
   /* Writes -------------------------------------------------------------- */
 
@@ -216,19 +276,15 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
       }
 
       setPending(null);
-      setRunSheet(null);
+      setSelected(null);
+      setEditRunId(null);
 
-      if (action.kind === "display" || action.kind === "message") {
-        setScreensOpen(false);
-        setMessageDraft(null);
+      if (action.kind === "score") {
+        // The message line under the cards says it; no toast over the panel.
+        setSaved({ name: action.run.rider_name, result: action.result, at: Date.now() });
+      } else {
+        pushToast("success", successMessage(action));
       }
-
-      if (action.kind === "current" || action.kind === "round") {
-        setDrawerOpen(false);
-        setRoundsOpen(false);
-      }
-
-      pushToast("success", successMessage(action));
     } catch (caught) {
       setPending(null);
       pushToast(
@@ -248,6 +304,33 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
     }
   };
 
+  const pick = (result: RunResult) => {
+    if (!busyRef.current && targetRun) {
+      setSelected(result);
+      setPickedFor(targetRun.id);
+      setSaved(null);
+    }
+  };
+
+  const cancelPick = () => {
+    setSelected(null);
+    setEditRunId(null);
+  };
+
+  const confirmPick = () => {
+    if (!shownSelected || !targetRun) {
+      return;
+    }
+
+    void perform({
+      kind: "score",
+      run: targetRun,
+      result: shownSelected,
+      override: targetRun.status === "scored",
+      fromMain: !editing,
+    });
+  };
+
   /* Escape closes the topmost layer (keyboards on tablets and laptops). */
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -257,20 +340,17 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
 
       if (pending) {
         setPending(null);
-      } else if (runSheet) {
-        setRunSheet(null);
-      } else if (roundsOpen) {
-        setRoundsOpen(false);
-      } else if (drawerOpen) {
-        setDrawerOpen(false);
+      } else if (selected || editRunId) {
+        setSelected(null);
+        setEditRunId(null);
       }
     };
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [pending, runSheet, roundsOpen, drawerOpen]);
+  }, [pending, selected, editRunId]);
 
-  /* Keep the phone awake while the panel is open (where supported). */
+  /* Keep the screen awake while the panel is open (where supported). */
   useEffect(() => {
     let lock: WakeLockSentinel | null = null;
     let disposed = false;
@@ -309,82 +389,53 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
 
   /* Render -------------------------------------------------------------- */
 
-  const confirmCopy = visiblePending ? describeAction(visiblePending) : null;
+  const confirmCopy = pending ? describeAction(pending) : null;
 
-  const header = (
-    <header className="sticky top-0 z-30 border-b border-cream/10 bg-ink/95 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur">
-      {sample && (
-        <div
-          role="note"
-          aria-label="Training mode"
-          className="mx-auto mb-3 flex max-w-xl flex-wrap items-center justify-between gap-2 rounded-xl border-2 border-amber-300 bg-amber-300 px-3 py-2 text-ink"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="font-display text-sm font-bold uppercase tracking-[0.08em]">
-              {TRAINING_LABEL}
-            </p>
-            <p className="text-sm font-medium leading-snug">{TRAINING_BANNER[sample]}</p>
-          </div>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => arm({ kind: "reset", scope: sample })}
-            className="min-h-11 rounded-lg border-2 border-ink px-3 font-display text-xs font-bold uppercase tracking-[0.1em] active:bg-ink/10 disabled:opacity-40"
-          >
-            Reset training data
-          </button>
-        </div>
-      )}
-      <div className="mx-auto flex max-w-xl items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate font-display text-lg font-bold uppercase tracking-wide">
-            {round?.name ?? "Judges' Panel"}
-          </p>
-          <p className="mt-0.5 font-display text-sm font-semibold uppercase tracking-[0.12em] text-cream/75">
-            {[
-              currentRun ? poolName(currentRun.pool_label) : poolName(calledPool),
-              currentRun && runs.length > 0
-                ? `Run ${currentRun.run_order} of ${runs.length}`
-                : runs.length > 0
-                  ? `${scoredCount} of ${runs.length} scored`
-                  : null,
-            ]
-              .filter(Boolean)
-              .join(" · ") || "No live round"}
-          </p>
-        </div>
-        <ConnectionBadge connection={connection} lastUpdated={lastUpdated} tone="dark" />
-      </div>
-      <div className="mx-auto mt-3 grid max-w-xl grid-cols-3 gap-2">
-        <button
-          type="button"
-          onClick={() => setDrawerOpen(true)}
-          disabled={!round}
-          className={`${secondaryButton} px-2`}
-        >
-          Start list
-        </button>
-        <button type="button" onClick={() => setRoundsOpen(true)} className={`${secondaryButton} px-2`}>
-          Round
-        </button>
-        <button
-          type="button"
-          onClick={() => setScreensOpen(true)}
-          disabled={!state?.configured}
-          className={`${secondaryButton} px-2`}
-        >
-          Screens
-        </button>
-      </div>
-    </header>
-  );
+  const whereText =
+    [
+      round?.name,
+      roundText(currentRun?.attempt_number ?? riding?.attempt),
+      poolName(currentRun?.pool_label ?? calledPool),
+    ]
+      .filter(Boolean)
+      .join(" · ") || "No live round";
 
-  let body: React.ReactNode;
+  /* "3 / 10": the run's place among its pool's rides in this round. */
+  const runInPool = (run: ScoringRun) => {
+    const { index, size } = blockPosition(runs, run);
+    return `${index} / ${size}`;
+  };
+
+  /* The facts row: Horse | Pool | Run | Round (or the team's rider). */
+  const facts = (run: ScoringRun) => {
+    const teamRuns = run.team_id
+      ? runs.filter(
+          (other) => other.entrant_key === run.entrant_key && other.attempt_number === run.attempt_number
+        )
+      : [];
+    const teamIndex = teamRuns.findIndex((other) => other.id === run.id);
+    const last: [string, string] = manyAttempts
+      ? ["Round", `${run.attempt_number} of ${round?.attempts_per_rider ?? 1}`]
+      : run.team_id
+        ? ["Team", [run.team_name, teamIndex >= 0 ? `rider ${teamIndex + 1} of ${teamRuns.length}` : null].filter(Boolean).join(" · ")]
+        : ["Round", round?.name ?? "—"];
+
+    return (
+      <div className="grid grid-cols-2 border-y border-[var(--ledger-rule)] bg-[var(--ledger-panel)] sm:grid-cols-[1.6fr_1fr_1fr_1fr]">
+        <FactCell term="Horse" value={run.horse_name ?? "—"} first />
+        <FactCell term="Pool" value={run.pool_label ?? "—"} />
+        <FactCell term="Rider" value={runInPool(run)} />
+        <FactCell term={last[0]} value={last[1] || "—"} />
+      </div>
+    );
+  };
+
+  let main: React.ReactNode;
 
   if (!state) {
-    body = error ? (
-      <div className="space-y-4 rounded-2xl border-2 border-red-400/70 bg-red-950/40 p-5">
-        <p className="text-lg">{error}</p>
+    main = error ? (
+      <div className="space-y-4 border-[3px] border-[var(--ledger-red)] bg-[var(--ledger-panel)] p-5">
+        <p className="text-xl">{error}</p>
         <div className={`grid gap-2 ${training ? "grid-cols-1" : "grid-cols-2"}`}>
           <button type="button" onClick={refetch} className={secondaryButton}>
             Retry
@@ -400,757 +451,471 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
         </div>
       </div>
     ) : (
-      <p className="py-16 text-center text-lg text-cream/75">Loading the start list…</p>
+      <p className="mono py-16 text-center text-[13px] uppercase text-[var(--ledger-muted)]">Loading the start list…</p>
     );
   } else if (!state.configured) {
-    body = (
-      <div className="rounded-2xl border border-cream/15 bg-white/5 p-6 text-center">
-        <p className="font-display text-2xl font-bold uppercase">Live scoring is not set up yet</p>
-        <p className="mt-3 text-cream/75">
+    main = (
+      <div className="border-[3px] border-[var(--ledger-rule)] bg-[var(--ledger-panel)] p-6 text-center">
+        <p className="text-[30px] font-bold uppercase">Live scoring is not set up yet</p>
+        <p className="mt-3 text-[var(--ledger-muted)]">
           An administrator needs to apply the scoring setup. This panel will update by itself.
         </p>
       </div>
     );
   } else if (!round) {
-    body = (
-      <div className="space-y-4 rounded-2xl border border-cream/15 bg-white/5 p-6 text-center">
-        <p className="font-display text-2xl font-bold uppercase">No live round</p>
-        <p className="text-cream/75">
-          {state.rounds.length > 0
-            ? "Choose the round that is being ridden."
-            : "No rounds have been created yet. An administrator sets them up under Admin → Scoring."}
+    main = (
+      <div className="space-y-4 border-[3px] border-[var(--ledger-rule)] bg-[var(--ledger-panel)] p-6 text-center">
+        <p className="text-[30px] font-bold uppercase">No live round</p>
+        <p className="text-[var(--ledger-muted)]">
+          The person in control makes a round live. This panel will update by itself.
         </p>
-        {state.rounds.length > 0 && (
-          <button type="button" onClick={() => setRoundsOpen(true)} className={primaryButton}>
-            Choose round
-          </button>
-        )}
       </div>
     );
   } else {
-    const teamPosition = (() => {
-      if (!currentRun || !currentRun.team_id) {
-        return null;
-      }
+    const overrideMode = targetRun?.status === "scored";
+    const resultsDisabled = busy || !targetRun || targetRun.status === "void";
+    const message = saved
+      ? `Saved · ${saved.name.split(" ")[0]} · ${RESULT_LABELS[saved.result]} ${RESULT_POINTS[saved.result]}`
+      : shownSelected
+        ? `${RESULT_LABELS[shownSelected]} ${RESULT_POINTS[shownSelected]} selected`
+        : overrideMode && targetRun?.result
+          ? `Recorded: ${RESULT_LABELS[targetRun.result]} ${RESULT_POINTS[targetRun.result]} — pick a result to change it`
+          : "";
 
-      const teamRuns = runs.filter(
-        (run) =>
-          run.entrant_key === currentRun.entrant_key &&
-          run.attempt_number === currentRun.attempt_number
-      );
-      const index = teamRuns.findIndex((run) => run.id === currentRun.id);
-      return index >= 0 ? `Rider ${index + 1} of ${teamRuns.length}` : null;
-    })();
-
-    const overrideMode = currentRun?.status === "scored";
-    const resultsDisabled = busy || !currentRun || currentRun.status === "void";
-
-    body = (
-      <div className="space-y-5">
+    main = (
+      <>
         {error && (
-          <p className="rounded-xl border-2 border-red-400/70 bg-red-950/40 px-4 py-3">
+          <p className="border-2 border-[var(--ledger-red)] bg-[var(--ledger-panel)] px-4 py-2 text-[var(--ledger-red)]">
             {error}
           </p>
         )}
 
-        {/* Call Pool --------------------------------------------------- */}
-        {pools.length > 0 && (
-          <section aria-label="Pool call-up" className="rounded-2xl border border-cream/15 p-4">
-            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-              <p className="font-display text-lg font-semibold uppercase tracking-wide">
-                <span className={label}>Called </span>
-                {calledPool ? `Pool ${calledPool}` : "None yet"}
-              </p>
-              <p className="font-display text-lg font-semibold uppercase tracking-wide text-cream/80">
-                <span className={label}>Next </span>
-                {nextPoolToCall ? `Pool ${nextPoolToCall}` : "—"}
-              </p>
-            </div>
-
-            {live?.display_mode === "pool_call" && (
-              <div className="mt-3 space-y-2 rounded-xl bg-bronze/25 p-3">
-                <p className="text-base">
-                  Screens show the Pool {calledPool} call-up. They return to the scoreboard on the
-                  first result.
-                </p>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => arm({ kind: "scoreboard" })}
-                  className={`${secondaryButton} w-full`}
-                >
-                  Show scoreboard now
-                </button>
-              </div>
+        {/* Rider on course ------------------------------------------- */}
+        <section aria-labelledby="current-rider-name" className="flex flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-3.5">
+            <span className="mono text-[13px] uppercase text-[var(--ledger-bronze)]">
+              {editing && editRun?.result
+                ? `Changing result · was ${RESULT_LABELS[editRun.result]} ${RESULT_POINTS[editRun.result]}`
+                : targetRun?.status === "void"
+                  ? "Skipped"
+                  : targetRun
+                    ? "● On course"
+                    : "Nobody on course"}
+            </span>
+            {editing && (
+              <button
+                type="button"
+                onClick={cancelPick}
+                className="mono h-7 border border-[var(--ledger-bronze)] bg-transparent px-2.5 text-[11px] uppercase text-[var(--ledger-bronze)]"
+              >
+                Back to rider on course
+              </button>
             )}
-
-            {nextPoolToCall && calledPoolDone ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => arm({ kind: "call", roundId: round.id, pool: nextPoolToCall })}
-                className={`${primaryButton} mt-3 min-h-20 text-2xl`}
-              >
-                Call Pool {nextPoolToCall}
-              </button>
-            ) : nextPoolToCall ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => arm({ kind: "call", roundId: round.id, pool: nextPoolToCall })}
-                className={`${secondaryButton} mt-3 w-full`}
-              >
-                Call Pool {nextPoolToCall} early
-              </button>
-            ) : calledPoolDone && calledPool ? (
-              <p className="mt-3 text-cream/75">Every pool in this round has ridden.</p>
-            ) : null}
-          </section>
-        )}
-
-        {/* Current rider ----------------------------------------------- */}
-        <section
-          aria-labelledby="current-rider-name"
-          className={`rounded-2xl border-2 p-5 ${
-            currentRun ? "border-bronze bg-white/5" : "border-cream/15"
-          }`}
-        >
-          {currentRun ? (
-            <>
-              <p className={label}>
-                {[
-                  currentRun.status === "void" ? "Skipped" : "On course",
-                  poolName(currentRun.pool_label),
-                  attemptText(currentRun, round),
-                  teamPosition,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
-              <h1
-                id="current-rider-name"
-                className="mt-2 break-words font-display text-[2.6rem] font-bold uppercase leading-[1.02] tracking-wide sm:text-5xl"
-              >
-                {currentRun.rider_name}
-              </h1>
-              {runSubtitle(currentRun) && (
-                <p className="mt-2 text-xl text-cream/85">{runSubtitle(currentRun)}</p>
-              )}
-              {overrideMode && currentRun.result && (
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <span className="text-cream/80">Already recorded:</span>
-                  <ResultBadge result={currentRun.result} tone="dark" size="md" />
-                  <span className="text-cream/80">Pick a result to change it.</span>
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              <h1 id="current-rider-name" className="font-display text-2xl font-bold uppercase">
-                Nobody on course
-              </h1>
-              <p className="mt-2 text-cream/75">
-                {nextRider
-                  ? `Next waiting: ${nextRider.rider_name}.`
-                  : "No riders are waiting in this round."}
-              </p>
-              {nextRider && (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void perform({ kind: "current", run: nextRider })}
-                  className={`${primaryButton} mt-4`}
-                >
-                  Put {nextRider.rider_name} on course
-                </button>
-              )}
-            </>
-          )}
-        </section>
-
-        {/* Result buttons ---------------------------------------------- */}
-        <section aria-label="Record a result" className="grid gap-3">
-          {RUN_RESULTS.map((result) => {
-            const armed =
-              visiblePending?.kind === "score" &&
-              visiblePending.fromMain &&
-              visiblePending.result === result;
-            const sameAsRecorded = overrideMode && currentRun?.result === result;
-
-            return (
-              <button
-                key={result}
-                type="button"
-                disabled={resultsDisabled || sameAsRecorded}
-                aria-pressed={armed}
-                onClick={() =>
-                  currentRun &&
-                  arm({
-                    kind: "score",
-                    run: currentRun,
-                    result,
-                    override: overrideMode,
-                    fromMain: true,
-                  })
-                }
-                className={`flex min-h-20 w-full items-center justify-between gap-4 rounded-2xl px-5 font-display font-bold uppercase tracking-[0.06em] disabled:opacity-35 ${
-                  RESULT_BUTTON[result]
-                } ${armed ? "outline outline-4 outline-offset-4 outline-cream" : ""}`}
-              >
-                <span className="flex items-center gap-3 text-3xl">
-                  <ResultMark result={result} className="h-6 w-6" />
-                  {RESULT_LABELS[result]}
-                </span>
-                <span className="text-4xl tabular-nums">
-                  {RESULT_POINTS[result]}
-                  <span className="sr-only"> points</span>
-                </span>
-              </button>
-            );
-          })}
-        </section>
-
-        {currentRun && (
-          <div className="grid grid-cols-1 gap-2">
-            {currentRun.status === "void" ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => arm({ kind: "restore", run: currentRun })}
-                className={secondaryButton}
-              >
-                Restore this run
-              </button>
-            ) : currentRun.status !== "scored" ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => arm({ kind: "void", run: currentRun })}
-                className={secondaryButton}
-              >
-                Skip run
-              </button>
-            ) : null}
           </div>
-        )}
-
-        {/* Last result ------------------------------------------------- */}
-        {lastScored && lastScored.result && (
-          <section aria-label="Last result" className="rounded-2xl border border-cream/15 p-4">
-            <p className={label}>Last result · Run {lastScored.run_order}</p>
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <p className="min-w-0 break-words font-display text-xl font-semibold uppercase">
-                {lastScored.rider_name}
-              </p>
-              <ResultBadge result={lastScored.result} tone="dark" size="md" />
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => setRunSheet({ runId: lastScored.id, mode: "change" })}
-                className={secondaryButton}
-              >
-                Change result
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => arm({ kind: "clear", run: lastScored, returnToRun: true })}
-                className={secondaryButton}
-              >
-                Undo last result
-              </button>
-            </div>
-          </section>
-        )}
-
-        {nextRider && currentRun && (
-          <p className="text-center text-cream/70">
-            <span className={label}>Next </span>
-            {nextRider.rider_name}
-            {runSubtitle(nextRider) ? ` · ${runSubtitle(nextRider)}` : ""}
-          </p>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-dvh bg-ink text-cream">
-      {header}
-
-      <main className={`mx-auto max-w-xl px-4 pt-5 ${visiblePending ? "pb-56" : "pb-10"}`}>
-        {body}
-
-        {/* Practice from home before event day; back again afterwards. */}
-        <p className="mt-10 text-center">
-          <Link
-            href={training ? "/judge" : "/judge/demo"}
-            className="inline-flex min-h-11 items-center font-display text-sm font-semibold uppercase tracking-[0.12em] text-cream/70 underline underline-offset-4"
+          <h1
+            id="current-rider-name"
+            className="break-words text-[52px] font-bold uppercase leading-[0.95] tracking-[-0.02em] sm:text-[68px] xl:text-[84px]"
           >
-            {training ? "Leave practice — open the live panel" : "Practise on sample riders"}
-          </Link>
-        </p>
-      </main>
+            {targetRun ? targetRun.rider_name : roundComplete ? round.name : "Waiting for a rider"}
+          </h1>
+        </section>
 
-      {/* Start list drawer ---------------------------------------------- */}
-      {drawerOpen && round && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="start-list-title"
-          className="fixed inset-0 z-40 overflow-y-auto bg-ink"
-        >
-          <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-cream/10 bg-ink/95 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur">
-            <div className="min-w-0">
-              <h2 id="start-list-title" className="font-display text-xl font-bold uppercase">
-                Start list
-              </h2>
-              <p className="truncate text-sm text-cream/70">
-                {round.name} · {scoredCount} of {runs.length} scored
-              </p>
-            </div>
-            <button
-              type="button"
-              autoFocus
-              onClick={() => setDrawerOpen(false)}
-              className={`${secondaryButton} shrink-0`}
+        {targetRun && facts(targetRun)}
+
+        {/* Result cards ---------------------------------------------- */}
+        {targetRun ? (
+          <>
+            <section
+              aria-label="Record a result"
+              className="grid grid-cols-3 border-[3px] border-[var(--ledger-rule)] bg-[var(--ledger-panel)]"
             >
-              Close
-            </button>
-          </div>
-
-          <div className={`mx-auto max-w-xl space-y-6 px-4 pt-4 ${visiblePending ? "pb-56" : "pb-10"}`}>
-            {runs.length > 0 && (
-              <div className="space-y-1">
-                <label htmlFor="start-list-search" className={label}>
-                  Find a rider
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    id="start-list-search"
-                    type="search"
-                    inputMode="search"
-                    autoComplete="off"
-                    enterKeyHint="search"
-                    value={startListQuery}
-                    onChange={(event) => setStartListQuery(event.target.value)}
-                    placeholder="Name, team, horse or pool"
-                    className="min-h-14 w-full min-w-0 flex-1 rounded-xl border-2 border-cream/30 bg-white/5 px-3 text-lg text-cream placeholder:text-cream/40 focus:border-bronze focus:outline-none"
-                  />
-                  {searching && (
-                    <button
-                      type="button"
-                      onClick={() => setStartListQuery("")}
-                      className={`${secondaryButton} shrink-0`}
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-                <p className="text-sm text-cream/65">Tap a rider to put them on course.</p>
-              </div>
-            )}
-            {runs.length === 0 && (
-              <p className="py-10 text-center text-cream/75">
-                No start list has been drawn for this round yet.
-              </p>
-            )}
-            {runs.length > 0 && shownGroups.length === 0 && (
-              <p className="py-6 text-center text-lg text-cream/75">
-                No rider matches “{startListQuery.trim()}”.
-              </p>
-            )}
-            {shownGroups.map((group) => {
-              const open = group.runs.filter(isOpenRun).length;
-              const scored = group.runs.filter((run) => run.status === "scored").length;
-
-              return (
-                <section key={group.label ?? "unpooled"} aria-label={poolName(group.label) ?? "Start list"}>
-                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <h3 className="font-display text-2xl font-bold uppercase">
-                        {poolName(group.label) ?? "All riders"}
-                        {group.label && group.label === calledPool && (
-                          <span className="ml-2 rounded-full bg-bronze px-2 py-0.5 align-middle text-xs tracking-[0.12em]">
-                            Called
-                          </span>
-                        )}
-                      </h3>
-                      <p className="text-sm text-cream/70">
-                        {open} to ride · {scored} scored
-                      </p>
-                    </div>
-                    {group.label && (
-                      <button
-                        type="button"
-                        disabled={busy || open === 0}
-                        onClick={() =>
-                          arm({ kind: "call", roundId: round.id, pool: group.label as string })
-                        }
-                        className={secondaryButton}
-                      >
-                        Call Pool {group.label}
-                      </button>
-                    )}
-                  </div>
-                  <ol className="space-y-2">
-                    {group.shown.map((run) => {
-                      const isCurrent = run.id === currentRun?.id;
-
-                      return (
-                        <li key={run.id}>
-                          <button
-                            type="button"
-                            onClick={() => setRunSheet({ runId: run.id, mode: "actions" })}
-                            aria-current={isCurrent ? "step" : undefined}
-                            className={`flex min-h-14 w-full items-center gap-3 rounded-xl border px-3 py-2 text-left active:bg-white/10 ${
-                              isCurrent
-                                ? "border-bronze border-l-8 bg-white/10"
-                                : run.status === "void"
-                                  ? "border-dashed border-cream/25 text-cream/60"
-                                  : "border-cream/15"
-                            }`}
-                          >
-                            <span className="w-9 shrink-0 text-right font-display text-lg font-bold tabular-nums text-cream/60">
-                              {run.run_order}
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block break-words font-display text-lg font-semibold uppercase leading-tight">
-                                {run.rider_name}
-                              </span>
-                              <span className="block text-sm text-cream/65">
-                                {[
-                                  run.team_name,
-                                  round.attempts_per_rider > 1
-                                    ? `Attempt ${run.attempt_number}`
-                                    : null,
-                                  isCurrent ? "Current rider" : null,
-                                  alreadyQualified(run) ? ALREADY_QUALIFIED_NOTE : null,
-                                ]
-                                  .filter(Boolean)
-                                  .join(" · ")}
-                              </span>
-                            </span>
-                            <ResultBadge result={run.result} status={run.status} tone="dark" size="sm" />
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ol>
-                </section>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Screens: what /live and the stream overlays show ---------------- */}
-      {screensOpen && state && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="screens-title"
-          className="fixed inset-0 z-40 overflow-y-auto bg-ink"
-        >
-          <div className="sticky top-0 flex items-center justify-between gap-3 border-b border-cream/10 bg-ink/95 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-            <h2 id="screens-title" className="font-display text-xl font-bold uppercase">
-              Screens
-            </h2>
-            <button
-              type="button"
-              autoFocus
-              onClick={() => {
-                setScreensOpen(false);
-                setMessageDraft(null);
-              }}
-              className={`${secondaryButton} shrink-0`}
-            >
-              Close
-            </button>
-          </div>
-          <div className={`mx-auto max-w-xl space-y-6 px-4 pt-4 ${visiblePending ? "pb-56" : "pb-10"}`}>
-            <section aria-label="Display mode" className="grid grid-cols-2 gap-2">
-              {DISPLAY_MODE_CHOICES.map((choice) => {
-                const active = live?.display_mode === choice.mode;
+              {RUN_RESULTS.map((result, index) => {
+                const armed = shownSelected === result;
+                const sameAsRecorded = overrideMode && targetRun.result === result;
 
                 return (
                   <button
-                    key={choice.mode}
+                    key={result}
                     type="button"
-                    aria-pressed={active}
-                    disabled={busy || active}
-                    onClick={() => arm({ kind: "display", mode: choice.mode })}
-                    className={`min-h-20 rounded-xl border-2 px-3 py-2 text-left disabled:cursor-default ${
-                      active ? "border-bronze bg-bronze/30" : "border-cream/25 active:bg-white/10"
+                    disabled={resultsDisabled || sameAsRecorded}
+                    aria-pressed={armed}
+                    onClick={() => pick(result)}
+                    className={`flex h-[124px] flex-col items-start justify-between gap-2 px-3 py-3 text-left text-[var(--ledger-ink)] disabled:cursor-not-allowed sm:h-[168px] sm:px-5 sm:py-4 xl:flex-row xl:items-end ${
+                      index < 2 ? "border-r-[3px] border-[var(--ledger-rule)]" : ""
+                    } ${armed ? "bg-[var(--ledger-pick)]" : "bg-transparent"} ${
+                      (shownSelected && !armed) || resultsDisabled || sameAsRecorded ? "opacity-40" : ""
                     }`}
                   >
-                    <span className="block font-display text-lg font-bold uppercase leading-tight">
-                      {choice.label}
+                    <span className={`text-[84px] font-bold leading-[0.8] sm:text-[124px] ${RESULT_NUMBER[result]}`}>
+                      {RESULT_POINTS[result]}
+                      <span className="sr-only"> points</span>
                     </span>
-                    <span className="mt-0.5 block text-sm leading-snug text-cream/70">
-                      {active ? "On screen now" : choice.hint}
+                    <span className="text-[18px] font-bold uppercase sm:text-[26px]">
+                      {RESULT_LABELS[result]}
+                      {sameAsRecorded ? <span className="sr-only"> (recorded)</span> : null}
                     </span>
                   </button>
                 );
               })}
             </section>
 
-            <section aria-labelledby="screens-message-label" className="space-y-2">
-              <label
-                id="screens-message-label"
-                htmlFor="screens-message"
-                className={label}
-              >
-                Message on the screens
-              </label>
-              <textarea
-                id="screens-message"
-                rows={2}
-                maxLength={200}
-                value={messageDraft ?? live?.message ?? ""}
-                onChange={(event) => setMessageDraft(event.target.value)}
-                className="block w-full rounded-xl border-2 border-cream/30 bg-white/5 px-3 py-3 text-lg text-cream placeholder:text-cream/40 focus:border-bronze focus:outline-none"
-                placeholder="e.g. Short break — Pool C rides at 2:30"
-              />
-              <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] items-center gap-3 xl:grid-cols-[auto_minmax(0,1fr)_180px_240px]">
+              <div className="flex gap-2">
                 <button
                   type="button"
-                  disabled={busy || (messageDraft ?? live?.message ?? "").trim() === ""}
+                  disabled={busy || editing || targetRun.status !== "on_course"}
+                  onClick={() => arm({ kind: "void", run: targetRun })}
+                  className="mono h-[52px] whitespace-nowrap border border-[var(--ledger-ink)] bg-transparent px-[18px] text-[13px] uppercase disabled:opacity-35"
+                >
+                  Skip
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || editing || targetRun.status !== "on_course" || carried.has(targetRun.entrant_key)}
                   onClick={() =>
-                    arm({ kind: "message", message: (messageDraft ?? live?.message ?? "").trim() })
+                    arm({
+                      kind: "take_out",
+                      roundId: round.id,
+                      entrantKey: targetRun.entrant_key,
+                      name: entrantName(targetRun),
+                      out: true,
+                    })
                   }
-                  className={secondaryButton}
+                  className="mono h-[52px] whitespace-nowrap border border-[var(--ledger-red)] bg-transparent px-[18px] text-[13px] uppercase text-[var(--ledger-red)] disabled:opacity-35"
                 >
-                  Set message
-                </button>
-                <button
-                  type="button"
-                  disabled={busy || !live?.message}
-                  onClick={() => arm({ kind: "message", message: null })}
-                  className={secondaryButton}
-                >
-                  Clear
+                  Take out
                 </button>
               </div>
-            </section>
-          </div>
-        </div>
-      )}
-
-      {/* Round picker --------------------------------------------------- */}
-      {roundsOpen && state && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="round-picker-title"
-          className="fixed inset-0 z-40 overflow-y-auto bg-ink"
-        >
-          <div className="sticky top-0 flex items-center justify-between gap-3 border-b border-cream/10 bg-ink/95 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-            <h2 id="round-picker-title" className="font-display text-xl font-bold uppercase">
-              Live round
-            </h2>
-            <button
-              type="button"
-              autoFocus
-              onClick={() => setRoundsOpen(false)}
-              className={`${secondaryButton} shrink-0`}
-            >
-              Close
-            </button>
-          </div>
-          <ul className={`mx-auto max-w-xl space-y-2 px-4 pt-4 ${visiblePending ? "pb-56" : "pb-10"}`}>
-            {state.rounds.length === 0 && (
-              <li className="py-10 text-center text-cream/75">No rounds have been created yet.</li>
-            )}
-            {state.rounds.map((option) => {
-              const isCurrent = option.id === round?.id;
-
-              return (
-                <li key={option.id}>
-                  <button
-                    type="button"
-                    disabled={busy || isCurrent}
-                    onClick={() => arm({ kind: "round", round: option })}
-                    className={`flex min-h-16 w-full items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left disabled:cursor-default ${
-                      isCurrent ? "border-bronze border-l-8 bg-white/10" : "border-cream/20 active:bg-white/10"
-                    }`}
-                  >
-                    <span className="min-w-0">
-                      <span className="block font-display text-lg font-semibold uppercase leading-tight">
-                        {option.name}
-                      </span>
-                      <span className="block text-sm text-cream/65">
-                        {[eventTypeName(option.event_type), isCurrent ? "Current live round" : null]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </span>
-                    </span>
-                    <span className="shrink-0 rounded-full border border-cream/30 px-2.5 py-0.5 font-display text-xs font-semibold uppercase tracking-[0.12em]">
-                      {ROUND_STATUS_TEXT[option.status] ?? option.status}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
-
-      {/* Run actions sheet ---------------------------------------------- */}
-      {runSheet && sheetRun && (
-        <div className="fixed inset-0 z-50 flex items-end bg-black/60" onClick={() => setRunSheet(null)}>
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="run-sheet-title"
-            onClick={(event) => event.stopPropagation()}
-            className="max-h-[90dvh] w-full overflow-y-auto rounded-t-3xl border-t-4 border-bronze bg-ink px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5"
-          >
-            <div className="mx-auto max-w-xl space-y-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className={label}>
-                    {[
-                      `Run ${sheetRun.run_order}`,
-                      poolName(sheetRun.pool_label),
-                      attemptText(sheetRun, round),
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                  <h2
-                    id="run-sheet-title"
-                    className="mt-1 break-words font-display text-3xl font-bold uppercase leading-tight"
-                  >
-                    {sheetRun.rider_name}
-                  </h2>
-                  {runSubtitle(sheetRun) && (
-                    <p className="text-cream/75">{runSubtitle(sheetRun)}</p>
-                  )}
-                </div>
-                <ResultBadge result={sheetRun.result} status={sheetRun.status} tone="dark" size="md" />
-              </div>
-
-              {runSheet.mode === "change" && sheetRun.status === "scored" && sheetRun.result ? (
-                <div className="space-y-3">
-                  <p className="text-lg">
-                    Recorded now: <strong>{RESULT_LABELS[sheetRun.result]} {RESULT_POINTS[sheetRun.result]}</strong>.
-                    Choose the correct result:
-                  </p>
-                  {RUN_RESULTS.map((result) => (
-                    <button
-                      key={result}
-                      type="button"
-                      disabled={busy || result === sheetRun.result}
-                      onClick={() => {
-                        setRunSheet(null);
-                        arm({ kind: "score", run: sheetRun, result, override: true, fromMain: false });
-                      }}
-                      className={`flex min-h-16 w-full items-center justify-between rounded-2xl px-5 font-display text-2xl font-bold uppercase disabled:opacity-35 ${RESULT_BUTTON[result]}`}
-                    >
-                      <span className="flex items-center gap-3">
-                        <ResultMark result={result} className="h-5 w-5" />
-                        {RESULT_LABELS[result]}
-                        {result === sheetRun.result ? " (recorded)" : ""}
-                      </span>
-                      <span className="tabular-nums">{RESULT_POINTS[result]}</span>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="grid gap-2">
-                  {sheetRun.id !== currentRun?.id && sheetRun.status === "pending" && (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void perform({ kind: "current", run: sheetRun })}
-                      className={primaryButton}
-                    >
-                      Put on course
-                    </button>
-                  )}
-                  {sheetRun.status === "scored" && (
-                    <>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => setRunSheet({ runId: sheetRun.id, mode: "change" })}
-                        className={primaryButton}
-                      >
-                        Change result
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => {
-                          setRunSheet(null);
-                          arm({ kind: "clear", run: sheetRun, returnToRun: false });
-                        }}
-                        className={secondaryButton}
-                      >
-                        Clear result
-                      </button>
-                    </>
-                  )}
-                  {(sheetRun.status === "pending" || sheetRun.status === "on_course") && (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => {
-                        setRunSheet(null);
-                        arm({ kind: "void", run: sheetRun });
-                      }}
-                      className={secondaryButton}
-                    >
-                      Skip run
-                    </button>
-                  )}
-                  {alreadyQualified(sheetRun) && (
-                    <p className="rounded-xl bg-white/10 px-4 py-3 text-base">
-                      {ALREADY_QUALIFIED_NOTE}. The rider carried earlier in this round.
-                    </p>
-                  )}
-                  {sheetRun.status === "void" && (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => {
-                        setRunSheet(null);
-                        arm({ kind: "restore", run: sheetRun });
-                      }}
-                      className={primaryButton}
-                    >
-                      Restore run
-                    </button>
-                  )}
-                </div>
-              )}
-
+              <span
+                role="status"
+                className={`mono order-last col-span-full min-h-5 text-[13px] xl:order-none xl:col-span-1 ${saved ? "text-[var(--ledger-green)]" : "text-[var(--ledger-muted)]"}`}
+              >
+                {message}
+              </span>
               <button
                 type="button"
-                autoFocus
-                onClick={() => setRunSheet(null)}
-                className={`${secondaryButton} w-full`}
+                disabled={busy || (!shownSelected && !editing)}
+                onClick={cancelPick}
+                className="h-14 border-2 border-[var(--ledger-ink)] bg-transparent text-[19px] font-bold uppercase disabled:opacity-40"
               >
                 Cancel
               </button>
+              <button
+                type="button"
+                disabled={busy || !shownSelected}
+                onClick={confirmPick}
+                className="h-14 bg-[var(--ledger-ink)] text-[19px] font-bold uppercase text-[var(--ledger-paper)] disabled:opacity-40"
+              >
+                {busy && shownSelected ? "Saving…" : "Confirm"}
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="flex min-h-[240px] flex-col items-center justify-center gap-4 border-[3px] border-[var(--ledger-rule)] bg-[var(--ledger-panel)] p-6 text-center">
+            {roundComplete ? (
+              <p className="text-[30px] font-bold uppercase">{round.name} complete</p>
+            ) : nextRider ? (
+              <>
+                <p className="text-[var(--ledger-muted)]">Next waiting: {nextRider.rider_name}.</p>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void perform({ kind: "current", run: nextRider })}
+                  className={`${primaryButton} max-w-md`}
+                >
+                  Put {nextRider.rider_name} on course
+                </button>
+              </>
+            ) : (
+              <p className="text-[var(--ledger-muted)]">
+                {runs.length === 0
+                  ? "No start list has been drawn for this round yet."
+                  : "No riders are waiting in this round."}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Skipped and Out ------------------------------------------- */}
+        {(skippedRuns.length > 0 || outRows.length > 0) && (
+          <div className="grid items-start gap-3 sm:grid-cols-2">
+            {skippedRuns.length > 0 && (
+              <section aria-labelledby="skipped-title" className="border-[3px] border-[var(--ledger-rule)] bg-[var(--ledger-panel)] p-3">
+                <h2 id="skipped-title" className="text-[20px] font-bold uppercase">
+                  Skipped
+                </h2>
+                <ul>
+                  {skippedRuns.map((run) => (
+                    <li
+                      key={run.id}
+                      className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-[var(--ledger-hair)] py-1.5 last:border-b-0"
+                    >
+                      <span className="min-w-[9rem] flex-1">
+                        <span className="block truncate text-[18px] font-semibold">{run.rider_name}</span>
+                        <span className="mono block text-[11px] uppercase text-[var(--ledger-muted)]">
+                          {[poolName(run.pool_label), manyAttempts ? `Round ${run.attempt_number}` : null]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      </span>
+                      <span className="flex shrink-0 gap-2">
+                        <button
+                          type="button"
+                          disabled={busy || carried.has(run.entrant_key)}
+                          onClick={() =>
+                            arm({
+                              kind: "take_out",
+                              roundId: round.id,
+                              entrantKey: run.entrant_key,
+                              name: run.rider_name,
+                              out: true,
+                            })
+                          }
+                          className="h-11 border-2 border-[var(--ledger-red)] bg-transparent px-3 text-[15px] font-bold uppercase text-[var(--ledger-red)] disabled:opacity-40"
+                        >
+                          Take out
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => arm({ kind: "ride_now", run })}
+                          className="h-11 bg-[var(--ledger-ink)] px-4 text-[15px] font-bold uppercase text-[var(--ledger-paper)] disabled:opacity-40"
+                        >
+                          Ride now
+                        </button>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+            {outRows.length > 0 && (
+              <section aria-labelledby="out-title" className="border-[3px] border-[var(--ledger-red)] bg-[var(--ledger-panel)] p-3">
+                <h2 id="out-title" className="text-[20px] font-bold uppercase text-[var(--ledger-red)]">
+                  Out
+                </h2>
+                <ul>
+                  {outRows.map((row) => (
+                    <li
+                      key={row.entrant_key}
+                      className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-[var(--ledger-hair)] py-1.5 last:border-b-0"
+                    >
+                      <span className="min-w-[9rem] flex-1">
+                        <span className="block truncate text-[18px] font-semibold">{row.name}</span>
+                        <span className="mono block text-[11px] uppercase text-[var(--ledger-muted)]">
+                          {poolName(row.pool_label)}
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          arm({
+                            kind: "take_out",
+                            roundId: round.id,
+                            entrantKey: row.entrant_key,
+                            name: row.name,
+                            out: false,
+                          })
+                        }
+                        className="h-11 shrink-0 border-2 border-[var(--ledger-ink)] bg-transparent px-4 text-[15px] font-bold uppercase disabled:opacity-40"
+                      >
+                        Bring back
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
+        )}
+
+        {/* Log ------------------------------------------------------- */}
+        <section aria-labelledby="log-title" className="flex min-h-0 flex-1 flex-col">
+          <div className="flex items-center justify-between border-b-[3px] border-[var(--ledger-rule)] pb-1.5">
+            <h2 id="log-title" className="text-[20px] font-bold uppercase">
+              Log
+            </h2>
+            <button
+              type="button"
+              disabled={busy || !lastScored}
+              onClick={() => lastScored && arm({ kind: "clear", run: lastScored, returnToRun: true })}
+              className="mono h-8 border border-[var(--ledger-ink)] bg-transparent px-3.5 text-[12px] uppercase disabled:opacity-35"
+            >
+              Undo last
+            </button>
+          </div>
+          {state.recent_results.length === 0 && (
+            <p className="mono px-1 py-2 text-[13px] text-[var(--ledger-muted)]">No results yet in this round.</p>
+          )}
+          {state.recent_results.slice(0, 4).map((run) => (
+            <div
+              key={run.id}
+              className={`mono grid grid-cols-[60px_minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-1 border-b border-[var(--ledger-hair)] px-1 py-1.5 text-[13px] sm:grid-cols-[72px_minmax(0,1fr)_minmax(0,110px)_minmax(0,120px)_76px] xl:grid-cols-[84px_minmax(0,1fr)_120px_140px_90px] ${
+                editRunId === run.id ? "bg-[var(--ledger-hl)]" : ""
+              }`}
+            >
+              <span className="text-[var(--ledger-muted)]">{clockTime(run.scored_at)}</span>
+              <span className="truncate font-[family-name:var(--font-plex-condensed)] text-[17px] font-semibold">
+                {run.rider_name}
+              </span>
+              <span className="hidden text-[var(--ledger-muted)] sm:inline">
+                {[poolName(run.pool_label), manyAttempts ? `R${run.attempt_number}` : null]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+              <span className={`font-semibold ${run.result ? RESULT_NUMBER[run.result] : ""}`}>
+                {run.result ? `${RESULT_LABELS[run.result]} ${RESULT_POINTS[run.result]}` : ""}
+              </span>
+              <button
+                type="button"
+                disabled={busy || run.status !== "scored"}
+                onClick={() => {
+                  setEditRunId(run.id);
+                  setSelected(null);
+                }}
+                className="h-7 border border-[var(--ledger-rule)] bg-transparent px-2 text-[12px] uppercase disabled:opacity-35"
+              >
+                Change
+              </button>
+            </div>
+          ))}
+        </section>
+      </>
+    );
+  }
+
+  /* Right column: pools, call, next rider, all pools --------------------- */
+  const side = state?.configured && round && (
+    <>
+      {pools.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 border-t-[3px] border-[var(--ledger-rule)] pt-2.5">
+            <div className="flex flex-col">
+              <span className={label}>
+                {["Riding now", roundText(riding?.attempt)].filter(Boolean).join(" · ")}
+              </span>
+              <span className="text-[46px] font-bold leading-none text-[var(--ledger-bronze)]">
+                {riding && currentRun ? `Pool ${riding.pool}` : "—"}
+              </span>
+            </div>
+            <div className="flex flex-col">
+              <span className={label}>{["Next", roundText(nextBlock?.attempt)].filter(Boolean).join(" · ")}</span>
+              <span className="text-[46px] font-bold leading-none">
+                {nextBlock ? `Pool ${nextBlock.pool}` : "None"}
+              </span>
             </div>
           </div>
+
+          <RoundChips chips={chips} />
+
+          <button
+            type="button"
+            disabled={busy || !nextBlock}
+            onClick={() =>
+              nextBlock &&
+              arm({
+                kind: "call",
+                roundId: round.id,
+                pool: nextBlock.pool,
+                attempt: manyAttempts ? nextBlock.attempt : null,
+              })
+            }
+            className="min-h-[50px] bg-[var(--ledger-ink)] px-[18px] text-left text-[17px] font-bold uppercase text-[var(--ledger-paper)] active:opacity-90 disabled:opacity-40"
+          >
+            {nextBlock
+              ? `Call next pool → ${[roundText(nextBlock.attempt), `Pool ${nextBlock.pool}`].filter(Boolean).join(" · ")}`
+              : "No more pools"}
+          </button>
+
+        </>
+      )}
+
+      <div className="flex items-baseline justify-between gap-3 border-b border-[var(--ledger-rule)] pb-2">
+        <span className={label}>Next rider</span>
+        <span className="truncate text-[19px] font-bold">{nextRider?.rider_name ?? "—"}</span>
+      </div>
+
+      {poolRows.length > 0 && (
+        <>
+          <h2 className="border-t-[3px] border-[var(--ledger-rule)] pt-2 text-[20px] font-bold uppercase">
+            All pools
+          </h2>
+          <PoolList pools={poolRows} rounds={manyAttempts} />
+        </>
+      )}
+    </>
+  );
+
+  return (
+    <div className={`${LEDGER_ROOT} flex min-h-dvh flex-col lg:h-dvh`}>
+      {sample && (
+        <div
+          role="note"
+          aria-label="Training mode"
+          className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-[#f2b07a] px-4 py-2 text-[var(--ledger-ink)] lg:px-9"
+        >
+          <p className="min-w-0 flex-1 text-[14px]">
+            <span className="mono mr-3 font-semibold uppercase">{TRAINING_LABEL}</span>
+            {TRAINING_BANNER[sample]}
+          </p>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => arm({ kind: "reset", scope: sample })}
+            className="mono h-9 border-2 border-[var(--ledger-ink)] bg-transparent px-3 text-[12px] font-semibold uppercase disabled:opacity-40"
+          >
+            Reset training data
+          </button>
         </div>
       )}
 
-      {/* Confirm bar ---------------------------------------------------- */}
-      {visiblePending && confirmCopy && (
+      <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_420px]">
+        <main className="flex min-w-0 flex-col gap-4 px-4 py-5 lg:overflow-y-auto lg:border-r-[3px] lg:border-[var(--ledger-rule)] lg:px-9 lg:py-6">
+          <TopStrip who="Judge" where={whereText} />
+          {main}
+        </main>
+
+        <aside className="flex min-w-0 flex-col gap-3.5 border-t-[3px] border-[var(--ledger-rule)] bg-[var(--ledger-side)] px-4 py-5 lg:overflow-y-auto lg:border-t-0 lg:px-7 lg:py-6">
+          {side}
+          {/* Practise from home before event day; back again afterwards. */}
+          <p className="mt-auto pt-4">
+            <Link
+              href={training ? "/judge" : "/judge/demo"}
+              className="mono inline-flex min-h-11 items-center text-[12px] uppercase text-[var(--ledger-muted)] underline underline-offset-4"
+            >
+              {training ? "Leave practice — open the live panel" : "Practise on sample riders"}
+            </Link>
+          </p>
+        </aside>
+      </div>
+
+      <div className="sticky bottom-0 z-20">
+        <StatusBar
+          role="Judge"
+          items={[
+            round?.name,
+            poolName(currentRun?.pool_label ?? null),
+            currentRun ? `Rider ${runInPool(currentRun)}` : null,
+            manyAttempts && currentRun
+              ? `Round ${currentRun.attempt_number} of ${round?.attempts_per_rider}`
+              : null,
+          ]}
+          connection={connection}
+          offlineNote="results not saving"
+        />
+      </div>
+
+      {/* Confirm bar: undo, skip, call, round … ------------------------- */}
+      {pending && confirmCopy && (
         <div
           role="alertdialog"
           aria-modal="false"
           aria-labelledby="confirm-question"
-          className="fixed inset-x-0 bottom-0 z-[60] border-t-4 border-bronze bg-cream px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 text-ink shadow-[0_-12px_32px_rgba(0,0,0,0.45)]"
+          className="fixed inset-x-0 bottom-0 z-[60] border-t-[3px] border-[var(--ledger-rule)] bg-[var(--ledger-panel)] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 shadow-[0_-12px_32px_rgba(46,29,14,0.25)]"
         >
-          <div className="mx-auto max-w-xl">
-            <p id="confirm-question" className="text-xl font-semibold leading-snug">
+          <div className="mx-auto max-w-2xl">
+            <p id="confirm-question" className="text-[21px] font-semibold leading-snug">
               {confirmCopy.question}
             </p>
             <div className="mt-4 grid grid-cols-2 gap-3">
@@ -1159,17 +924,15 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
                 autoFocus
                 disabled={busy}
                 onClick={() => setPending(null)}
-                className="min-h-16 rounded-xl border-2 border-ink/50 font-display text-lg font-semibold uppercase tracking-[0.1em] disabled:opacity-40"
+                className="h-14 border-2 border-[var(--ledger-ink)] bg-transparent text-[19px] font-bold uppercase disabled:opacity-40"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => void perform(visiblePending)}
-                className={`min-h-16 rounded-xl px-2 font-display text-lg font-bold uppercase tracking-[0.06em] disabled:opacity-60 ${
-                  confirmCopy.result ? CONFIRM_BUTTON[confirmCopy.result] : "bg-bronze-deep text-cream"
-                }`}
+                onClick={() => void perform(pending)}
+                className="h-14 bg-[var(--ledger-ink)] px-2 text-[19px] font-bold uppercase text-[var(--ledger-paper)] disabled:opacity-60"
               >
                 {busy ? "Saving…" : confirmCopy.confirm}
               </button>
@@ -1187,17 +950,17 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
           <div
             key={toast.id}
             role={toast.tone === "error" ? "alert" : "status"}
-            className={`pointer-events-auto flex w-full max-w-xl items-start gap-3 rounded-xl border-2 px-4 py-3 shadow-lg ${
+            className={`pointer-events-auto flex w-full max-w-xl items-start gap-3 border-2 px-4 py-3 shadow-lg ${
               toast.tone === "error"
-                ? "border-red-300 bg-red-900 text-cream"
-                : "border-emerald-300 bg-emerald-900 text-cream"
+                ? "border-[var(--ledger-red)] bg-[var(--ledger-red)] text-[var(--ledger-paper)]"
+                : "border-[var(--ledger-green)] bg-[var(--ledger-green)] text-[var(--ledger-paper)]"
             }`}
           >
-            <p className="flex-1 pt-2 text-lg leading-snug">{toast.message}</p>
+            <p className="flex-1 pt-1.5 text-lg leading-snug">{toast.message}</p>
             <button
               type="button"
               onClick={() => dismissToast(toast.id)}
-              className="min-h-11 shrink-0 rounded-lg border border-cream/40 px-3 font-display text-sm font-semibold uppercase tracking-[0.1em]"
+              className="mono min-h-10 shrink-0 border border-current px-3 text-[12px] uppercase"
             >
               OK
             </button>

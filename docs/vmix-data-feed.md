@@ -118,7 +118,7 @@ It follows the same rules as real scoring and uses the same columns, options and
 
 ## What to show: display_mode
 
-The judges and organisers choose what the screens show, and the current feed reports it in `display_mode`. The feeds themselves are never filtered, so honouring it is up to your titles:
+The organisers choose what the screens show (calling a pool switches to the call-up until the first result), and the current feed reports it in `display_mode`. The feeds themselves are never filtered, so honouring it is up to your titles:
 
 | `display_mode` | Meaning |
 | --- | --- |

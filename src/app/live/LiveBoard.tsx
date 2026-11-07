@@ -18,6 +18,7 @@ import {
   normalizePublicState,
   nowAndNextPools,
   nowNextText,
+  callUpRoster,
   rosterFor,
 } from "@/components/scoring/format";
 import { plural } from "@/lib/scoring/format";
@@ -321,7 +322,7 @@ export default function LiveBoard() {
                   Next: Pool {next}
                 </p>
               )}
-              <PoolRoster entries={rosterFor(state.pool_rosters, poolCall)} className="mt-4" />
+              <PoolRoster entries={callUpRoster(state, poolCall)} className="mt-4" />
             </section>
           ) : (
             <OnCourseCard run={state.current_run} round={round} />
