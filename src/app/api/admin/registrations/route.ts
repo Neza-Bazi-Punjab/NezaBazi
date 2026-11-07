@@ -4,6 +4,8 @@ import {
   verifyAdminRequest,
 } from "@/lib/admin/server";
 import { isValidEmail } from "@/lib/email-address";
+import { forgetPaperHeadshotUrl, readPaperHeadshotPath } from "@/lib/admin/headshot-urls";
+import { HEADSHOT_BUCKET } from "@/lib/headshots";
 import { PAPER_EMAIL_DOMAIN, isPaperPlaceholderEmail } from "@/lib/paper-registration";
 
 export const dynamic = "force-dynamic";
@@ -346,6 +348,19 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: reservedEmail }, { status: 400 });
   }
 
+  /* A no-account rider's photo lives with their solo entry, so it goes with
+     it. `*` so this works before the paper-photo migration has been run. */
+  let paperHeadshotPath: string | null = null;
+
+  if (operation === "delete_solo") {
+    const { data: soloRow } = await serviceSupabase
+      .from("solo_registrations")
+      .select("*")
+      .eq("id", targetId)
+      .maybeSingle();
+    paperHeadshotPath = readPaperHeadshotPath(targetId, soloRow?.headshot_path);
+  }
+
   const { error } = await serviceSupabase.rpc("admin_mutate_registration", {
     p_operation: operation,
     p_target_id: targetId,
@@ -359,6 +374,18 @@ export async function PATCH(request: Request) {
   if (error) {
     const { status, message } = describeMutationError(operation, error);
     return NextResponse.json({ error: message }, { status });
+  }
+
+  if (paperHeadshotPath) {
+    const { error: removeError } = await serviceSupabase.storage
+      .from(HEADSHOT_BUCKET)
+      .remove([paperHeadshotPath]);
+
+    if (removeError) {
+      console.error("Could not remove a deleted entry's photo", removeError.message);
+    }
+
+    forgetPaperHeadshotUrl(targetId);
   }
 
   return NextResponse.json({ ok: true });

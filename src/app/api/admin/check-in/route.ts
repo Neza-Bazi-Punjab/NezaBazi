@@ -11,7 +11,11 @@ import {
   type ServiceRoleClient,
 } from "@/lib/admin/server";
 import { verifyAdminRequest } from "@/lib/admin/server";
-import { findProfileIdByEmail, getHeadshotUrl } from "@/lib/admin/headshot-urls";
+import {
+  findProfileIdByEmail,
+  getHeadshotUrl,
+  getPaperHeadshotUrl,
+} from "@/lib/admin/headshot-urls";
 import { escapeIlikePattern } from "@/lib/supabase/query";
 
 type LookupRequest = { code?: unknown; query?: unknown; roster?: unknown };
@@ -258,7 +262,12 @@ const soloHeadshot = async (serviceSupabase: ServiceRoleClient, registrationId: 
     .eq("id", registrationId)
     .maybeSingle();
 
-  return headshotFor(serviceSupabase, (data?.profile_id as string | null | undefined) ?? null);
+  // The account's photo first; a rider with no account may have one on the
+  // registration instead.
+  return (
+    (await headshotFor(serviceSupabase, (data?.profile_id as string | null | undefined) ?? null)) ??
+    (await getPaperHeadshotUrl(serviceSupabase, registrationId))
+  );
 };
 
 // Generated codes are NBP- plus six characters, but stay lenient about case,

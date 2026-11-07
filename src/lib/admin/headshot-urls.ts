@@ -5,7 +5,11 @@
 import "server-only";
 
 import type { ServiceRoleClient } from "@/lib/admin/server";
-import { HEADSHOT_BUCKET, HEADSHOT_SIGNED_URL_SECONDS } from "@/lib/headshots";
+import {
+  HEADSHOT_BUCKET,
+  HEADSHOT_SIGNED_URL_SECONDS,
+  PAPER_HEADSHOT_FOLDER,
+} from "@/lib/headshots";
 import { escapeIlikePattern } from "@/lib/supabase/query";
 
 /* The headshot lives in the rider's Auth metadata (`headshot_path`), so the
@@ -170,4 +174,188 @@ export const findProfileIdByEmail = async (
 
   const accounts = await loadConfirmedAuthEmails(client);
   return accounts.get(address.toLowerCase()) ?? null;
+};
+
+/* Drop a profile's cached URL, after an administrator adds a photo, so the
+   check-in desk and commentary panel on this instance pick it up at once. */
+export const forgetHeadshotUrl = (profileId: string) => {
+  headshotCache.delete(profileId);
+};
+
+/* A stored path is only trusted if it sits in its owner's own folder (see
+   HEADSHOT_PATH_PATTERN above). */
+export const readOwnHeadshotPath = (
+  profileId: string,
+  metadata: Record<string, unknown> | null | undefined
+): string | null => {
+  const path = typeof metadata?.headshot_path === "string" ? metadata.headshot_path : null;
+
+  return path &&
+    HEADSHOT_PATH_PATTERN.test(path) &&
+    path.split("/")[0].toLowerCase() === profileId.toLowerCase()
+    ? path
+    : null;
+};
+
+/* A paper rider's photo, kept on the registration (`headshot_path`) until an
+   account claims it. Trusted only inside that registration's own folder; the
+   database enforces the same rule. */
+export const readPaperHeadshotPath = (
+  registrationId: string,
+  path: unknown
+): string | null => {
+  if (typeof path !== "string") {
+    return null;
+  }
+
+  const [folder, id, file, ...rest] = path.split("/");
+
+  return folder === PAPER_HEADSHOT_FOLDER &&
+    id?.toLowerCase() === registrationId.toLowerCase() &&
+    rest.length === 0 &&
+    /^[A-Za-z0-9._-]{1,200}$/.test(file ?? "")
+    ? path
+    : null;
+};
+
+const paperCacheKey = (registrationId: string) => `paper:${registrationId}`;
+
+export const forgetPaperHeadshotUrl = (registrationId: string) => {
+  headshotCache.delete(paperCacheKey(registrationId));
+};
+
+/* The photo stored on a solo registration, for a rider whose account (if any)
+   has none. Cached like getHeadshotUrl. Any failure, including the column not
+   existing yet, is just "no photo". */
+export const getPaperHeadshotUrl = async (
+  client: ServiceRoleClient,
+  registrationId: string
+): Promise<string | null> => {
+  const key = paperCacheKey(registrationId);
+  const cached = headshotCache.get(key);
+
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.url;
+  }
+
+  let url: string | null = null;
+  let lifetime = NO_HEADSHOT_CACHE_MS;
+
+  try {
+    const { data, error } = await client
+      .from("solo_registrations")
+      .select("headshot_path")
+      .eq("id", registrationId)
+      .maybeSingle();
+    const path = error ? null : readPaperHeadshotPath(registrationId, data?.headshot_path);
+
+    if (path) {
+      const signed = await client.storage
+        .from(HEADSHOT_BUCKET)
+        .createSignedUrl(path, HEADSHOT_SIGNED_URL_SECONDS);
+
+      if (!signed.error && signed.data?.signedUrl) {
+        url = signed.data.signedUrl;
+        lifetime = HEADSHOT_CACHE_MS;
+      }
+    }
+  } catch (error) {
+    console.error("[headshots] paper headshot lookup failed", error);
+  }
+
+  headshotCache.set(key, { url, expiresAt: Date.now() + lifetime });
+  return url;
+};
+
+export type SoloHeadshot = { url: string | null };
+
+/* Photos for the admin Solo riders list, keyed by registration id. One Auth
+   listing and one batch signing call for the whole list, rather than a lookup
+   per rider. A failure only means no thumbnails, never a broken page. */
+export const loadSoloHeadshots = async (
+  client: ServiceRoleClient,
+  registrations: Array<{
+    id: string;
+    profile_id: string | null;
+    email: string;
+    headshot_path?: string | null;
+  }>
+): Promise<Record<string, SoloHeadshot>> => {
+  const result: Record<string, SoloHeadshot> = {};
+
+  try {
+    const { data, error } = await client.auth.admin.listUsers({
+      page: 1,
+      perPage: AUTH_USERS_PER_PAGE,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    const pathById = new Map<string, string | null>();
+    const idByConfirmedEmail = new Map<string, string>();
+
+    for (const user of data?.users ?? []) {
+      pathById.set(
+        user.id,
+        readOwnHeadshotPath(user.id, user.user_metadata as Record<string, unknown>)
+      );
+
+      const address = user.email?.trim().toLowerCase();
+
+      if (address && user.email_confirmed_at && !idByConfirmedEmail.has(address)) {
+        idByConfirmedEmail.set(address, user.id);
+      }
+    }
+
+    const pathByRegistration = new Map<string, string>();
+
+    for (const registration of registrations) {
+      const profileId =
+        (registration.profile_id && pathById.has(registration.profile_id)
+          ? registration.profile_id
+          : null) ??
+        idByConfirmedEmail.get(registration.email?.trim().toLowerCase() ?? "") ??
+        null;
+      // The account's photo first; a paper rider's sits on the registration.
+      const path =
+        (profileId ? pathById.get(profileId) ?? null : null) ??
+        readPaperHeadshotPath(registration.id, registration.headshot_path);
+
+      result[registration.id] = { url: null };
+
+      if (path) {
+        pathByRegistration.set(registration.id, path);
+      }
+    }
+
+    const paths = Array.from(new Set(pathByRegistration.values()));
+
+    if (paths.length > 0) {
+      const signed = await client.storage
+        .from(HEADSHOT_BUCKET)
+        .createSignedUrls(paths, HEADSHOT_SIGNED_URL_SECONDS);
+
+      if (signed.error) {
+        throw signed.error;
+      }
+
+      const urlByPath = new Map<string, string>();
+
+      for (const entry of signed.data ?? []) {
+        if (entry.path && entry.signedUrl && !entry.error) {
+          urlByPath.set(entry.path, entry.signedUrl);
+        }
+      }
+
+      for (const [registrationId, path] of pathByRegistration) {
+        result[registrationId].url = urlByPath.get(path) ?? null;
+      }
+    }
+  } catch (error) {
+    console.error("[headshots] solo list lookup failed", error);
+  }
+
+  return result;
 };

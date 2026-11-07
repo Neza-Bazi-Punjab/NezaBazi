@@ -16,6 +16,7 @@ import {
 import { PROFILE_ROLES, type ProfileRole } from "@/lib/scoring/types";
 import { site } from "@/lib/site";
 import CheckInPanel from "./CheckInPanel";
+import SoloHeadshotCell, { type SoloHeadshotState } from "./SoloHeadshotCell";
 
 /* The email box of the edit form. A paper placeholder is shown as an empty
    box with PAPER_EMAIL_DISPLAY as its placeholder text, so neither the
@@ -63,6 +64,9 @@ export type SoloRegistration = {
   father_name: string | null;
   mother_name: string | null;
   created_at: string;
+  /* A no-account rider's photo, kept on the entry until an account claims it.
+     Absent until the paper-photo migration has been run. */
+  headshot_path?: string | null;
 };
 
 export type Team = {
@@ -132,6 +136,8 @@ type AdminDashboardProps = {
   auditLog: AuditLogEntry[];
   auditArchive: ArchivedAuditEntry[];
   auditActors: AuditActor[];
+  /* Solo riders' photos by registration id; empty on other pages. */
+  soloHeadshots: Record<string, SoloHeadshotState>;
   /* Which section this page shows; each has its own address under /admin
      (see AdminNav), so refresh and Back stay on it. */
   tab: AdminSection;
@@ -359,6 +365,8 @@ const auditActionLabels: Record<string, string> = {
   void_run: "Skip Run",
   restore_run: "Restore Run",
   move_pool: "Change Pool",
+  add_headshot: "Add Rider Photo",
+  remove_headshot: "Remove Rider Photo",
   set_live: "Update Live Display",
 };
 
@@ -661,6 +669,7 @@ export default function AdminDashboard({
   auditLog,
   auditArchive,
   auditActors,
+  soloHeadshots,
   tab: activeTab,
 }: AdminDashboardProps) {
   const router = useRouter();
@@ -694,6 +703,7 @@ export default function AdminDashboard({
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
   const [teamNameDraft, setTeamNameDraft] = useState("");
   const [teamEmergencyNameDraft, setTeamEmergencyNameDraft] = useState("");
@@ -2201,10 +2211,17 @@ export default function AdminDashboard({
             />
           </div>
 
+          {photoError && (
+            <p role="alert" className="rounded-lg border border-red-700/30 bg-red-50 px-3 py-2 text-sm text-red-800">
+              {photoError}
+            </p>
+          )}
+
           {filteredSoloRegistrations.length > 0 ? (
             <div className="max-w-full overflow-x-auto overscroll-x-contain">
-              <table className="w-full min-w-[2380px] table-fixed border-collapse text-left text-sm text-brown">
+              <table className="w-full min-w-[2444px] table-fixed border-collapse text-left text-sm text-brown">
                 <colgroup>
+                  <col className="w-[64px]" />
                   <col className="w-[190px]" />
                   <col className="w-[170px]" />
                   <col className="w-[170px]" />
@@ -2223,6 +2240,7 @@ export default function AdminDashboard({
                 </colgroup>
                 <thead className="border-b border-bronze/20 bg-parchment">
                   <tr className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
+                    <th className="whitespace-nowrap px-3 py-2">Photo</th>
                     <th className="whitespace-nowrap px-3 py-2">Name</th>
                     <th className="whitespace-nowrap px-3 py-2">Father&apos;s Name</th>
                     <th className="whitespace-nowrap px-3 py-2">Mother&apos;s Name</th>
@@ -2252,6 +2270,14 @@ export default function AdminDashboard({
 
                     return (
                       <tr key={registration.id} className="border-b border-bronze/10 last:border-0">
+                        <td className="px-3 py-2">
+                          <SoloHeadshotCell
+                            registrationId={registration.id}
+                            riderName={registration.full_name}
+                            initial={soloHeadshots[registration.id]}
+                            onError={setPhotoError}
+                          />
+                        </td>
                         <td className="overflow-hidden whitespace-nowrap px-3 py-2 font-semibold text-ink">
                           {isEditing ? (
                             <input
