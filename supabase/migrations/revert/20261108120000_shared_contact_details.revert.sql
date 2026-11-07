@@ -68,6 +68,9 @@ declare
   v_occurrences integer;
 begin
   v_definition := replace(pg_catalog.pg_get_functiondef(p_function), E'\r\n', E'\n');
+  -- Normalised like the body: a paste from a Windows checkout carries CR LF.
+  p_patched := replace(p_patched, E'\r\n', E'\n');
+  p_original := replace(p_original, E'\r\n', E'\n');
 
   if position(p_patched in v_definition) = 0 then
     raise notice '% does not carry this patch; left unchanged.', p_function;
