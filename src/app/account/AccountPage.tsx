@@ -41,6 +41,15 @@ export type AccountSoloRegistration = {
   checked_in_at: string | null;
 };
 
+/* A rider this account entered for someone else: shown by name and code
+   only, and edited by an administrator, not from this account. */
+export type AccountEnteredRegistration = {
+  id: string;
+  full_name: string;
+  confirmation_code: string;
+  created_at: string;
+};
+
 export type AccountTeam = {
   id: string;
   team_name: string;
@@ -76,6 +85,7 @@ export type AccountTeamMembership = {
 type AccountPageClientProps = {
   profile: AccountProfile;
   soloRegistration: AccountSoloRegistration | null;
+  enteredRegistrations: AccountEnteredRegistration[];
   team: AccountTeam | null;
   teamMembers: AccountTeamMember[];
   memberships: AccountTeamMembership[];
@@ -164,6 +174,7 @@ const CheckInStatus = ({
 export default function AccountPageClient({
   profile,
   soloRegistration,
+  enteredRegistrations,
   team,
   teamMembers,
   memberships,
@@ -431,7 +442,10 @@ export default function AccountPageClient({
         <SectionHeading>Active Registrations</SectionHeading>
 
         <div className="mt-10 space-y-6">
-          {!soloRegistration && !team && memberships.length === 0 ? (
+          {!soloRegistration &&
+          enteredRegistrations.length === 0 &&
+          !team &&
+          memberships.length === 0 ? (
             <div className="space-y-6 rounded-lg border border-bronze/20 bg-sand p-6">
               <p className="leading-7 text-brown/85">
                 You haven&apos;t registered yet.
@@ -481,6 +495,41 @@ export default function AccountPageClient({
                     code={soloRegistration.confirmation_code}
                     checkedInAt={soloRegistration.checked_in_at}
                   />
+                </article>
+              )}
+
+              {enteredRegistrations.length > 0 && (
+                <article className="space-y-6 rounded-lg border border-bronze/20 bg-sand p-6">
+                  <div>
+                    <h3 className="font-display text-xl font-bold uppercase tracking-wide text-bronze-dark">
+                      Registrations You Entered
+                    </h3>
+                    <p className="mt-2 leading-7 text-brown/85">
+                      Riders you registered from this account. Their details are edited by an
+                      administrator, not here.
+                    </p>
+                  </div>
+
+                  <ul className="space-y-3">
+                    {enteredRegistrations.map((entry) => (
+                      <li
+                        key={entry.id}
+                        className="flex flex-col gap-1 rounded-lg border border-bronze/20 bg-cream p-4 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <span className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
+                          {entry.full_name}
+                        </span>
+                        <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                          <span className="font-mono text-sm font-bold tracking-[0.15em] text-bronze-deep">
+                            {entry.confirmation_code}
+                          </span>
+                          <span className="text-sm text-brown/80">
+                            Registered {formatDate(entry.created_at)}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 </article>
               )}
 

@@ -8,11 +8,7 @@
 import "server-only";
 
 import type { ServiceRoleClient } from "@/lib/admin/server";
-import {
-  findProfileIdByEmail,
-  getHeadshotUrl,
-  getPaperHeadshotUrl,
-} from "@/lib/admin/headshot-urls";
+import { getSoloHeadshotUrl, getTeamRiderHeadshotUrl } from "@/lib/admin/headshot-urls";
 import type {
   RiderDetail,
   RunResult,
@@ -27,7 +23,7 @@ import type {
    panel simply shows no parents' names. */
 const PARENT_COLUMNS = "father_name, mother_name";
 const SOLO_COLUMNS =
-  "id, profile_id, full_name, age, location, years_experience, horse_name, horse_age, horse_breed";
+  "id, profile_id, email, full_name, age, location, years_experience, horse_name, horse_age, horse_breed";
 const MEMBER_COLUMNS =
   "id, team_id, email, is_leader, full_name, age, location, years_experience, horse_name, horse_age, horse_breed";
 const UNDEFINED_COLUMN = "42703";
@@ -45,7 +41,7 @@ type RiderRow = {
   horse_breed: string | null;
 };
 
-type SoloRow = RiderRow & { profile_id: string | null };
+type SoloRow = RiderRow & { profile_id: string | null; email: string | null };
 
 type MemberRow = RiderRow & {
   team_id: string;
@@ -95,22 +91,6 @@ const selectWithParents = async <T>(
     message: first.error.message ?? null,
   });
   return [];
-};
-
-/* A team rider has no profile id of their own on the row. The leader is the
-   account that registered the team, so `teams.leader_profile_id` is theirs.
-   Anyone else is found by email (identity is the email address): a solo
-   entry under it, or their own confirmed account. Otherwise no photo. */
-const findMemberProfileId = async (
-  client: ServiceRoleClient,
-  member: MemberRow,
-  team: TeamRow | undefined
-) => {
-  if (member.is_leader && team?.leader_profile_id) {
-    return team.leader_profile_id;
-  }
-
-  return findProfileIdByEmail(client, member.email);
 };
 
 /* Assembly ------------------------------------------------------------------------ */
@@ -242,15 +222,19 @@ export const loadRiderDetails = async (
       }
 
       const team = member ? teams.get(member.team_id) : undefined;
-      const profileId = solo
-        ? solo.profile_id
+      /* A solo rider: the registration's own photo, else the account's for
+         the account holder's own entry. A team rider has no profile id of
+         their own: the leader's account (for the leader) or the accounts found
+         by email, and only one whose email and name are the rider's. */
+      const headshotUrl = solo
+        ? await getSoloHeadshotUrl(client, solo)
         : member
-          ? await findMemberProfileId(client, member, team)
+          ? await getTeamRiderHeadshotUrl(
+              client,
+              member,
+              member.is_leader ? team?.leader_profile_id ?? null : null
+            )
           : null;
-      const headshotUrl =
-        (profileId ? await getHeadshotUrl(client, profileId) : null) ??
-        // A solo rider with no account may have a photo on the registration.
-        (solo ? await getPaperHeadshotUrl(client, solo.id) : null);
       const history = solo
         ? todayFor((today) => today.solo_registration_id === solo.id)
         : todayFor((today) => today.team_member_id === member?.id);

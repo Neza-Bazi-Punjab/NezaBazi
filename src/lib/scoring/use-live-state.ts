@@ -33,6 +33,10 @@ import { createClient } from "@/lib/supabase/client";
 /* The cache key for a realtime event: identical for every viewer who receives
    the same change. The commit timestamp first, then the row's own updated_at,
    then (should neither be present) the current second. */
+/* How long one load may take before it is dropped and the next poll is
+   scheduled: a weak signal at the ground must never leave a screen stuck. */
+export const LOAD_TIMEOUT_MS = 12_000;
+
 export const realtimeCacheKey = (payload: unknown): string => {
   if (payload && typeof payload === "object") {
     const record = payload as Record<string, unknown>;
@@ -192,6 +196,11 @@ export function useLiveState<T>(url: string): LiveStateHook<T> {
       const controller = new AbortController();
       const ticket = ++ticketCounter.current;
       inFlight = controller;
+      // A poll that has not answered in time is dropped; the finally below
+      // schedules the next one. (A timer on the same controller rather than
+      // AbortSignal.timeout, so one signal covers both a timeout and a newer
+      // load superseding this one.)
+      const timeout = setTimeout(() => controller.abort(), LOAD_TIMEOUT_MS);
 
       try {
         const response = await fetch(withCacheKey(withSampleFlag(url), cacheKey), {
@@ -233,6 +242,8 @@ export function useLiveState<T>(url: string): LiveStateHook<T> {
           setFailed(true);
         }
       } finally {
+        clearTimeout(timeout);
+
         if (inFlight === controller) {
           inFlight = null;
           schedulePoll();

@@ -119,8 +119,9 @@ test("the Solo riders and Audit log pages start the account listing before await
   assert.match(headshots, /export const matchSoloHeadshots = async \(\s*index: AuthUserIndex \| null,/);
   assert.match(headshots, /if \(!index\) \{\s*return result;/);
   assert.match(headshots, /\.createSignedUrls\(paths, HEADSHOT_SIGNED_URL_SECONDS\)/);
-  // Only confirmed addresses match, as before.
-  assert.match(headshots, /address && user\.email_confirmed_at && !idByConfirmedEmail\.has\(address\)/);
+  // The listing carries each account's email and name, so a solo rider is
+  // matched by profile_id and the own-registration rule, never by email.
+  assert.match(headshots, /accountById\.set\(user\.id, \{/);
 });
 
 test("a section page draws its heading first and streams its rows in under it", () => {

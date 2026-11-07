@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import ConfirmationCode from "@/components/ConfirmationCode";
 import PageHeader from "@/components/PageHeader";
+import { isOwnRegistration } from "@/lib/registration-identity";
 import { createClient } from "@/lib/supabase/server";
 import { site } from "@/lib/site";
 
@@ -18,13 +19,26 @@ export default async function RegisterSuccessPage() {
 
   // Read the code back rather than passing it through the URL: a confirmation
   // code in a query string ends up in browser history, logs and shared links.
-  const { data: registration } = user
+  // An account may enter several riders, so this is the newest one.
+  const { data: rows } = user
     ? await supabase
         .from("solo_registrations")
-        .select("confirmation_code")
+        .select("full_name, email, confirmation_code, created_at")
         .eq("profile_id", user.id)
-        .maybeSingle()
+        .order("created_at", { ascending: false })
     : { data: null };
+  const accountRows = rows ?? [];
+  const registration = accountRows[0] ?? null;
+  // Only the account holder's own code is emailed (see
+  // /api/registration/confirmation-code); another rider's is on /account.
+  const emailed =
+    registration !== null &&
+    user !== null &&
+    isOwnRegistration(
+      registration,
+      { email: user.email, full_name: user.user_metadata?.full_name },
+      { onlyRegistration: accountRows.length === 1 }
+    );
 
   return (
     <>
@@ -56,7 +70,9 @@ export default async function RegisterSuccessPage() {
               </div>
 
               <p className="leading-7 text-brown/85">
-                {`We have emailed this code to you. You can also find it any time on your account page.`}
+                {emailed
+                  ? `We have emailed this code to you. You can also find it any time on your account page.`
+                  : `This rider's code is not emailed. It is shown on your account page, under Registrations You Entered, whenever you need it.`}
               </p>
             </>
           ) : (
@@ -71,6 +87,12 @@ export default async function RegisterSuccessPage() {
               className="block w-full rounded-lg bg-bronze-deep px-6 py-3 text-center font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze"
             >
               View My Account
+            </Link>
+            <Link
+              href="/register/solo"
+              className="block w-full rounded-lg border border-bronze/40 px-6 py-3 text-center font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown transition-colors hover:bg-sand"
+            >
+              Register Another Rider
             </Link>
             <Link
               href="/"

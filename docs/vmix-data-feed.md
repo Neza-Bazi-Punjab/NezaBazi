@@ -98,7 +98,7 @@ Every sample row has `sample` = `Yes`; live rows have `No`.
 
 `?sample=1` never changes, so it cannot show how your titles behave when results come in. Add `?sample=solo` instead, to any feed, and while the organisers have the rehearsal feed running the feeds play a **scripted solo qualification on a loop**, one step every **8 seconds**, about four minutes per loop:
 
-1. Pool A is called (`display_mode` = `pool_call`), and its first rider comes on course.
+1. Pool A is called (`display_mode` = `pool_call`). Calling a pool puts nobody on course: its first rider comes on course only when the judge taps Start, as on the day.
 2. Results come in one by one. A carry skips that rider's later attempts, as on the day, and the standings re-rank.
 3. A result is recorded wrongly and then changed, and a short break shows a message.
 4. Pool A finishes and the screens switch to the standings, then Pool B is called.
@@ -107,6 +107,7 @@ Every sample row has `sample` = `Yes`; live rows have `No`.
 
 It follows the same rules as real scoring and uses the same columns, options and timing (a 1–2 second refresh). The only difference is that nobody is scoring: the steps come from a script, at a steady pace. Real judging has pauses and bursts.
 
+- Between riders `rider_name` in the current feed is empty (a result leaves the course empty until the judge taps Start for the next rider), so titles must handle a blank name.
 - Every viewer sees the same moment of the loop, with real times in `last_scored_at` and `updated_at`.
 - Every row still has `sample` = `Yes`. Nothing is read from or written to the live database.
 - Section 1 stays complete, as in `?sample=1`.

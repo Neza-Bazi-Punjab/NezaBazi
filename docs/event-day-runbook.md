@@ -61,7 +61,7 @@ The same rider may hold one solo entry and one team place under the same email: 
 - If it did not, an administrator first edits their registration in the dashboard. For a paper entry without email the email box is empty (it reads "No email (paper entry)"): type their real address and save. Saving with the box still empty keeps the placeholder, and an address on `paper.nezabazipunjab.com` cannot be typed in by hand. Then they sign up with that address.
 - Their confirmation code does not change.
 - A **team** rider then sees their team on `/account`, matched by email like every team rider.
-- A **solo** paper entry has no account attached, so it is claimed instead: when the rider signs in with the confirmed address that matches the entry, the entry is linked to their account (only a paper entry, only one nobody has claimed, and only if they have no solo entry already). It then shows on `/account`, and from then on their account details are copied onto it like any online rider's.
+- A **solo** paper entry has no account attached, so it is claimed instead: when the rider signs in with the confirmed address that matches the entry, the entry is linked to their account (only a paper entry, only one nobody has claimed, and only if they have no solo entry of their own already). It then shows on `/account`, and from then on their account details are copied onto it like any online rider's.
 
 ## 3. The day before: check-in
 
@@ -207,7 +207,7 @@ Use a laptop or a tablet held sideways. Sign in and open `/commentary`. It follo
 Between riders nobody is on course: the panel shows the last result and **Up next · <name>**, the rider the judge will start next, so there is a moment to introduce them.
 
 - **Header:** the round and event, "Now riding: Pool A · Next: Pool B", **Screens:** what the stream is showing (Scoreboard, Leaderboard, Rider, Pool call-up, Message only, or Hidden for Blank), and the connection badge.
-- **On course now** (left, largest type): the rider's name, then **Father** and **Mother** (each shown only when the rider gave it — both are optional), **From** (the full home address as registered), **Age**, **Horse** (name, breed, age), **Riding** (years of experience), **Team** with a "Team leader" tag, and the rider's photo if they uploaded one. Below: every run they have ridden today with its result, **Total today**, and their **Rank** in the round and in their pool.
+- **On course now** (left, largest type): the rider's name, then **Father** and **Mother** (each shown only when the rider gave it — both are optional), **From** (the full home address as registered), **Age**, **Horse** (name, breed, age), **Riding** (years of experience), **Team** with a "Team leader" tag, and the rider's photo if there is one: the photo an organiser added to that registration, or the rider's own account photo when the registration is theirs (an account that entered someone else never lends that rider its photo). Add, replace or remove a solo rider's photo from the Photo column on Solo riders. Below: every run they have ridden today with its result, **Total today**, and their **Rank** in the round and in their pool.
 - **Just scored:** a flash with the rider and the result each time a run is recorded.
 - **Up next** (right): the next three riders, with parents, district and years riding.
 - **Standings:** toggle between the current **Pool** and the whole **Round**; a selector looks back at any round ridden today.

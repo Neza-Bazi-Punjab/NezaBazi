@@ -1,17 +1,23 @@
-// An administrator adds a headshot for a solo rider who has none, from the
+// An administrator adds, replaces or removes a solo rider's photo from the
 // Solo riders list.
 //
-// A rider with an account: the photo is stored in their own folder and
-// recorded in their Auth metadata, exactly where their own upload would put
-// it, so their account page shows it and they can replace or remove it.
+// A registration is a rider; its account is whoever entered it, and one
+// account may have entered several riders. So where a photo goes is decided
+// by one rule (src/lib/registration-identity.ts): only when the registration
+// is the account holder's own (same email and full name as the account found
+// by its profile_id) does the photo go onto the account, in their own folder
+// and Auth metadata, exactly where their own upload would put it. Every other
+// registration keeps its own photo on the row (`headshot_path`, under
+// `paper/<registration_id>/`), so a photo of one rider can never appear on
+// another. An account is never looked up by email to decide this.
 //
-// A rider with no account (a paper entry, possibly with no phone or email):
-// the photo is kept on the registration (`headshot_path`) and moves onto
-// their account if they sign up later with the email on the entry.
+// The registration's own photo is what staff screens show first, so a
+// registration that already has one always has it replaced or removed there.
 //
-// POST only fills an empty slot — an existing photo is never overwritten.
-// DELETE removes the photo shown for the rider (the account's first, as every
-// staff screen shows it), so a wrong or poor photo can be taken again.
+// POST adds a first photo (audited `add_headshot`) or replaces the existing
+// one (`replace_headshot`; the old object is deleted once the new one is
+// recorded). DELETE removes the photo shown (`remove_headshot`). Every change
+// is audited before anything is written.
 import { NextResponse } from "next/server";
 import {
   createServiceRoleClient,
@@ -19,7 +25,6 @@ import {
   verifyAdminRequest,
 } from "@/lib/admin/server";
 import {
-  findProfileIdByEmail,
   forgetHeadshotUrl,
   forgetPaperHeadshotUrl,
   readOwnHeadshotPath,
@@ -32,6 +37,7 @@ import {
   buildHeadshotPath,
   buildPaperHeadshotPath,
 } from "@/lib/headshots";
+import { isOwnRegistration } from "@/lib/registration-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +48,73 @@ const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const fail = (error: string, status: number) => NextResponse.json({ error }, { status });
+
+type ServiceClient = ReturnType<typeof createServiceRoleClient>;
+type Actor = Parameters<typeof insertRequiredAuditLog>[1];
+type Registration = Record<string, unknown>;
+
+/* The account holder, only when this registration is their own. `null` when
+   the registration has no account or is a rider the account entered for
+   someone else. A failed account read is an error, never a guess. */
+type Holder = { profileId: string; metadata: Record<string, unknown> };
+
+const findOwnHolder = async (
+  serviceSupabase: ServiceClient,
+  registration: Registration
+): Promise<{ ok: true; holder: Holder | null } | { ok: false }> => {
+  const profileId = typeof registration.profile_id === "string" ? registration.profile_id : null;
+
+  if (!profileId) {
+    return { ok: true, holder: null };
+  }
+
+  const { data, error } = await serviceSupabase.auth.admin.getUserById(profileId);
+
+  if (error || !data?.user) {
+    return { ok: false };
+  }
+
+  const metadata = (data.user.user_metadata ?? {}) as Record<string, unknown>;
+  // An account that entered exactly one registration can only hold its own,
+  // so a name an administrator corrected still counts. The count is read by
+  // profile_id, never by email; a failed count is an error, not a guess.
+  const { count, error: countError } = await serviceSupabase
+    .from("solo_registrations")
+    .select("id", { count: "exact", head: true })
+    .eq("profile_id", profileId);
+
+  if (countError) {
+    return { ok: false };
+  }
+
+  const own = isOwnRegistration(
+    registration,
+    { email: data.user.email, full_name: metadata.full_name },
+    { onlyRegistration: count === 1 }
+  );
+
+  return { ok: true, holder: own ? { profileId, metadata } : null };
+};
+
+const loadRegistration = async (serviceSupabase: ServiceClient, registrationId: string) =>
+  serviceSupabase
+    .from("solo_registrations")
+    // `*` rather than naming headshot_path, so the "needs a database update"
+    // message below can be given instead of a query error.
+    .select("*")
+    .eq("id", registrationId)
+    .maybeSingle();
+
+const signedUrlFor = async (serviceSupabase: ServiceClient, path: string) => {
+  const { data } = await serviceSupabase.storage
+    .from(HEADSHOT_BUCKET)
+    .createSignedUrl(path, HEADSHOT_SIGNED_URL_SECONDS);
+
+  return data?.signedUrl ?? null;
+};
+
+const NEEDS_MIGRATION =
+  "Registration photos need a database update first (supabase/migrations/20261108100000_paper_rider_headshots.sql).";
 
 export async function POST(request: Request) {
   const verification = await verifyAdminRequest();
@@ -74,14 +147,10 @@ export async function POST(request: Request) {
   }
 
   const serviceSupabase = createServiceRoleClient();
-
-  const { data: registration, error: registrationError } = await serviceSupabase
-    .from("solo_registrations")
-    // `*` rather than naming headshot_path, so an account rider can still be
-    // given a photo before the paper-photo migration has been run.
-    .select("*")
-    .eq("id", registrationId)
-    .maybeSingle();
+  const { data: registration, error: registrationError } = await loadRegistration(
+    serviceSupabase,
+    registrationId
+  );
 
   if (registrationError) {
     return fail(registrationError.message, 400);
@@ -91,38 +160,52 @@ export async function POST(request: Request) {
     return fail("That registration no longer exists. Refresh the list.", 404);
   }
 
-  const profileId =
-    (registration.profile_id as string | null) ??
-    (await findProfileIdByEmail(serviceSupabase, registration.email as string));
+  // A photo already on the registration is the one shown, so it is the one
+  // replaced, whoever the registration belongs to.
+  const registrationPath = readPaperHeadshotPath(registrationId, registration.headshot_path);
 
-  if (!profileId) {
-    return addPaperHeadshot(serviceSupabase, verification.actor, registration, photo);
+  if (!registrationPath) {
+    const found = await findOwnHolder(serviceSupabase, registration);
+
+    if (!found.ok) {
+      return fail("This rider's account couldn't be checked. Try again.", 502);
+    }
+
+    if (found.holder) {
+      return saveAccountHeadshot(serviceSupabase, verification.actor, registration, found.holder, photo);
+    }
   }
 
-  const { data: userData, error: userError } =
-    await serviceSupabase.auth.admin.getUserById(profileId);
+  return saveRegistrationHeadshot(
+    serviceSupabase,
+    verification.actor,
+    registration,
+    registrationPath,
+    photo
+  );
+}
 
-  if (userError || !userData?.user) {
-    return fail("This rider's account couldn't be found.", 404);
-  }
-
-  const metadata = (userData.user.user_metadata ?? {}) as Record<string, unknown>;
-
-  if (readOwnHeadshotPath(profileId, metadata)) {
-    return fail("This rider already has a photo. Refresh the list to see it.", 409);
-  }
-
+/* The account holder's own registration: the photo is the account's. */
+const saveAccountHeadshot = async (
+  serviceSupabase: ServiceClient,
+  actor: Actor,
+  registration: Registration,
+  { profileId, metadata }: Holder,
+  photo: Blob
+) => {
+  const registrationId = registration.id as string;
+  const previousPath = readOwnHeadshotPath(profileId, metadata);
   const path = buildHeadshotPath(profileId);
 
   try {
-    await insertRequiredAuditLog(serviceSupabase, verification.actor, {
-      action: "add_headshot",
+    await insertRequiredAuditLog(serviceSupabase, actor, {
+      action: previousPath ? "replace_headshot" : "add_headshot",
       target_table: "solo_registrations",
       target_id: registrationId,
-      details: { rider: registration.full_name, profile_id: profileId },
+      details: { rider: registration.full_name, stored_on: "account", profile_id: profileId },
     });
   } catch {
-    return fail("The photo was not added because its audit record could not be created.", 500);
+    return fail("The photo was not saved because its audit record could not be created.", 500);
   }
 
   const { error: uploadError } = await serviceSupabase.storage
@@ -138,58 +221,45 @@ export async function POST(request: Request) {
   });
 
   if (metadataError) {
-    // Nothing points at the object; don't leave it orphaned.
+    // Nothing points at the new object; don't leave it orphaned.
     await serviceSupabase.storage.from(HEADSHOT_BUCKET).remove([path]);
     return fail(metadataError.message, 500);
   }
 
+  // Only once the account points at the new photo is the old one deleted.
+  if (previousPath) {
+    await serviceSupabase.storage.from(HEADSHOT_BUCKET).remove([previousPath]);
+  }
+
   forgetHeadshotUrl(profileId);
-
   return NextResponse.json({ url: await signedUrlFor(serviceSupabase, path) });
-}
-
-const signedUrlFor = async (
-  serviceSupabase: ReturnType<typeof createServiceRoleClient>,
-  path: string
-) => {
-  const { data } = await serviceSupabase.storage
-    .from(HEADSHOT_BUCKET)
-    .createSignedUrl(path, HEADSHOT_SIGNED_URL_SECONDS);
-
-  return data?.signedUrl ?? null;
 };
 
-/* No account to hold the photo, so it is kept on the registration. */
-const addPaperHeadshot = async (
-  serviceSupabase: ReturnType<typeof createServiceRoleClient>,
-  actor: Parameters<typeof insertRequiredAuditLog>[1],
-  registration: Record<string, unknown>,
+/* Any other registration keeps its own photo on the row. */
+const saveRegistrationHeadshot = async (
+  serviceSupabase: ServiceClient,
+  actor: Actor,
+  registration: Registration,
+  previousPath: string | null,
   photo: Blob
 ) => {
   const registrationId = registration.id as string;
 
   if (!("headshot_path" in registration)) {
-    return fail(
-      "Photos for riders without an account need a database update first (supabase/migrations/20261108100000_paper_rider_headshots.sql).",
-      409
-    );
-  }
-
-  if (readPaperHeadshotPath(registrationId, registration.headshot_path)) {
-    return fail("This rider already has a photo. Refresh the list to see it.", 409);
+    return fail(NEEDS_MIGRATION, 409);
   }
 
   const path = buildPaperHeadshotPath(registrationId);
 
   try {
     await insertRequiredAuditLog(serviceSupabase, actor, {
-      action: "add_headshot",
+      action: previousPath ? "replace_headshot" : "add_headshot",
       target_table: "solo_registrations",
       target_id: registrationId,
-      details: { rider: registration.full_name, stored_on: "registration (no account)" },
+      details: { rider: registration.full_name, stored_on: "registration" },
     });
   } catch {
-    return fail("The photo was not added because its audit record could not be created.", 500);
+    return fail("The photo was not saved because its audit record could not be created.", 500);
   }
 
   const { error: uploadError } = await serviceSupabase.storage
@@ -200,30 +270,38 @@ const addPaperHeadshot = async (
     return fail(uploadError.message, 500);
   }
 
-  // Only fills an empty slot, even if two admins add a photo at once.
-  const { data: updated, error: updateError } = await serviceSupabase
+  // Written only if the row still holds the photo this request saw, so two
+  // admins changing the same photo at once can't silently overwrite each other.
+  const update = serviceSupabase
     .from("solo_registrations")
     .update({ headshot_path: path })
-    .eq("id", registrationId)
-    .is("headshot_path", null)
-    .select("id");
+    .eq("id", registrationId);
+  const { data: updated, error: updateError } = await (previousPath
+    ? update.eq("headshot_path", previousPath)
+    : update.is("headshot_path", null)
+  ).select("id");
 
   if (updateError || !updated || updated.length === 0) {
     await serviceSupabase.storage.from(HEADSHOT_BUCKET).remove([path]);
     return fail(
-      updateError?.message ?? "This rider already has a photo. Refresh the list to see it.",
+      updateError?.message ?? "This rider's photo was changed meanwhile. Refresh the list to see it.",
       updateError ? 500 : 409
     );
+  }
+
+  if (previousPath) {
+    await serviceSupabase.storage.from(HEADSHOT_BUCKET).remove([previousPath]);
   }
 
   forgetPaperHeadshotUrl(registrationId);
   return NextResponse.json({ url: await signedUrlFor(serviceSupabase, path) });
 };
 
-/* Removes the photo the Solo riders list shows for this rider: the account's
-   own photo if there is one, otherwise the one kept on the registration.
-   Replies with the photo that is shown next, if any (a registration copy left
-   behind because the account already had its own), so the list stays right. */
+/* Removes the photo the Solo riders list shows for this rider: the one on the
+   registration if there is one, otherwise the account's, and the account's
+   only for the account holder's own registration. Replies with the photo shown
+   next, if any (the holder's account photo, once a registration photo has
+   gone), so the list stays right. */
 export async function DELETE(request: Request) {
   const verification = await verifyAdminRequest();
 
@@ -249,11 +327,10 @@ export async function DELETE(request: Request) {
   }
 
   const serviceSupabase = createServiceRoleClient();
-  const { data: registration, error: registrationError } = await serviceSupabase
-    .from("solo_registrations")
-    .select("*")
-    .eq("id", registrationId)
-    .maybeSingle();
+  const { data: registration, error: registrationError } = await loadRegistration(
+    serviceSupabase,
+    registrationId
+  );
 
   if (registrationError) {
     return fail(registrationError.message, 400);
@@ -263,24 +340,17 @@ export async function DELETE(request: Request) {
     return fail("That registration no longer exists. Refresh the list.", 404);
   }
 
-  const paperPath = readPaperHeadshotPath(registrationId, registration.headshot_path);
-  const profileId =
-    (registration.profile_id as string | null) ??
-    (await findProfileIdByEmail(serviceSupabase, registration.email as string));
+  const registrationPath = readPaperHeadshotPath(registrationId, registration.headshot_path);
+  const found = await findOwnHolder(serviceSupabase, registration);
 
-  let metadata: Record<string, unknown> | null = null;
-  let accountPath: string | null = null;
-
-  if (profileId) {
-    const { data: userData } = await serviceSupabase.auth.admin.getUserById(profileId);
-
-    if (userData?.user) {
-      metadata = (userData.user.user_metadata ?? {}) as Record<string, unknown>;
-      accountPath = readOwnHeadshotPath(profileId, metadata);
-    }
+  if (!found.ok) {
+    return fail("This rider's account couldn't be checked. Try again.", 502);
   }
 
-  if (!accountPath && !paperPath) {
+  const holder = found.holder;
+  const accountPath = holder ? readOwnHeadshotPath(holder.profileId, holder.metadata) : null;
+
+  if (!registrationPath && !accountPath) {
     return fail("This rider has no photo. Refresh the list.", 404);
   }
 
@@ -291,42 +361,47 @@ export async function DELETE(request: Request) {
       target_id: registrationId,
       details: {
         rider: registration.full_name,
-        removed_from: accountPath ? "account" : "registration (no account)",
+        removed_from: registrationPath ? "registration" : "account",
       },
     });
   } catch {
     return fail("The photo was not removed because its audit record could not be created.", 500);
   }
 
-  if (accountPath && profileId && metadata) {
-    const { error: metadataError } = await serviceSupabase.auth.admin.updateUserById(profileId, {
-      user_metadata: { ...metadata, headshot_path: null },
+  if (registrationPath) {
+    const { error: updateError } = await serviceSupabase
+      .from("solo_registrations")
+      .update({ headshot_path: null })
+      .eq("id", registrationId)
+      .eq("headshot_path", registrationPath);
+
+    if (updateError) {
+      return fail(updateError.message, 500);
+    }
+
+    forgetPaperHeadshotUrl(registrationId);
+    await serviceSupabase.storage.from(HEADSHOT_BUCKET).remove([registrationPath]);
+
+    return NextResponse.json({
+      url: accountPath ? await signedUrlFor(serviceSupabase, accountPath) : null,
     });
+  }
+
+  // Only reached for the account holder's own registration (accountPath is
+  // null for anyone else).
+  if (holder && accountPath) {
+    const { error: metadataError } = await serviceSupabase.auth.admin.updateUserById(
+      holder.profileId,
+      { user_metadata: { ...holder.metadata, headshot_path: null } }
+    );
 
     if (metadataError) {
       return fail(metadataError.message, 500);
     }
 
-    forgetHeadshotUrl(profileId);
+    forgetHeadshotUrl(holder.profileId);
     await serviceSupabase.storage.from(HEADSHOT_BUCKET).remove([accountPath]);
-
-    return NextResponse.json({
-      url: paperPath ? await signedUrlFor(serviceSupabase, paperPath) : null,
-    });
   }
-
-  const { error: updateError } = await serviceSupabase
-    .from("solo_registrations")
-    .update({ headshot_path: null })
-    .eq("id", registrationId)
-    .eq("headshot_path", paperPath as string);
-
-  if (updateError) {
-    return fail(updateError.message, 500);
-  }
-
-  forgetPaperHeadshotUrl(registrationId);
-  await serviceSupabase.storage.from(HEADSHOT_BUCKET).remove([paperPath as string]);
 
   return NextResponse.json({ url: null });
 }

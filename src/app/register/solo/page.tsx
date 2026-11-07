@@ -64,13 +64,18 @@ export default async function SoloRegisterPage() {
     redirect(`/complete-profile?next=${encodeURIComponent("/register/solo")}`);
   }
 
-  const { data: existingRegistration } = !isAdmin && user
+  /* Any account may enter several riders (a parent, a club contact). The
+     first registration is usually the account holder's own, so it keeps the
+     account's details and photo box; every later one is another rider and
+     starts blank. */
+  const { count: registrationCount } = user
     ? await supabase
         .from("solo_registrations")
-        .select("id")
+        .select("id", { count: "exact", head: true })
         .eq("profile_id", user.id)
-        .maybeSingle()
-    : { data: null };
+    : { count: 0 };
+  const existingRegistrations = registrationCount ?? 0;
+  const enteringAnotherRider = existingRegistrations > 0;
 
   // Restore the autosaved draft (RLS limits the read to the user's own row).
   const { data: draftRow } = user
@@ -102,22 +107,30 @@ export default async function SoloRegisterPage() {
                   </p>
                 </div>
               </>
-            ) : !isAdmin && existingRegistration ? (
-              <>
-                <SectionHeading>Already Registered</SectionHeading>
-
-                <div className="mt-10 space-y-6">
-                  <p className="leading-7 text-brown/85">
-                    You have already registered for solo competition.
-                  </p>
-                </div>
-              </>
             ) : (
               <>
                 <SectionHeading>Rider Details</SectionHeading>
+                {enteringAnotherRider && (
+                  <p className="mt-6 rounded-lg border-l-4 border-bronze bg-sand px-5 py-4 leading-7 text-brown">
+                    {`You have ${existingRegistrations} ${
+                      existingRegistrations === 1 ? "registration" : "registrations"
+                    }. Registering another rider? Enter their details below. `}
+                    <Link href="/account" className="font-semibold text-bronze-deep underline">
+                      See your registrations
+                    </Link>
+                  </p>
+                )}
+                {/* The photo box writes the account's own photo, so it is shown
+                    only for the account holder's first entry. Another rider's
+                    photo is added by the organisers from the admin list. */}
                 <RegisterForm
-                  lockProfileFields={!isAdmin}
+                  lockContactFields={!isAdmin && !enteringAnotherRider}
+                  holderName={
+                    !isAdmin && !enteringAnotherRider ? authMetadata?.full_name ?? "" : null
+                  }
                   initialDraft={(draftRow?.data ?? null) as SoloDraftData | null}
+                  showHeadshot={!isAdmin && !enteringAnotherRider}
+                  ownContactNote={enteringAnotherRider}
                   initialHeadshotPath={
                     typeof authMetadata?.headshot_path === "string"
                       ? authMetadata.headshot_path
@@ -126,7 +139,12 @@ export default async function SoloRegisterPage() {
                   initialValues={
                     isAdmin
                       ? undefined
-                      : {
+                      : enteringAnotherRider
+                        ? // Another rider starts blank: the database still refuses
+                          // an email or phone already registered (UNIQUE on
+                          // each) until a later migration.
+                          {}
+                        : {
                           full_name: authMetadata?.full_name,
                           age: getMetadataNumber(authMetadata?.age),
                           location: authMetadata?.location,

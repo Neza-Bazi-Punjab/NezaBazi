@@ -151,11 +151,14 @@ export const buildHeadshotPath = (profileId: string) => {
   return `${profileId}/${unique}.jpg`;
 };
 
-/* A rider with no account (a paper entry) keeps their photo on the
-   registration, at `paper/<registration_id>/<random>.jpg`. No rider's storage
-   policy matches the `paper` folder, so only the service role writes here.
-   The photo moves to the rider's own folder once they sign up and their
-   account claims the entry. */
+/* An entry photo: a registration's own photo, kept on the registration at
+   `paper/<registration_id>/<random>.jpg`. Used for every rider who is not the
+   account holder of their registration: a paper entry with no account, or a
+   rider entered from someone else's account (see registration-identity.ts).
+   The folder name is historical, from when only paper riders had one. No
+   rider's storage policy matches the `paper` folder, so only the service role
+   writes here. A paper entry's photo moves to the rider's own folder once
+   they sign up and their account claims the entry as their own. */
 export const PAPER_HEADSHOT_FOLDER = "paper";
 
 export const buildPaperHeadshotPath = (registrationId: string) =>

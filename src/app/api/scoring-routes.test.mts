@@ -556,3 +556,49 @@ test("the moving sample (?sample=solo) is rehearsal data behind an admin switch"
     assert.doesNotMatch(source, /from "@\/lib\/scoring\/vmix-sample"/, path);
   }
 });
+
+test("Start never silently replaces a rider already on course", () => {
+  const live = repoFile("src/app/api/judge/live/route.ts");
+  const actions = repoFile("src/app/judge/judge-actions.ts");
+
+  // The big Start button sends the flag; "Put on course" from the start list
+  // and Ride now do not, and keep today's behaviour.
+  assert.match(actions, /case "start":[\s\S]*?post\("\/api\/judge\/live", \{ current_run_id: action\.run\.id, start: true \}\)/);
+  assert.match(actions, /case "current":[\s\S]*?post\("\/api\/judge\/live", \{ current_run_id: action\.run\.id \}\)/);
+  assert.equal((actions.match(/start: true/g) ?? []).length, 1);
+
+  // Refused only when a different rider is on course, so a retried Start
+  // that already landed changes nothing.
+  assert.match(live, /onCourseRunId != null &&\s*onCourseRunId !== update\.current_run_id/);
+  assert.match(live, /`\$\{name\} is already on course\. Refresh and check\.`/);
+
+  // Real path: reads the live state before the write and answers 409.
+  const real = live.slice(live.indexOf("const serviceSupabase = createServiceRoleClient();"));
+  assert.ok(
+    real.indexOf('.from("scoring_live_state")') < real.indexOf('rpc("scoring_set_live"'),
+    "the live state is read before the write"
+  );
+  assert.match(real, /alreadyOnCourse\([\s\S]*?\),\s*409\s*\)/);
+  // The flag is never passed to the database function.
+  assert.match(real, /p_payload: parsed\.value,/);
+
+  // Training path: the same check, refused as a 409 (SampleRefusal 22023).
+  assert.match(live, /await checkTrainingStart\(training\.session, value\)/);
+  assert.match(live, /throw new SampleRefusal\(\s*"22023",\s*alreadyOnCourse\(/);
+});
+
+test("judge writes and live polls give up after 12 seconds", () => {
+  const actions = repoFile("src/app/judge/judge-actions.ts");
+  const hook = repoFile("src/lib/scoring/use-live-state.ts");
+
+  assert.match(actions, /JUDGE_WRITE_TIMEOUT_MS = 12_000/);
+  assert.match(actions, /signal: AbortSignal\.timeout\(JUDGE_WRITE_TIMEOUT_MS\)/);
+  assert.match(actions, /caught\.name === "TimeoutError"\) \{\s*throw new Error\(TIMED_OUT_WRITE_MESSAGE\);/);
+  assert.match(actions, /"Not sure it saved — check Last result before tapping again\."/);
+
+  // A timed-out poll is aborted quietly and the next one scheduled.
+  assert.match(hook, /LOAD_TIMEOUT_MS = 12_000/);
+  assert.match(hook, /setTimeout\(\(\) => controller\.abort\(\), LOAD_TIMEOUT_MS\)/);
+  assert.match(hook, /if \(disposed \|\| controller\.signal\.aborted\) \{\s*return;/);
+  assert.match(hook, /finally \{\s*clearTimeout\(timeout\);\s*if \(inFlight === controller\) \{\s*inFlight = null;\s*schedulePoll\(\);/);
+});

@@ -8,10 +8,35 @@ import {
 import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
 import { escapeIlikePattern } from "@/lib/supabase/query";
 import { HEADSHOT_BUCKET, PAPER_HEADSHOT_FOLDER, buildHeadshotPath } from "@/lib/headshots";
+import { isOwnRegistration, type RiderIdentity } from "@/lib/registration-identity";
+
+/* A registration is a rider; the account is whoever entered it, and one
+   account may have entered several riders. Account edits therefore reach only
+   the account holder's own registration: the row whose email and full name
+   were the account's before this edit (src/lib/registration-identity.ts).
+   Never the other riders the account entered; an administrator edits those. */
+
+/* While an email change waits for confirmation the holder's own rows keep the
+   old address, so it is remembered in the account's metadata under this key
+   (set by PATCH /api/account/profile). Once the new address is confirmed, the
+   next sync still recognises the rows by it, moves them to the new address,
+   and clears it. */
+export const REGISTRATION_EMAIL_KEY = "registration_email";
 
 type RegistrationProfile = {
   userId: string;
+  // The account's current address as Supabase Auth holds it. Both callers
+  // pass the verified user's email after checking hasConfirmedEmail, so it is
+  // the only address trusted to find team rows (see below).
   previousEmail: string;
+  // The account's full name before this edit: with previousEmail, what the
+  // holder's own registration rows still hold.
+  previousFullName: string;
+  // The older address the holder's own rows may still hold after an email
+  // change (REGISTRATION_EMAIL_KEY above), or null. It lives in user_metadata,
+  // which the user can write from the browser, so it is used only for solo
+  // rows, where `profile_id` already limits it to rows this account entered.
+  registrationEmail?: string | null;
   email: string;
   fullName: string;
   age: number;
@@ -36,20 +61,28 @@ type RegistrationProfile = {
    placeholder with the rider's real address and the rider signs up and
    confirms that address, the row is claimed by it — the same email-identity
    rule that links team riders. Paper rows only (an online row always has its
-   owner), only while unclaimed, and only when the user has no solo entry yet,
-   so nobody ends up holding two. Best effort: a failure (including the paper
-   migration not being applied yet) is logged and the sync carries on. */
+   owner), only while unclaimed, and only when the user has no solo entry of
+   their own yet (riders they entered for others don't count), so nobody ends
+   up holding two. Best effort: a failure (including the paper migration not
+   being applied yet) is logged and the sync carries on. */
 const claimPaperSoloRegistration = async (
   serviceSupabase: SupabaseClient,
   userId: string,
-  confirmedEmail: string
+  confirmedEmail: string,
+  fullName: string
 ) => {
-  const { count, error: countError } = await serviceSupabase
+  const { data: accountRows, error: readError } = await serviceSupabase
     .from("solo_registrations")
-    .select("id", { count: "exact", head: true })
+    .select("id, email, full_name")
     .eq("profile_id", userId);
 
-  if (countError || (count ?? 0) > 0) {
+  // A write decision, so the name must match too (registration-identity.ts).
+  if (
+    readError ||
+    ((accountRows ?? []) as RiderIdentity[]).some((row) =>
+      isOwnRegistration(row, { email: confirmedEmail, full_name: fullName })
+    )
+  ) {
     return;
   }
 
@@ -78,9 +111,11 @@ const claimPaperSoloRegistration = async (
    claimed that entry, the photo becomes theirs like any other: copied into
    their own folder, recorded in their Auth metadata (so their account page,
    the check-in desk and the commentary panel all find it), and removed from
-   the registration. If the account already has a photo of its own, that one
-   wins and the registration's copy is left where it is. Best effort: on any
-   failure the photo stays on the registration, where it is still shown. */
+   the registration. Only for the account holder's own entry (same email and
+   full name as the account): a rider who is not the holder keeps the photo
+   on their registration. If the account already has a photo of its own, that
+   one wins and the registration's copy is left where it is. Best effort: on
+   any failure the photo stays on the registration, where it is still shown. */
 const movePaperHeadshotToAccount = async (
   serviceSupabase: SupabaseClient,
   userId: string,
@@ -102,6 +137,10 @@ const movePaperHeadshotToAccount = async (
     }
 
     const metadata = (userData.user.user_metadata ?? {}) as Record<string, unknown>;
+
+    if (!isOwnRegistration(row, { email: userData.user.email, full_name: metadata.full_name })) {
+      return;
+    }
 
     if (typeof metadata.headshot_path === "string" && metadata.headshot_path !== "") {
       return;
@@ -194,6 +233,8 @@ const getRegistrationConflictMessage = (error: {
 export const syncRegistrationProfile = async ({
   userId,
   previousEmail,
+  previousFullName,
+  registrationEmail = null,
   email,
   fullName,
   age,
@@ -233,36 +274,101 @@ export const syncRegistrationProfile = async ({
   let syncedCount = 0;
 
   if (confirmedEmail && confirmedEmail.trim() !== "") {
-    await claimPaperSoloRegistration(serviceSupabase, userId, confirmedEmail.trim());
+    await claimPaperSoloRegistration(serviceSupabase, userId, confirmedEmail.trim(), previousFullName);
   }
 
-  // The solo row belongs to this user (profile_id), so writing the current
-  // confirmed email onto it is always safe and self-heals it after an email
-  // change is confirmed. Skipped while a change is still pending confirmation.
-  const soloUpdates = syncEmail ? { ...profileUpdates, email } : profileUpdates;
-  const { data: soloRows, error: soloError } = await serviceSupabase
-    .from("solo_registrations")
-    .update(soloUpdates)
-    .eq("profile_id", userId)
-    .select("id");
+  const present = (address: string | null | undefined): address is string =>
+    typeof address === "string" && address.trim() !== "";
 
-  if (soloError) {
-    warnings.push(
-      `Your solo registration could not be updated: ${getRegistrationConflictMessage(soloError)}`
+  // Solo rows: the account's confirmed address or the remembered older one,
+  // each with the name the account had before this edit. Safe for the
+  // remembered address only because every solo row read here already belongs
+  // to this account (profile_id).
+  const soloEmails = [previousEmail, registrationEmail].filter(present);
+  // Writes never relax the name, not even for the account's only row: that
+  // row may be a child entered under a parent's email (registration-identity.ts).
+  const isHoldersOwnSolo = (row: RiderIdentity) =>
+    soloEmails.some((address) =>
+      isOwnRegistration(row, { email: address, full_name: previousFullName })
     );
-  } else {
-    syncedCount += (soloRows ?? []).length;
+
+  // Team rows have no account id, so the email is all that ties them to a
+  // person. Only addresses Supabase Auth has confirmed for this account may
+  // find them, never the remembered registration_email: that is user-writable
+  // metadata, and with it anyone who knew a rider's email and name could have
+  // that rider's team row rewritten with their own details.
+  const teamEmails = [...new Set([previousEmail, syncEmail ? email : null].filter(present))];
+  const isHoldersOwnTeam = (row: RiderIdentity) =>
+    teamEmails.some((address) =>
+      isOwnRegistration(row, { email: address, full_name: previousFullName })
+    );
+
+  // Only the holder's own solo row, among the rows this account entered
+  // (profile_id). Writing the current confirmed email onto it is safe and
+  // self-heals it after an email change is confirmed. Skipped while a change
+  // is still pending confirmation.
+  const soloUpdates = syncEmail ? { ...profileUpdates, email } : profileUpdates;
+  const { data: accountRows, error: accountRowsError } = await serviceSupabase
+    .from("solo_registrations")
+    .select("id, email, full_name")
+    .eq("profile_id", userId);
+  const ownSoloIds = ((accountRows ?? []) as Array<RiderIdentity & { id: string }>)
+    .filter(isHoldersOwnSolo)
+    .map((row) => row.id);
+
+  if (accountRowsError) {
+    warnings.push(
+      `Your solo registration could not be updated: ${getRegistrationConflictMessage(accountRowsError)}`
+    );
+  } else if (ownSoloIds.length > 0) {
+    const { data: soloRows, error: soloError } = await serviceSupabase
+      .from("solo_registrations")
+      .update(soloUpdates)
+      .in("id", ownSoloIds)
+      .eq("profile_id", userId)
+      .select("id");
+
+    if (soloError) {
+      warnings.push(
+        `Your solo registration could not be updated: ${getRegistrationConflictMessage(soloError)}`
+      );
+    } else {
+      syncedCount += (soloRows ?? []).length;
+    }
   }
 
-  // Rider rows on any team are linked only by email, so they are matched by the
-  // email the rows currently hold (previousEmail). The email column is only
-  // rewritten once the new address is confirmed.
-  if (previousEmail !== "") {
+  // Rider rows on any team are linked only by email, so they are found by the
+  // email the rows currently hold (previousEmail), and only the holder's own
+  // row (same name too) is written. The email column is only rewritten once
+  // the new address is confirmed.
+  const memberIds = new Set<string>();
+
+  for (const address of teamEmails) {
+    const { data: candidates, error: candidatesError } = await serviceSupabase
+      .from("team_members")
+      .select("id, email, full_name")
+      .ilike("email", escapeIlikePattern(address));
+
+    if (candidatesError) {
+      warnings.push(
+        `Your team rider entry could not be updated: ${getRegistrationConflictMessage(candidatesError)}`
+      );
+      continue;
+    }
+
+    for (const row of (candidates ?? []) as Array<RiderIdentity & { id: string }>) {
+      if (isHoldersOwnTeam(row)) {
+        memberIds.add(row.id);
+      }
+    }
+  }
+
+  if (memberIds.size > 0) {
     const memberUpdates = syncEmail ? { ...profileUpdates, email } : profileUpdates;
     const { data: memberRows, error: memberError } = await serviceSupabase
       .from("team_members")
       .update(memberUpdates)
-      .ilike("email", escapeIlikePattern(previousEmail))
+      .in("id", [...memberIds])
       .select("id");
 
     if (memberError) {
@@ -275,6 +381,24 @@ export const syncRegistrationProfile = async ({
   }
 
   return { syncedCount, warnings };
+};
+
+/* After a confirmed email change has been carried onto the holder's own
+   rows, the remembered old address is no longer needed. Best effort. */
+const forgetRegistrationEmail = async (user: User) => {
+  try {
+    const serviceSupabase = createSupabaseAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    );
+
+    await serviceSupabase.auth.admin.updateUserById(user.id, {
+      user_metadata: { ...(user.user_metadata ?? {}), [REGISTRATION_EMAIL_KEY]: null },
+    });
+  } catch {
+    console.warn("Could not clear the remembered registration email");
+  }
 };
 
 export const syncRegistrationProfileFromUser = async (user: User) => {
@@ -300,9 +424,19 @@ export const syncRegistrationProfileFromUser = async (user: User) => {
     } as const;
   }
 
-  return syncRegistrationProfile({
+  const registrationEmail =
+    typeof user.user_metadata?.[REGISTRATION_EMAIL_KEY] === "string"
+      ? (user.user_metadata[REGISTRATION_EMAIL_KEY] as string)
+      : null;
+
+  // Nothing in the account has changed here, so the holder's own rows are the
+  // ones with the account's current name and email (or the remembered older
+  // address, after an email change was confirmed).
+  const result = await syncRegistrationProfile({
     userId: user.id,
     previousEmail: user.email,
+    previousFullName: fullName,
+    registrationEmail,
     email: user.email.trim().toLowerCase(),
     // hasConfirmedEmail(user) was checked above.
     confirmedEmail: user.email,
@@ -318,4 +452,10 @@ export const syncRegistrationProfileFromUser = async (user: User) => {
     horseBreed:
       typeof metadata.horse_breed === "string" ? metadata.horse_breed.trim() : null,
   });
+
+  if (registrationEmail && result.warnings.length === 0) {
+    await forgetRegistrationEmail(user);
+  }
+
+  return result;
 };
