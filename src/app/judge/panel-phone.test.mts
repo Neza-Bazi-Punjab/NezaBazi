@@ -126,3 +126,25 @@ test("between riders: the last result stays in view and one big Start <name> but
   assert.match(actions, /export const needsConfirmation = \(action: JudgeAction\) => action\.kind !== "start";/);
   assert.match(panel, /onClick=\{\(\) => arm\(\{ kind: "ride_now", run \}\)\}/);
 });
+
+test("between riders: Skip this rider sits under Start and asks before voiding the run", () => {
+  // The judge can pass a rider over before they ever come on course, not only
+  // from the scoring form (which reaches the rider already on course).
+  const skip = buttonFor(panel, />\s*Skip this rider\s*</);
+  assert.match(skip, /onClick=\{\(\) => tap\(\{ kind: "void", run: startRider \}\)\}/);
+  // Same 44px-plus target as the form's Skip, and full width under Start.
+  assert.match(skip, /\bh-12\b/);
+  assert.match(skip, /w-full max-w-md/);
+  assert.match(skip, /sm:h-\[52px\]/);
+  // It is offered only while Start is, and only for the rider Start names.
+  const startScreen = panel.slice(
+    panel.indexOf("{/* The judge's Start: the one way a rider comes on course. */}"),
+    panel.indexOf("Skip this rider")
+  );
+  assert.ok(startScreen.length > 0, "the Skip sits inside the startRider branch");
+  assert.doesNotMatch(startScreen, /\) : \(/, "no branch closes between Start and Skip");
+  // "void" asks first, so a mis-tap cannot pass a rider over silently.
+  const actions = read("./judge-actions.ts");
+  assert.match(actions, /export const needsConfirmation = \(action: JudgeAction\) => action\.kind !== "start";/);
+  assert.match(actions, /question: `Skip \$\{action\.run\.rider_name\} for now\?/);
+});

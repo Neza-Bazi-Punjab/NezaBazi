@@ -1503,6 +1503,29 @@ export default function ScoringAdmin({
               </button>
             )}
           </div>
+          {/* Straight into either practice panel. Both were only reachable
+              from a link at the foot of the live panel, so the commentary
+              demo in particular was hard to find; the judges' and the
+              commentators' practice open from here, in a new tab so this
+              page keeps its place. */}
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <Link
+              href="/judge/demo"
+              target="_blank"
+              rel="noopener"
+              className={`${secondaryButton} text-center`}
+            >
+              Open the judges&rsquo; practice panel
+            </Link>
+            <Link
+              href="/commentary/demo"
+              target="_blank"
+              rel="noopener"
+              className={`${secondaryButton} text-center`}
+            >
+              Open the commentary practice panel
+            </Link>
+          </div>
           <ul className="mt-2 space-y-1 text-sm text-brown">
             {DEMO_FEED_ADDRESSES.map((address) => (
               <li key={address}>
