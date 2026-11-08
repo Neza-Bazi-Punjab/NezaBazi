@@ -249,7 +249,7 @@ Judges, commentators and the stream team can rehearse on the real panels with sa
 **One shared demo, on the live site.** The practice on the live site is **one demo for everyone**: every judge, commentator and administrator who opens it sees the same thing, each on their own device, so the whole team can rehearse the day together.
 
 1. Sign in with your staff account (judge, commentator or administrator).
-2. Open the **Judge Panel** or **Commentary** link, then **Practise on sample riders** at the bottom of the page. Or go straight to `/judge/demo` or `/commentary/demo`.
+2. The quickest way in is `/admin/scoring`, **Graphics Rehearsal Feed** card, under "Follows the demo": **Open the judges' practice panel** and **Open the commentary practice panel**, each in a new tab. From a panel itself, **Practise on sample riders** at the bottom of the **Judge Panel** or **Commentary** page does the same. Or go straight to `/judge/demo` or `/commentary/demo`.
 3. A yellow **TRAINING MODE** banner reads "Practice data — one demo shared by everyone, on every device; nothing is recorded."
 4. Judges drive the demo on `/judge/demo`; commentators follow it on `/commentary/demo`, on any device, within about two seconds. Two judges can work at once, as on the day: if both tap the same run, the second is told it is already scored. If two taps land at exactly the same moment, one of them is asked to try again ("Someone else just changed the practice. It has refreshed; try again.").
 5. **Reset training data** (in the judges' banner, with a confirmation) **restarts the demo for everyone, on every device**, from the top of Qualification. Agree a reset with the team first.

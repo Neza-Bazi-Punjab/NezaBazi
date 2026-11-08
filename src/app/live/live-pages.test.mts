@@ -547,3 +547,32 @@ test("an administrator puts a rider on course from the start list in one click",
   assert.match(admin, />\s+Put on course\s+</);
   assert.match(admin, /On course now/);
 });
+
+test("both practice panels open from the admin scoring page's demo card", () => {
+  const admin = read("../admin/scoring/ScoringAdmin.tsx");
+
+  // Each panel's practice is one click from here, not only from the link at
+  // the foot of the live panel — the commentary demo was hard to find.
+  for (const [href, label] of [
+    ["/judge/demo", /Open the judges&rsquo; practice panel/],
+    ["/commentary/demo", /Open the commentary practice panel/],
+  ] as const) {
+    const link = admin.slice(
+      admin.lastIndexOf("<Link", admin.search(label)),
+      admin.search(label)
+    );
+    assert.ok(link.length > 0, `a Link for ${href}`);
+    assert.match(link, new RegExp(`href="${href}"`));
+    // A new tab, so the administrator keeps their place on this page.
+    assert.match(link, /target="_blank"/);
+    assert.match(link, /rel="noopener"/);
+  }
+
+  // They sit in the "Follows the demo" card, beside the Close demo switch.
+  const card = admin.slice(admin.indexOf("Follows the demo ("));
+  assert.ok(card.indexOf("/commentary/demo") > 0, "the commentary demo link is in that card");
+  assert.ok(
+    card.indexOf("/commentary/demo") < card.indexOf("DEMO_FEED_ADDRESSES.map"),
+    "the links come before the feed addresses"
+  );
+});
