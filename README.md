@@ -36,7 +36,7 @@ Requires a `.env.local` with `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_A
 | 1 | Public website & design | ✅ Done |
 | 2 | Supabase setup + player registration/login | Reviewing |
 | 3 | Player profiles + event registration + admin dashboard | In progress — registration, account management, and admin tools live; /players is still a placeholder |
-| 4 | Admin dashboard + score entry | Built — live scoring, judges' and commentary panels, stream overlays, paper registration. Pending: the five new migrations on the live project, then an event-day rehearsal |
+| 4 | Admin dashboard + score entry | Built — live scoring, judges' and commentary panels, stream overlays, paper registration. All migrations are applied on the live project (8 Nov 2026). Pending: an event-day rehearsal |
 | 5 | Rankings/stats + audit log & security review | Planned |
 
 ## Project structure

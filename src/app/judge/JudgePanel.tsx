@@ -700,6 +700,21 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
                     .filter(Boolean)
                     .join(" · ")}
                 </p>
+                {/* Skip before the rider ever comes on course. Since a result,
+                    a skip or a call-up leaves the course empty (migration
+                    20261107130000), this screen is where the judge decides who
+                    rides, so the skip has to be offered here too — not only in
+                    the scoring form, where it reaches the rider already on
+                    course. The run goes straight to the Skipped box, and Start
+                    then names the next rider in order. */}
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => tap({ kind: "void", run: startRider })}
+                  className="mono h-12 w-full max-w-md border-2 border-[var(--ledger-ink)] bg-transparent px-4 text-[14px] font-bold uppercase disabled:opacity-40 sm:h-[52px] sm:text-[15px]"
+                >
+                  Skip this rider
+                </button>
               </>
             ) : (
               <p className="text-[var(--ledger-muted)]">
