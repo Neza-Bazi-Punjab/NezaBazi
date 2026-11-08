@@ -272,6 +272,21 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
 
   /* Render -------------------------------------------------------------- */
 
+  /* Into practice and back again. On /judge this lives in the panel's own
+     sidebar, which is on screen whatever the panel is showing. The commentary
+     panel has no sidebar outside its full layout, so the link went missing
+     exactly when it is wanted most: before event day no round is live, and
+     "No round is live" was a dead end with no way into the demo. One
+     definition, used by every branch below. */
+  const practiceLink = (
+    <Link
+      href={training ? "/commentary" : "/commentary/demo"}
+      className="mono inline-flex min-h-11 items-center text-[12px] uppercase text-[var(--ledger-muted)] underline underline-offset-4"
+    >
+      {training ? "Leave practice — open the live panel" : "Practise on sample riders"}
+    </Link>
+  );
+
   let body: React.ReactNode;
 
   if (!state) {
@@ -294,6 +309,7 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
               Log in again
             </Link>
           )}
+          {practiceLink}
         </div>
       </div>
     ) : (
@@ -308,6 +324,9 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
         <p className="mt-3 text-[var(--ledger-muted)]">
           The panel fills in by itself as soon as a round goes live.
         </p>
+        {/* Before event day this is the whole screen, so practice has to be
+            reachable from it. */}
+        <p className="mt-4">{practiceLink}</p>
       </div>
     );
   } else {
@@ -633,14 +652,7 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
           )}
 
           {/* Practise from home before event day; back again afterwards. */}
-          <p className={`mt-auto pt-4 ${STACK_ORDER.practice}`}>
-            <Link
-              href={training ? "/commentary" : "/commentary/demo"}
-              className="mono inline-flex min-h-11 items-center text-[12px] uppercase text-[var(--ledger-muted)] underline underline-offset-4"
-            >
-              {training ? "Leave practice — open the live panel" : "Practise on sample riders"}
-            </Link>
-          </p>
+          <p className={`mt-auto pt-4 ${STACK_ORDER.practice}`}>{practiceLink}</p>
         </aside>
       </div>
     );

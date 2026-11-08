@@ -493,6 +493,32 @@ test("the training panels read and write a practice session and say whose it is"
   assert.match(commentary, /href=\{training \? "\/commentary" : "\/commentary\/demo"\}/);
   assert.match(judge, /Practise on sample riders/);
 
+  // The judges' link sits in the panel's sidebar, which is on screen whatever
+  // the panel shows. The commentary panel has no sidebar outside its full
+  // layout, so it shares one `practiceLink` across every branch — otherwise
+  // the link vanishes exactly when it is wanted: before event day, when no
+  // round is live.
+  assert.match(commentary, /const practiceLink = \(\s+<Link/);
+  assert.equal(
+    commentary.match(/href=\{training \? "\/commentary" : "\/commentary\/demo"\}/g)?.length,
+    1,
+    "one definition of the practice link, not one per branch"
+  );
+  // "No round is live" / "Live scoring is not set up yet" offers it...
+  const noRound = commentary.slice(
+    commentary.indexOf('{state.configured ? "No round is live"'),
+    commentary.indexOf('{state.configured ? "No round is live"') + 700
+  );
+  assert.match(noRound, /\{practiceLink\}/, "the no-round screen links to practice");
+  // ...so does the error screen, beside Retry and Log in again...
+  const errorScreen = commentary.slice(
+    commentary.indexOf("Log in again"),
+    commentary.indexOf("Log in again") + 220
+  );
+  assert.match(errorScreen, /\{practiceLink\}/, "the error screen links to practice");
+  // ...and the full panel keeps it last in the stack on a phone.
+  assert.match(commentary, /\$\{STACK_ORDER\.practice\}`\}>\{practiceLink\}</);
+
   assert.match(judge, /const stateUrl = training \? withTrainingFlag\(JUDGE_STATE_URL\) : JUDGE_STATE_URL;/);
   assert.match(commentary, /const stateUrl = training \? `\$\{COMMENTARY_STATE_URL\}\?sample=1` : COMMENTARY_STATE_URL;/);
   assert.match(commentary, /useLiveState<CommentaryState>\(stateUrl\)/);
