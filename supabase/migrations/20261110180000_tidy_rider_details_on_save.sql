@@ -22,6 +22,10 @@
 --   4. tidy_rider_details(), a BEFORE INSERT OR UPDATE trigger function, and
 --      its trigger on solo_registrations, team_members and teams.
 --
+-- The fields: full_name, father_name, mother_name, horse_name,
+-- emergency_contact_name, team_name and dal_panth (rule 1), location (rule 2)
+-- and horse_breed (rule 3). Emails and phone numbers are left as typed.
+--
 -- What makes it safe on the day:
 --   * On UPDATE a field is tidied only when that update changes it. A
 --     check-in, a photo or a Dal Panth edit never rewrites a rider's text.
@@ -263,7 +267,8 @@ begin
     select candidate.name
     from pg_catalog.unnest(array[
       'full_name', 'father_name', 'mother_name', 'horse_name',
-      'emergency_contact_name', 'location', 'horse_breed'
+      'emergency_contact_name', 'team_name', 'dal_panth',
+      'location', 'horse_breed'
     ]) as candidate(name)
     where v_typed ? candidate.name
   loop
