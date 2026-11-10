@@ -192,6 +192,16 @@ export type PoolRosterEntry = {
   members?: string[];
 };
 
+/* One attempt of a Single rider in a round: the result, on course, not
+   needed (skipped after a carry, or skipped), still to ride, or no such run.
+   The same shape as AttemptMark in blocks.ts, which builds it. */
+export type LeaderboardAttempt =
+  | { kind: "result"; result: RunResult; points: number }
+  | { kind: "on_course" }
+  | { kind: "not_needed" }
+  | { kind: "to_ride" }
+  | { kind: "none" };
+
 /* One row of a round's standings. For a Single round an entrant is a rider;
    for a Section round it is a team and `members` lists the four riders. */
 export type LeaderboardRow = {
@@ -215,6 +225,11 @@ export type LeaderboardRow = {
   advanced: boolean | null;
   /* True when `advanced` comes from an administrator's override. */
   advanced_overridden: boolean;
+  /* The live round only, and only a Single round with several attempts (the
+     qualifier's Round 1 / 2 / 3): one mark per attempt, in order. Drawn as
+     the rider's boxes on the public leaderboard. Results and run states
+     only, which the public runs table already shows. */
+  attempts?: LeaderboardAttempt[];
   members?: {
     team_member_id: string | null;
     rider_name: string;

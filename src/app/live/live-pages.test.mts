@@ -377,11 +377,12 @@ test("administrators and the stream control the screens, not judges; modes chang
   }
   assert.match(read("../overlay/leaderboard/LeaderboardOverlay.tsx"), /live\.display_mode === "rider"\s*\) \{\s*return <OverlayFrame name="leaderboard" \/>;/);
 
-  // /live: standings first in leaderboard mode, collapsed in rider mode.
+  // /live is the leaderboard in every mode: the modes only change the
+  // stream graphics, and never hide or collapse the standings.
   const board = read("./LiveBoard.tsx");
-  assert.match(board, /\{mode === "leaderboard" && standingsSection\}/);
-  assert.match(board, /mode === "rider" && !standingsOpen/);
-  assert.match(board, /Show standings and pools/);
+  assert.match(board, /\n        \{standingsSection\}\n/);
+  assert.doesNotMatch(board, /display_mode === "(leaderboard|rider)"|\bmode === "/);
+  assert.doesNotMatch(board, /Show standings and pools/);
 });
 
 test("a decided round's podium shows on /live, the live round included", () => {
@@ -604,4 +605,58 @@ test("both practice panels open from the admin scoring page's demo card", () => 
     card.indexOf("/commentary/demo") < card.indexOf("DEMO_FEED_ADDRESSES.map"),
     "the links come before the feed addresses"
   );
+});
+
+test("/live wears the panels' ledger look and keeps its hand-held layout", () => {
+  const board = read("./LiveBoard.tsx");
+  const parts = read("./live-parts.tsx");
+
+  // The same paper, rules and type as the judges' and commentary panels.
+  assert.match(board, /<div className=\{`\$\{LEDGER_ROOT\} flex-1`\}>/);
+  assert.match(board, /<LiveStatusBar/);
+  assert.match(board, /<Standings\s/);
+  // The leaderboard is the page: no large on-course or last-result blocks.
+  // A small strip says who is riding and who is up next, and both are
+  // tagged in the standings.
+  assert.doesNotMatch(board, /OnCourse|LastResult|NextRiders|last_scored_run/);
+  assert.match(board, /<UpNext current=\{state\.current_run\} next=\{state\.up_next\} \/>/);
+  assert.match(board, /nextKey=\{isCurrentRound \? \(state\.up_next\[0\]\?\.entrant_key \?\? null\) : null\}/);
+  assert.match(board, /highlightKey=\{isCurrentRound \? \(state\.current_run\?\.entrant_key \?\? null\) : null\}/);
+
+  // Tight rows so a pool fits one screen, thumb-sized controls, and long
+  // names wrap instead of being cut. The pool letters scroll sideways.
+  assert.match(parts, /min-h-11 min-w-11 shrink-0/);
+  assert.match(parts, /overflow-x-auto/);
+  assert.match(board, /mono min-h-11 rounded-full/);
+  assert.match(parts, /min-w-0 break-words text-\[15px\] font-bold uppercase/);
+  assert.doesNotMatch(parts, /truncate/);
+  // The tabs stay under the status bar while the list scrolls.
+  assert.match(board, /sticky top-\[calc\(var\(--nav-height\)\+2\.25rem\)\]/);
+
+  // A team opens to its riders; the judges' overrides stay marked.
+  assert.match(parts, /aria-expanded=\{isOpen\}/);
+  assert.match(parts, /\* Decided by the judges\./);
+});
+
+test("the qualifier's three attempts show as three boxes on /live, as on the commentary panel", () => {
+  const parts = read("./live-parts.tsx");
+  const blocks = read("../../lib/scoring/blocks.ts");
+  const server = read("../../lib/scoring/server.ts");
+  const session = read("../../lib/scoring/sample-session.ts");
+
+  // The attempts travel with each row of the live round, real and practice.
+  assert.match(server, /leaderboard = withAttemptMarks\(boardResult\.rows\.map\(toLeaderboardRow\), runs, currentRound\);/);
+  assert.match(session, /withAttemptMarks\(\s+computeSampleLeaderboard\(/);
+  // Only a Single round with several attempts; teams and one-run rounds keep
+  // the points box.
+  assert.match(blocks, /if \(!round \|\| round\.event_type !== "single" \|\| attempts < 2\) \{\s+return rows;/);
+  assert.match(parts, /const withAttempts = attemptCount > 1;/);
+  assert.match(parts, /<span aria-hidden>R\{index \+ 1\}<\/span>/);
+  assert.match(parts, /<AttemptBox/);
+  assert.match(parts, /<PointsBox/);
+});
+
+test("/live never calls a rider Out before the rules have settled it", () => {
+  const board = read("./LiveBoard.tsx");
+  assert.match(board, /const standingsRows = withProvisionalOuts\(\s+isCurrentRound \? \(state\?\.leaderboard \?\? \[\]\) : \(earlier\.rows \?\? \[\]\),\s+selectedRound\s+\);/);
 });
