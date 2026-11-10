@@ -24,6 +24,7 @@ import {
   type ScoringRound,
   type ScoringRun,
 } from "@/lib/scoring/types";
+import { justRodeRun } from "@/lib/scoring/types";
 import type { RoundRunSummary } from "@/lib/scoring/server";
 
 export {
@@ -126,7 +127,9 @@ export const toVmixCurrentRow = (
   sample = false
 ): VmixCurrentRow => {
   const round = state.current_round;
-  const run = state.current_run;
+  /* Between riders the feed keeps the rider who has just ridden, so the
+     graphic never drops to an empty name while the judge readies the next. */
+  const run = state.current_run ?? justRodeRun(state);
   const last = state.last_scored_run;
 
   return {

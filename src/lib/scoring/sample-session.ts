@@ -83,6 +83,7 @@ import {
   type ScoringRound,
   type ScoringRun,
 } from "@/lib/scoring/types";
+import { justRodeRun } from "@/lib/scoring/types";
 
 export { SampleRefusal } from "@/lib/scoring/sample-engine";
 export { SHARED_TRAINING_SESSION } from "@/lib/scoring/training-db";
@@ -627,6 +628,7 @@ export const sampleCommentaryState = async (key: string): Promise<CommentaryStat
   return {
     ...state,
     current_rider: state.current_run ? riderDetail(state.current_run, all) : null,
+    last_rider: justRodeRun(state) ? riderDetail(justRodeRun(state) as ScoringRun, all) : null,
     up_next_riders: nextRuns.map((run) => ({ ...run, rider: riderDetail(run, all) })),
     leaderboards_by_round: leaderboards,
     runs,
