@@ -661,7 +661,7 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
   }
 
   return (
-    <div className={`${LEDGER_ROOT} flex min-h-dvh flex-col xl:h-dvh`}>
+    <div className={`${LEDGER_ROOT} flex min-h-dvh flex-col uppercase xl:h-dvh [&_input]:normal-case [&_textarea]:normal-case`}>
       {sample && (
         <p
           role="note"
