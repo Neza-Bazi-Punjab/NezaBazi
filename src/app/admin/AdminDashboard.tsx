@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { isValidEmail } from "@/lib/email-address";
 /* A paper registration without an email is stored under a generated
@@ -14,6 +15,7 @@ import {
   isPaperPlaceholderEmail,
 } from "@/lib/paper-registration";
 import { PROFILE_ROLES, type ProfileRole } from "@/lib/scoring/types";
+import { MARKSHEET_PATH } from "@/lib/admin/team-marksheet";
 import { site } from "@/lib/site";
 import CheckInPanel from "./CheckInPanel";
 import DalPanthCell from "./DalPanthCell";
@@ -3134,7 +3136,17 @@ export default function AdminDashboard({
               label="Search teams"
               count={filteredTeams.length}
               noun={["team", "teams"]}
-              action={<ExportRidersButton list="teams" />}
+              action={
+                <div className="flex flex-wrap items-start gap-2">
+                  <Link
+                    href={MARKSHEET_PATH}
+                    className="whitespace-nowrap rounded-lg border border-bronze-deep px-4 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-deep transition-colors hover:bg-bronze-deep hover:text-cream"
+                  >
+                    Print marksheets
+                  </Link>
+                  <ExportRidersButton list="teams" />
+                </div>
+              }
             />
           </div>
 
