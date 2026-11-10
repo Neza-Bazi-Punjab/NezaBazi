@@ -19,6 +19,7 @@ import {
   RESULT_POINTS,
   shortLocation,
   type EventType,
+  type LeaderboardAttempt,
   type LeaderboardRow,
   type PodiumEntry,
   type PoolRosterEntry,
@@ -347,6 +348,56 @@ function PointsBox({
   );
 }
 
+/* One attempt's box, as on the commentary panel: the points once ridden
+   (green for a carry), a dot while the rider is on course, an empty box while
+   the attempt is still to ride, and a faint dash when it is not needed (the
+   rider has already carried, or it was skipped). */
+function AttemptBox({ mark, number }: { mark: LeaderboardAttempt; number: number }) {
+  const base = "mono flex h-7 items-center justify-center rounded-md text-[13px] font-semibold";
+
+  if (mark.kind === "result") {
+    return (
+      <span
+        className={`${base} ${
+          mark.result === "carry"
+            ? "bg-[var(--ledger-green)] text-[var(--ledger-paper)]"
+            : "bg-[var(--ledger-hair)] text-[var(--ledger-ink)]"
+        }`}
+      >
+        <span className="sr-only">Round {number}: </span>
+        {mark.points}
+        <span className="sr-only"> points</span>
+      </span>
+    );
+  }
+
+  if (mark.kind === "on_course") {
+    return (
+      <span className={`${base} bg-[var(--ledger-pick)] text-[var(--ledger-bronze)]`}>
+        <span aria-hidden className="nbp-pulse">
+          ●
+        </span>
+        <span className="sr-only">Round {number}: riding now</span>
+      </span>
+    );
+  }
+
+  if (mark.kind === "to_ride") {
+    return (
+      <span className={`${base} border border-[var(--ledger-chip)]`}>
+        <span className="sr-only">Round {number}: still to ride</span>
+      </span>
+    );
+  }
+
+  return (
+    <span className={`${base} text-[var(--ledger-faint)]`}>
+      <span aria-hidden>–</span>
+      <span className="sr-only">Round {number}: not needed</span>
+    </span>
+  );
+}
+
 const STANDING_GRID = "grid grid-cols-[16px_minmax(0,1fr)_34px_62px] items-center gap-1.5";
 
 export function Standings({
@@ -380,6 +431,20 @@ export function Standings({
   const shown = standingsFor(rows, selected);
   const isSection = eventType === "section";
   const anyOverride = shown.some((row) => row.advanced_overridden);
+  /* A qualifier ridden over several attempts: a box per attempt (R1 R2 R3)
+     takes the place of the single points box. */
+  const attemptCount = isSection
+    ? 0
+    : shown.reduce((most, row) => Math.max(most, row.attempts?.length ?? 0), 0);
+  const withAttempts = attemptCount > 1;
+  const grid = withAttempts
+    ? "grid grid-cols-[var(--standing-cols)] items-center gap-1"
+    : STANDING_GRID;
+  const gridStyle = withAttempts
+    ? ({
+        "--standing-cols": `16px minmax(0,1fr) repeat(${attemptCount}, 24px) 58px`,
+      } as React.CSSProperties)
+    : undefined;
 
   const toggle = (key: string) =>
     setExpanded((current) => ({ ...current, [key]: !current[key] }));
@@ -394,20 +459,30 @@ export function Standings({
         <div
           role="table"
           aria-label={`${caption}${byPool ? `, Pool ${selected}` : ""}`}
-          className={`${card} overflow-hidden`}
+          className={`${card} overflow-hidden ${withAttempts ? "-mx-2 sm:mx-0" : ""}`}
         >
           <div role="rowgroup">
             <div
               role="row"
-              className={`${STANDING_GRID} mono border-b border-[var(--ledger-hair)] px-2.5 py-1.5 text-[10px] uppercase text-[var(--ledger-muted)]`}
+              style={gridStyle}
+              className={`${grid} mono border-b border-[var(--ledger-hair)] px-2.5 py-1.5 text-[10px] uppercase text-[var(--ledger-muted)]`}
             >
               <span role="columnheader" className="text-right">
                 #
               </span>
               <span role="columnheader">{isSection ? "Team" : "Rider"}</span>
-              <span role="columnheader" className="text-center">
-                Pts
-              </span>
+              {withAttempts ? (
+                Array.from({ length: attemptCount }, (_, index) => (
+                  <span key={index} role="columnheader" className="text-center">
+                    <span aria-hidden>R{index + 1}</span>
+                    <span className="sr-only">Round {index + 1}</span>
+                  </span>
+                ))
+              ) : (
+                <span role="columnheader" className="text-center">
+                  Pts
+                </span>
+              )}
               <span role="columnheader">Status</span>
             </div>
           </div>
@@ -429,7 +504,7 @@ export function Standings({
                     riding ? "bg-[var(--ledger-pick)]" : ""
                   }`}
                 >
-                  <div role="row" className={`${STANDING_GRID} px-2.5 py-1.5`}>
+                  <div role="row" style={gridStyle} className={`${grid} px-2.5 py-1.5`}>
                     <span
                       role="cell"
                       className="mono text-right text-[12px] font-semibold text-[var(--ledger-muted)]"
@@ -456,7 +531,11 @@ export function Standings({
                           </span>
                         </button>
                       ) : (
-                        <span className="break-words text-[15px] font-bold uppercase leading-tight">
+                        <span
+                          className={`break-words font-bold uppercase leading-tight ${
+                            withAttempts ? "text-[14px] sm:text-[15px]" : "text-[15px]"
+                          }`}
+                        >
                           {row.name}
                         </span>
                       )}
@@ -466,13 +545,24 @@ export function Standings({
                         </span>
                       )}
                     </span>
-                    <span role="cell">
-                      <PointsBox
-                        row={row}
-                        target={isSection ? targetPoints : null}
-                        total={isSection}
-                      />
-                    </span>
+                    {withAttempts ? (
+                      Array.from({ length: attemptCount }, (_, index) => (
+                        <span key={index} role="cell">
+                          <AttemptBox
+                            mark={row.attempts?.[index] ?? { kind: "none" }}
+                            number={index + 1}
+                          />
+                        </span>
+                      ))
+                    ) : (
+                      <span role="cell">
+                        <PointsBox
+                          row={row}
+                          target={isSection ? targetPoints : null}
+                          total={isSection}
+                        />
+                      </span>
+                    )}
                     <span role="cell">
                       <StatusTag
                         row={row}

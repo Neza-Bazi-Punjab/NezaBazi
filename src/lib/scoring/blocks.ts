@@ -369,6 +369,39 @@ export const attemptMarks = (
     return run.status === "void" ? { kind: "not_needed" } : { kind: "to_ride" };
   });
 
+/* The standings rows with each rider's attempts attached, for a Single round
+   ridden over several attempts (the qualifier). Any other round is returned
+   as it is: one attempt needs no boxes, and a team's riders are its
+   `members`. */
+export const withAttemptMarks = <Row extends { entrant_key: string }>(
+  rows: Row[],
+  runs: readonly PanelRun[],
+  round: { event_type: string; attempts_per_rider: number } | null | undefined
+): (Row & { attempts?: AttemptMark[] })[] => {
+  const attempts = round?.attempts_per_rider ?? 1;
+
+  if (!round || round.event_type !== "single" || attempts < 2) {
+    return rows;
+  }
+
+  const byEntrant = new Map<string, PanelRun[]>();
+
+  for (const run of runs) {
+    const own = byEntrant.get(run.entrant_key);
+
+    if (own) {
+      own.push(run);
+    } else {
+      byEntrant.set(run.entrant_key, [run]);
+    }
+  }
+
+  return rows.map((row) => ({
+    ...row,
+    attempts: attemptMarks(byEntrant.get(row.entrant_key) ?? [], row.entrant_key, attempts),
+  }));
+};
+
 /* Where a run sits in its pool and round: "3 / 10" is the third of Pool A's
    ten rides in Round 1. Every ride counts (skipped ones too), so a rider's
    number never shifts while the pool rides. */

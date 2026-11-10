@@ -628,7 +628,7 @@ test("/live wears the panels' ledger look and keeps its hand-held layout", () =>
   assert.match(parts, /min-h-11 min-w-11 shrink-0/);
   assert.match(parts, /overflow-x-auto/);
   assert.match(board, /mono min-h-11 rounded-full/);
-  assert.match(parts, /break-words text-\[15px\] font-bold uppercase/);
+  assert.match(parts, /min-w-0 break-words text-\[15px\] font-bold uppercase/);
   assert.doesNotMatch(parts, /truncate/);
   // The tabs stay under the status bar while the list scrolls.
   assert.match(board, /sticky top-\[calc\(var\(--nav-height\)\+2\.25rem\)\]/);
@@ -636,4 +636,22 @@ test("/live wears the panels' ledger look and keeps its hand-held layout", () =>
   // A team opens to its riders; the judges' overrides stay marked.
   assert.match(parts, /aria-expanded=\{isOpen\}/);
   assert.match(parts, /\* Decided by the judges\./);
+});
+
+test("the qualifier's three attempts show as three boxes on /live, as on the commentary panel", () => {
+  const parts = read("./live-parts.tsx");
+  const blocks = read("../../lib/scoring/blocks.ts");
+  const server = read("../../lib/scoring/server.ts");
+  const session = read("../../lib/scoring/sample-session.ts");
+
+  // The attempts travel with each row of the live round, real and practice.
+  assert.match(server, /leaderboard = withAttemptMarks\(boardResult\.rows\.map\(toLeaderboardRow\), runs, currentRound\);/);
+  assert.match(session, /withAttemptMarks\(\s+computeSampleLeaderboard\(/);
+  // Only a Single round with several attempts; teams and one-run rounds keep
+  // the points box.
+  assert.match(blocks, /if \(!round \|\| round\.event_type !== "single" \|\| attempts < 2\) \{\s+return rows;/);
+  assert.match(parts, /const withAttempts = attemptCount > 1;/);
+  assert.match(parts, /<span aria-hidden>R\{index \+ 1\}<\/span>/);
+  assert.match(parts, /<AttemptBox/);
+  assert.match(parts, /<PointsBox/);
 });

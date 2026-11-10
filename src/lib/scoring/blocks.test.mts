@@ -305,3 +305,56 @@ test("the public state names the same next rider as the judges' Start", () => {
   // Loadable by node --test and by the browser panels alike: no imports.
   assert.doesNotMatch(repoFile("src/lib/scoring/next-to-ride.ts"), /^import /m);
 });
+
+test("withAttemptMarks: a box per attempt for a Single qualifier, nothing for other rounds", async () => {
+  const { withAttemptMarks } = await import("./blocks.ts");
+  const run = (
+    entrant: string,
+    attempt: number,
+    status: RunStatus,
+    result: "carry" | "strike" | "miss" | null = null
+  ) => ({
+    id: `${entrant}-${attempt}`,
+    run_order: attempt,
+    attempt_number: attempt,
+    pool_label: "A",
+    status,
+    entrant_key: entrant,
+    rider_name: entrant,
+    team_name: null,
+    result,
+    points: result === "carry" ? 4 : result === "strike" ? 2 : result === "miss" ? 0 : null,
+  });
+  const runs = [
+    run("solo:a", 1, "scored", "miss"),
+    run("solo:a", 2, "scored", "carry"),
+    run("solo:a", 3, "void"),
+    run("solo:b", 1, "scored", "strike"),
+    run("solo:b", 2, "on_course"),
+    run("solo:b", 3, "pending"),
+  ];
+  const rows = [{ entrant_key: "solo:a" }, { entrant_key: "solo:b" }, { entrant_key: "solo:c" }];
+  const qualifier = { event_type: "single", attempts_per_rider: 3 };
+
+  const marked = withAttemptMarks(rows, runs, qualifier);
+
+  assert.deepEqual(marked[0].attempts, [
+    { kind: "result", result: "miss", points: 0 },
+    { kind: "result", result: "carry", points: 4 },
+    { kind: "not_needed" },
+  ]);
+  assert.deepEqual(marked[1].attempts, [
+    { kind: "result", result: "strike", points: 2 },
+    { kind: "on_course" },
+    { kind: "to_ride" },
+  ]);
+  // A row with no runs still gets its three (empty) marks, and the input is
+  // not changed.
+  assert.deepEqual(marked[2].attempts, [{ kind: "none" }, { kind: "none" }, { kind: "none" }]);
+  assert.deepEqual(rows[0], { entrant_key: "solo:a" });
+
+  // One attempt, a team round, or no round: the rows come back as they are.
+  assert.equal(withAttemptMarks(rows, runs, { event_type: "single", attempts_per_rider: 1 }), rows);
+  assert.equal(withAttemptMarks(rows, runs, { event_type: "section", attempts_per_rider: 3 }), rows);
+  assert.equal(withAttemptMarks(rows, runs, null), rows);
+});

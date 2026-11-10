@@ -494,6 +494,8 @@ test("the training session never imports or calls a database client", () => {
     "server-only",
     "@/lib/scoring/sample-engine",
     "@/lib/scoring/server",
+    // Pure block and attempt helpers (no database client; server.ts uses them too).
+    "@/lib/scoring/blocks",
     "@/lib/scoring/next-to-ride",
     "@/lib/scoring/training-db",
     "@/lib/scoring/training-store",
