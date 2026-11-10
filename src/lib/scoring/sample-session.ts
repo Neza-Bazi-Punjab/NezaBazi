@@ -64,6 +64,7 @@ import {
   type TrainingDatabase,
 } from "@/lib/scoring/training-db";
 import { createTrainingStore, type TrainingStore } from "@/lib/scoring/training-store";
+import { withAttemptMarks } from "@/lib/scoring/blocks";
 import { upNextRuns } from "@/lib/scoring/next-to-ride";
 import {
   buildPoolRosters,
@@ -537,7 +538,11 @@ export const assembleSnapshot = (all: SampleSeed): Assembled => {
       // never a rider passed over earlier (next-to-ride.ts).
       up_next: upNextRuns(runs, live, UP_NEXT_LIMIT),
       leaderboard: currentRound
-        ? computeSampleLeaderboard(currentRound, runs, overridesFor(all.overrides, currentRound.id))
+        ? withAttemptMarks(
+            computeSampleLeaderboard(currentRound, runs, overridesFor(all.overrides, currentRound.id)),
+            runs,
+            currentRound
+          )
         : [],
       pools,
       pool_rosters: buildPoolRosters(runs),

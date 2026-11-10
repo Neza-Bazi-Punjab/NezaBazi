@@ -17,7 +17,7 @@ import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
 import { createServiceRoleClient, type ServiceRoleClient } from "@/lib/admin/server";
-import { nextPoolBlock } from "@/lib/scoring/blocks";
+import { nextPoolBlock, withAttemptMarks } from "@/lib/scoring/blocks";
 import { upNextRuns } from "@/lib/scoring/next-to-ride";
 import { loadRiderDetails } from "@/lib/scoring/rider-detail";
 import {
@@ -368,7 +368,9 @@ export const loadLiveSnapshot = async (client: ScoringDbClient): Promise<LiveSna
     }
 
     runs = runsResult.rows;
-    leaderboard = boardResult.rows.map(toLeaderboardRow);
+    // A qualifier ridden over several attempts: each rider's attempts go with
+    // their row, for the boxes on the public leaderboard.
+    leaderboard = withAttemptMarks(boardResult.rows.map(toLeaderboardRow), runs, currentRound);
   }
 
   const currentRun = live?.current_run_id

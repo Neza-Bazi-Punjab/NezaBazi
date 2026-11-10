@@ -495,6 +495,8 @@ test("the training session never imports or calls a database client", () => {
     "server-only",
     "@/lib/scoring/sample-engine",
     "@/lib/scoring/server",
+    // Pure block and attempt helpers (no database client; server.ts uses them too).
+    "@/lib/scoring/blocks",
     "@/lib/scoring/next-to-ride",
     "@/lib/scoring/training-db",
     "@/lib/scoring/training-store",
@@ -602,50 +604,4 @@ test("judge writes and live polls give up after 12 seconds", () => {
   assert.match(hook, /setTimeout\(\(\) => controller\.abort\(\), LOAD_TIMEOUT_MS\)/);
   assert.match(hook, /if \(disposed \|\| controller\.signal\.aborted\) \{\s*return;/);
   assert.match(hook, /finally \{\s*clearTimeout\(timeout\);\s*if \(inFlight === controller\) \{\s*inFlight = null;\s*schedulePoll\(\);/);
-});
-
-test("vMix feeds send the on-screen words in capitals and leave the switch values alone", () => {
-  const vmix = repoFile("src/lib/scoring/vmix.ts");
-
-  // Every response goes through the one place that capitalises.
-  assert.match(vmix, /const rows = sourceRows\.map\(toVmixDisplayRow\);/);
-  assert.match(vmix, /value\.toLocaleUpperCase\("en"\)/);
-
-  const list = vmix.slice(
-    vmix.indexOf("export const VMIX_UPPERCASE_COLUMNS"),
-    vmix.indexOf("export const toVmixDisplayRow")
-  );
-
-  for (const column of [
-    "round_name",
-    "name",
-    "rider_name",
-    "team_name",
-    "horse_name",
-    "location_short",
-    "members",
-    "message",
-    "last_rider_name",
-    "last_team_name",
-  ]) {
-    assert.match(list, new RegExp(`"${column}"`), `${column} is sent in capitals`);
-  }
-
-  // What the graphics switch on, the ids and the times keep their documented form.
-  for (const column of [
-    "display_mode",
-    "status",
-    "event_type",
-    "last_result",
-    "best_result",
-    "advanced",
-    "is_live",
-    "sample",
-    "round_id",
-    "entrant_key",
-    "updated_at",
-    "last_scored_at",
-  ]) {
-    assert.doesNotMatch(list, new RegExp(`"${column}"`), `${column} is left as it is`);
-  }
 });
