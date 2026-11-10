@@ -149,7 +149,8 @@ test("both toolbars carry the Excel export", () => {
   assert.match(dashboard, /import ExportRidersButton from "\.\/ExportRidersButton";/);
   assert.match(dashboard, /action\?: React\.ReactNode;/);
   assert.match(dashboard, /action=\{<ExportRidersButton list="solo" \/>\}/);
-  assert.match(dashboard, /action=\{<ExportRidersButton list="teams" \/>\}/);
+  // Teams also carries the link to the printable marksheets beside it.
+  assert.match(dashboard, /<Link\s+href=\{MARKSHEET_PATH\}[\s\S]{0,400}?Print marksheets\s+<\/Link>\s+<ExportRidersButton list="teams" \/>/);
   assert.equal((dashboard.match(/<ExportRidersButton /g) ?? []).length, 2);
 });
 
