@@ -322,6 +322,12 @@ test("the engine fixes: plain ASCII, asserted anchors, and the corrections the r
   // Every patch goes through the helper: one anchor, a marker, a second run is a no-op.
   assert.match(fixes, /if v_found <> 1 then\s+raise exception/);
   assert.match(fixes, /return 'already applied';/);
+  // Pasted from Windows the file arrives with CR LF: both sides are normalised,
+  // or a patch that spans lines is "found 0 times" (the first run did that).
+  assert.match(fixes, /v_anchor constant text := replace\(p_anchor, E'\r\n', E'\n'\);/);
+  assert.match(fixes, /v_replacement constant text := replace\(p_replacement, E'\r\n', E'\n'\);/);
+  assert.match(fixes, /v_marker constant text := replace\(p_marker, E'\r\n', E'\n'\);/);
+  assert.match(fixes, /execute replace\(v_definition, v_anchor, v_replacement\);/);
   assert.equal((fixes.match(/select pg_temp\.patch_scoring_function\(/g) ?? []).length, 7);
 
   // The rule is chosen from every rider not overridden Out.
