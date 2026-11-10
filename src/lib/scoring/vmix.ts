@@ -386,13 +386,45 @@ export const wantsSample = (url: URL) =>
     url.searchParams.get("sample")?.trim().toLowerCase() ?? ""
   );
 
+/* The words the stream team puts on screen: sent in capitals, as broadcast
+   graphics set them, so nobody has to retype or restyle a name. Only these
+   columns: the values the graphics switch on (display_mode, status,
+   event_type, last_result, best_result, advanced, is_live, sample), the ids
+   and the times stay exactly as documented. */
+export const VMIX_UPPERCASE_COLUMNS: ReadonlySet<string> = new Set([
+  "round_name",
+  "name",
+  "rider_name",
+  "team_name",
+  "horse_name",
+  "location_short",
+  "members",
+  "pool_label",
+  "next_pool_label",
+  "message",
+  "last_rider_name",
+  "last_team_name",
+]);
+
+export const toVmixDisplayRow = <Row extends Readonly<Record<string, CsvValue>>>(row: Row): Row =>
+  Object.fromEntries(
+    Object.entries(row).map(([column, value]) => [
+      column,
+      typeof value === "string" && VMIX_UPPERCASE_COLUMNS.has(column)
+        ? value.toLocaleUpperCase("en")
+        : value,
+    ])
+  ) as Row;
+
 /* JSON array (one element per row) or CSV with a header row. */
 export const vmixResponse = (
   columns: readonly string[],
-  rows: readonly Readonly<Record<string, CsvValue>>[],
+  sourceRows: readonly Readonly<Record<string, CsvValue>>[],
   csv: boolean,
   cacheControl: string
 ) => {
+  const rows = sourceRows.map(toVmixDisplayRow);
+
   if (csv) {
     return new NextResponse(toCsv(columns, rows), {
       headers: {
