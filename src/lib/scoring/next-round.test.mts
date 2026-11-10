@@ -161,9 +161,21 @@ test("route: administrators only; the card sits on the Scoring page", () => {
   assert.match(admin, /<NextStepCard/);
   assert.match(admin, /\[true, "Automatic"\],\s+\[false, "Manual"\],/);
   assert.match(admin, /if \(!engine\.auto_on\) \{/);
-  // The Rounds section is the Manual tab's contents, inside the card.
-  assert.match(admin, /\{\/\* Manual tab: every round tool \*\/\}\s+<div className="grid gap-8 lg:grid-cols-\[320px_minmax\(0,1fr\)\]">/);
+  // The Rounds section is the card's children, and it is shown in every mode:
+  // Manual, Automatic (under the card), while the step loads, and when the
+  // engine is not set up. Set Live and the start list are never hidden.
+  assert.match(admin, /\{\/\* Every round tool, in Manual and Automatic alike \*\/\}\s+<div className="grid gap-8 lg:grid-cols-\[320px_minmax\(0,1fr\)\]">/);
   assert.match(admin, /<\/NextStepCard>/);
+  const card = admin.slice(admin.indexOf("function NextStepCard("), admin.indexOf("export default function ScoringAdmin("));
+  assert.equal((card.match(/\{children\}/g) ?? []).length, 4, "children in all four branches");
+  assert.match(card, /if \(step === undefined\) \{\s+return <>\{children\}<\/>;/);
+  assert.doesNotMatch(card, /return null;/);
+  assert.doesNotMatch(card, /SQL editor/);
+  // A failed read keeps what the card knew; switching mode asks first.
+  assert.match(admin, /\[event\]: result\.ok \? toNextStep\(result\.body\.step\) : current\[event\],/);
+  assert.match(admin, /title: `Switch \$\{who\} to \$\{autoOn \? "Automatic" : "Manual"\}\?`,/);
+  // The draw wording follows what the database does.
+  assert.match(admin, /mode === "advanced" && orderKept \? "in the previous round's start order" : "in a random order"/);
   assert.match(admin, /The highlighted tab already shows the mode\./i);
   assert.match(admin, /in the previous round's start order/);
 });

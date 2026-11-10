@@ -460,12 +460,14 @@ function RoundForm({
 
 /* Small pieces ------------------------------------------------------------------- */
 
-/* A Single round drawn from the previous round keeps its start order
-   (20261110130000); every other draw is shuffled. */
-const drawOrderText = (eventType: EventType, mode: "all_checked_in" | "advanced") =>
-  eventType === "single" && mode === "advanced"
-    ? "in the previous round's start order"
-    : "in a random order";
+/* A round drawn from the previous round keeps that round's start order once
+   the engine's database update for its event is in place (Singles:
+   20261110130000, Teams: 20261110150000). Before that, and for a draw of
+   every checked-in entrant, the draw is shuffled. `orderKept` says whether
+   the update is in place, so the words never promise what the database will
+   not do. */
+const drawOrderText = (mode: "all_checked_in" | "advanced", orderKept: boolean) =>
+  mode === "advanced" && orderKept ? "in the previous round's start order" : "in a random order";
 
 function RunStatusChip({ run }: { run: ScoringRun }) {
   const tone =
@@ -524,7 +526,7 @@ function NextStepCard({
   onStart: (plan: NextRoundPlan) => void;
   onUndo: (undo: NonNullable<NextStep["undo"]>) => void;
   onSwitch: (autoOn: boolean) => void;
-  /* The Manual tab's contents: the whole Rounds section. */
+  /* The whole Rounds section: shown in every mode. */
   children: ReactNode;
 }) {
   const eventTabs = (
@@ -551,10 +553,14 @@ function NextStepCard({
     </div>
   );
 
+  // Still loading, or the read failed: the round tools are never held back
+  // by it. Set Live, the start list and the pool sheet must always be there.
   if (step === undefined) {
-    return null;
+    return <>{children}</>;
   }
 
+  // The engine's database update is not in place: the page is the manual
+  // Scoring page, with one quiet line saying so.
   if (step === null) {
     return (
       <section aria-labelledby="next-step-heading" className="space-y-5 rounded-lg border border-bronze/20 p-4 sm:p-5">
@@ -563,11 +569,9 @@ function NextStepCard({
           <h2 id="next-step-heading" className={subheadingClass}>
             Rounds · Manual
           </h2>
-          <p className="text-sm leading-6 text-brown/85 [overflow-wrap:anywhere]">
-            {event === "section"
-              ? "Automatic mode for Teams is not set up yet. Apply supabase/migrations/20261110150000_scoring_auto_teams.sql in the Supabase SQL editor, then reload."
-              : "Automatic mode is not set up yet. Apply supabase/migrations/20261110130000_scoring_auto_next_round.sql, then 20261110140000_scoring_auto_qualifying.sql and 20261110150000_scoring_auto_teams.sql in the Supabase SQL editor, then reload."}{" "}
-            Rounds work by hand below until then.
+          <p className="text-sm leading-6 text-brown/85">
+            Automatic mode is not available for {event === "section" ? "Teams" : "Singles"} yet. Rounds
+            work by hand below.
           </p>
         </div>
         {children}
@@ -634,7 +638,12 @@ function NextStepCard({
     plan.state === "later_round" ||
     plan.state === "manual_setup";
 
+  // Automatic: the Next step card, then every round tool under it. Set Live,
+  // the start list, Take out / Skip, overrides, the podium and the pool sheet
+  // are needed in Automatic mode too ("everything the engine does is an
+  // ordinary round"), so they are never hidden.
   return (
+    <>
     <section aria-labelledby="next-step-heading" className={`${cardClass} space-y-4 print:hidden`}>
       {eventTabs}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -746,6 +755,8 @@ function NextStepCard({
         </div>
       )}
     </section>
+    {children}
+    </>
   );
 }
 
@@ -795,7 +806,9 @@ export default function ScoringAdmin({
         if (!cancelled) {
           setNextSteps((current) => ({
             ...current,
-            [event]: result.ok ? toNextStep(result.body.step) : null,
+            // A failed read (a lost connection, an expired session) keeps
+            // what the card last knew; only an answer changes it.
+            [event]: result.ok ? toNextStep(result.body.step) : current[event],
           }));
         }
       });
@@ -1187,14 +1200,36 @@ export default function ScoringAdmin({
       },
     });
 
+  /* Whether a draw from the previous round keeps its order for this event:
+     true once the engine's database update for it is in place. */
+  const orderKeptFor = (eventType: EventType) =>
+    (eventType === "section" ? nextSteps.section : nextSteps.single) != null;
+
   const switchEngine = (autoOn: boolean) => {
-    void perform(
-      "/api/admin/scoring/next-round",
-      "POST",
-      { action: "switch", auto_on: autoOn, event_type: engineEvent },
-      // No message: the highlighted tab already shows the mode.
-      () => ""
-    );
+    const teams = engineEvent === "section";
+    const who = teams ? "Teams" : "Singles";
+
+    ask({
+      title: `Switch ${who} to ${autoOn ? "Automatic" : "Manual"}?`,
+      detail: autoOn
+        ? teams
+          ? "A team whose last rider checks in will join Teams Round 1 on its own, and the Next step card will offer to start each round. The round tools stay below."
+          : "Riders who check in will join the qualifying pools on their own, and the Next step card will offer to start each round. The round tools stay below."
+        : teams
+          ? "Teams completing check-in will no longer join a round on their own. Rounds are made and drawn by hand."
+          : "Check-ins will no longer join pools on their own. Rounds are made and drawn by hand.",
+      confirmLabel: `Switch to ${autoOn ? "Automatic" : "Manual"}`,
+      danger: false,
+      run: async () => {
+        await perform(
+          "/api/admin/scoring/next-round",
+          "POST",
+          { action: "switch", auto_on: autoOn, event_type: engineEvent },
+          // No message: the highlighted tab already shows the mode.
+          () => ""
+        );
+      },
+    });
   };
 
   const submitRoundForm = (payload: Record<string, unknown>) => {
@@ -1430,7 +1465,7 @@ export default function ScoringAdmin({
 
     ask({
       title: `Draw ${plural(drawPreview.count, noun)} into ${poolText}?`,
-      detail: `${plural(drawPreview.runs, "run")} ${drawOrderText(target.event_type, drawMode)}.${
+      detail: `${plural(drawPreview.runs, "run")} ${drawOrderText(drawMode, orderKeptFor(target.event_type))}.${
         runs.length > 0
           ? ` This replaces the current start list of ${plural(runs.length, "run")}.`
           : ""
@@ -1730,7 +1765,7 @@ export default function ScoringAdmin({
         onUndo={undoNextRound}
         onSwitch={switchEngine}
       >
-        {/* Manual tab: every round tool */}
+        {/* Every round tool, in Manual and Automatic alike */}
       <div className="grid gap-8 lg:grid-cols-[320px_minmax(0,1fr)]">
         {/* Rounds list */}
         <aside className="space-y-4">
@@ -1961,7 +1996,7 @@ export default function ScoringAdmin({
                                   .map((size, index) => `${poolLabelForIndex(index)} ${size}`)
                                   .join(" · ")}`
                               : "one start list, no pools"
-                          } · ${plural(drawPreview.runs, "run")}, ${drawOrderText(round.event_type, drawMode)}.`}
+                          } · ${plural(drawPreview.runs, "run")}, ${drawOrderText(drawMode, orderKeptFor(round.event_type))}.`}
                     {scoredCount > 0 && " Results are recorded in this round — clear them before redrawing."}
                   </p>
                 )}
