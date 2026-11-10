@@ -8,8 +8,13 @@ const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   // Send only the origin cross-site, full URL on same-origin navigation.
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-  // This site never needs these browser features.
-  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  // The camera is for this site's own pages only (admins take riders'
+  // photos), never for anything embedded from elsewhere. It is allowed on
+  // every page, not just /admin: the browser fixes this policy when a page
+  // first loads, and moving into /admin by a link keeps the policy of the
+  // page the admin started on, which would block the camera. The browser
+  // still asks before any page may use it. The rest are never needed.
+  { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=()" },
 ];
 
 const nextConfig: NextConfig = {
@@ -37,13 +42,6 @@ const nextConfig: NextConfig = {
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
           { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
         ],
-      },
-      // Admin pages may use this site's own camera, for taking a rider's
-      // photo from the Solo riders list. Every other page keeps it off. Comes
-      // after the catch-all so it overrides that rule's Permissions-Policy.
-      {
-        source: "/admin/:path*",
-        headers: [{ key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=()" }],
       },
     ];
   },

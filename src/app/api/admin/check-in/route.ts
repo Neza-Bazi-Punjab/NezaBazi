@@ -213,6 +213,26 @@ const soloHeadshot = async (serviceSupabase: ServiceRoleClient, registrationId: 
   return data ? getSoloHeadshotUrl(serviceSupabase, data) : null;
 };
 
+/* Where the desk's Add / Replace / Remove photo goes for one rider, so it
+   always acts on the photo on screen: the solo entry's when that is the one
+   shown, the team row's when that is, and, with no photo yet, the solo entry
+   if the rider has one (a rider with both entries shows their solo photo
+   first, everywhere). `id` is the row /api/admin/headshots expects. */
+type PhotoTarget = { kind: "solo" | "team"; id: string };
+
+const pickPhotoTarget = (
+  soloId: string | null,
+  soloUrl: string | null,
+  teamId: string | null,
+  teamUrl: string | null
+): PhotoTarget | null => {
+  if (soloId && (soloUrl || !teamUrl)) {
+    return { kind: "solo", id: soloId };
+  }
+
+  return teamId ? { kind: "team", id: teamId } : null;
+};
+
 // Generated codes are NBP- plus six characters, but stay lenient about case,
 // spacing and a missing prefix so a hurried desk entry still resolves.
 const codePattern = /^[A-Z0-9-]{4,24}$/i;
@@ -318,6 +338,7 @@ export async function POST(request: Request) {
     confirmation_code: string;
     checked_in_at: string | null;
     headshot_url: string | null;
+    photo_target: PhotoTarget | null;
   }> = [];
 
   const teamEntry = entries.find(
@@ -358,25 +379,54 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: contactError.message }, { status: 400 });
     }
 
+    // A teammate who also holds a solo entry shares its code. Their solo
+    // photo is shown first, exactly as on their own card, so a photo added
+    // from either place shows in both. A failed read only means no solo
+    // photo; the team photo below still applies.
+    const teammateCodes = (teamRows ?? []).map((row) => row.confirmation_code);
+    const { data: teammateSolos } = teammateCodes.length
+      ? await serviceSupabase
+          .from("solo_registrations")
+          .select("id, profile_id, email, full_name, confirmation_code")
+          .in("confirmation_code", teammateCodes)
+      : { data: [] };
+    const soloByCode = new Map(
+      (teammateSolos ?? []).map((solo) => [solo.confirmation_code as string, solo])
+    );
+
     // The rider's own photo on the row first. Then: the leader registered
     // the team, so the team's account may be theirs; anyone else is found by
     // email: a solo entry, or their own confirmed account. Either way only an
     // account with the rider's own email and name counts.
     teammates = await Promise.all(
       (teamRows ?? []).map(async ({ email, ...teammate }) => {
-        let headshot_url: string | null = null;
+        const solo = soloByCode.get(teammate.confirmation_code) ?? null;
+        let soloUrl: string | null = null;
+        let teamUrl: string | null = null;
 
         try {
-          headshot_url = await getTeamRiderHeadshotUrl(
-            serviceSupabase,
-            { id: teammate.id, email, full_name: teammate.full_name },
-            teammate.is_leader ? ((teamRow?.leader_profile_id as string | null) ?? null) : null
-          );
+          soloUrl = solo ? await getSoloHeadshotUrl(serviceSupabase, solo) : null;
         } catch {
-          headshot_url = null;
+          soloUrl = null;
         }
 
-        return { ...teammate, headshot_url };
+        try {
+          teamUrl = soloUrl
+            ? null
+            : await getTeamRiderHeadshotUrl(
+                serviceSupabase,
+                { id: teammate.id, email, full_name: teammate.full_name },
+                teammate.is_leader ? ((teamRow?.leader_profile_id as string | null) ?? null) : null
+              );
+        } catch {
+          teamUrl = null;
+        }
+
+        return {
+          ...teammate,
+          headshot_url: soloUrl ?? teamUrl,
+          photo_target: pickPhotoTarget(solo?.id ?? null, soloUrl, teammate.id, teamUrl),
+        };
       })
     );
     teamEmergency = teamRow
@@ -401,12 +451,28 @@ export async function POST(request: Request) {
     headshotUrl = null;
   }
 
+  const soloUrl = headshotUrl;
+
   if (!headshotUrl && teamEntry) {
     headshotUrl =
       teammates.find((teammate) => teammate.id === teamEntry.id)?.headshot_url ?? null;
   }
 
-  return NextResponse.json({ rider, entries, teammates, teamEmergency, headshotUrl });
+  const photoTarget = pickPhotoTarget(
+    soloEntry?.id ?? null,
+    soloUrl,
+    (teamEntry?.id as string | undefined) ?? null,
+    soloUrl ? null : headshotUrl
+  );
+
+  return NextResponse.json({
+    rider,
+    entries,
+    teammates,
+    teamEmergency,
+    headshotUrl,
+    photoTarget,
+  });
 }
 
 export async function PATCH(request: Request) {

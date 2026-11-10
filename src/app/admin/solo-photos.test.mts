@@ -149,9 +149,12 @@ test("the add-photo menu offers files and the camera; photos open in a pop-up", 
   assert.match(cell, /aria-modal="true"/);
 });
 
-test("only admin pages may use the camera", () => {
-  assert.match(nextConfig, /value: "camera=\(\), microphone=\(\), geolocation=\(\)"/);
-  assert.match(nextConfig, /source: "\/admin\/:path\*",\s*headers: \[\{ key: "Permissions-Policy", value: "camera=\(self\)/);
+test("only this site's own pages may use the camera, on every page", () => {
+  // Site-wide, so an admin who reaches /admin by a link from another page
+  // isn't left with that page's policy blocking the camera.
+  assert.match(nextConfig, /value: "camera=\(self\), microphone=\(\), geolocation=\(\)"/);
+  assert.doesNotMatch(nextConfig, /camera=\(\)/);
+  assert.doesNotMatch(nextConfig, /camera=\*/);
 });
 
 test("admins can replace or remove a photo from the pop-up, removal after confirming, audited", () => {
