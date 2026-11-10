@@ -11,13 +11,29 @@ test("registration tables contain long values and usable edit fields", () => {
   assert.match(source, /const adminTableInputClass =[\s\S]*?min-w-0/);
   assert.match(source, /function AdminTableText[\s\S]*?truncate/);
   // Two 170px columns for the parents' names, plus a 64px Photo column on
-  // the solo list and on each team's rider table.
-  assert.match(source, /min-w-\[2444px\]/);
-  assert.match(source, /min-w-\[1944px\]/);
+  // the solo list and on each team's rider table, plus a 240px Dal Panth
+  // column on both.
+  assert.match(source, /min-w-\[2684px\]/);
+  assert.match(source, /min-w-\[2184px\]/);
+  assert.doesNotMatch(source, /min-w-\[(2444|1944)px\]/);
   assert.match(source, /<colgroup>/);
+
+  // Every width in each colgroup adds up to the table's min-width, so a new
+  // column can never squeeze the others.
+  const colgroupSums = [...source.matchAll(/min-w-\[(\d+)px\] table-fixed[^>]*>\s*<colgroup>([\s\S]*?)<\/colgroup>/g)].map(
+    ([, width, cols]) => ({
+      width: Number(width),
+      sum: [...cols.matchAll(/w-\[(\d+)px\]/g)].reduce((total, [, w]) => total + Number(w), 0),
+    })
+  );
+  assert.equal(colgroupSums.length, 2);
+  for (const { width, sum } of colgroupSums) {
+    assert.equal(sum, width);
+  }
 
   for (const label of [
     "Photo",
+    "Dal Panth",
     "Horse Name",
     "Emergency Contact",
     "Emergency Phone",

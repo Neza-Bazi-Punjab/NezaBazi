@@ -10,6 +10,7 @@
    screen shows the confirmation code(s) large enough to copy onto the form's
    "Office use only" box from across a table. */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DAL_PANTH_MAX_LENGTH } from "@/lib/dal-panth";
 import { isValidEmail } from "@/lib/email-address";
 import {
   PAPER_EMAIL_DOMAIN,
@@ -438,6 +439,46 @@ function Field({
   );
 }
 
+/* Dal Panth is not on the printed sheet and not in PAPER_RIDER_FIELDS (that
+   list drives the payload the database whitelists and the printed forms). It
+   is its own box, sent as a top-level `dal_panth` and saved by the route only
+   after the registration itself has been saved. */
+function DalPanthField({
+  id,
+  label,
+  value,
+  className = "",
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  className?: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className={className}>
+      <label
+        htmlFor={id}
+        className="block font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink"
+      >
+        {label}
+        <span className="ml-1 normal-case tracking-normal text-brown/60">(optional)</span>
+      </label>
+      <input
+        id={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        type="text"
+        maxLength={DAL_PANTH_MAX_LENGTH}
+        autoComplete="off"
+        spellCheck={false}
+        className={`${inputClassName} border-bronze/40`}
+      />
+    </div>
+  );
+}
+
 const EMAIL_NOTE = `Optional. Leave blank if they have none: a placeholder on ${PAPER_EMAIL_DOMAIN} is stored and no email is sent. Give them their code from the next screen.`;
 
 function SectionTitle({ english, punjabi }: { english: string; punjabi: string }) {
@@ -528,6 +569,13 @@ export default function PaperEntryPanel() {
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [created, setCreated] = useState<Created | null>(null);
+  /* Dal Panth, one box per form (the team's applies to all four riders). Its
+     own state, kept per mode like the forms, reset with the form. */
+  const [soloDalPanth, setSoloDalPanth] = useState("");
+  const [teamDalPanth, setTeamDalPanth] = useState("");
+  /* Shown on the confirmation screen when the registration saved but its
+     Dal Panth did not (dal_panth_saved === false). */
+  const [dalPanthError, setDalPanthError] = useState<string | null>(null);
   const topRef = useRef<HTMLDivElement>(null);
 
   const validation = useMemo(
@@ -590,12 +638,19 @@ export default function PaperEntryPanel() {
     }
 
     setSubmitting(true);
+    setDalPanthError(null);
+
+    const dalPanth = mode === "solo" ? soloDalPanth : teamDalPanth;
 
     try {
       const response = await fetch("/api/admin/paper-registration", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: mode, registration: mode === "solo" ? solo : team }),
+        body: JSON.stringify({
+          type: mode,
+          registration: mode === "solo" ? solo : team,
+          ...(dalPanth.trim() !== "" ? { dal_panth: dalPanth } : {}),
+        }),
       });
       const body: unknown = await response.json().catch(() => null);
 
@@ -613,6 +668,13 @@ export default function PaperEntryPanel() {
         return;
       }
 
+      setDalPanthError(
+        isRecord(body) && body.dal_panth_saved === false
+          ? typeof body.dal_panth_error === "string"
+            ? body.dal_panth_error
+            : "The registration was saved, but the Dal Panth was not. Add it from the Solo Riders or Teams list."
+          : null
+      );
       setCreated(result);
       topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch {
@@ -625,11 +687,14 @@ export default function PaperEntryPanel() {
   const enterAnother = () => {
     if (mode === "solo") {
       setSolo(emptySoloInput());
+      setSoloDalPanth("");
     } else {
       setTeam(emptyTeamInput());
+      setTeamDalPanth("");
     }
 
     setCreated(null);
+    setDalPanthError(null);
     setAttempted(false);
     setTouched(new Set());
     setServerError(null);
@@ -653,6 +718,15 @@ export default function PaperEntryPanel() {
             ? "Registration saved. Write this code in the Office use only box on the paper form."
             : `Team saved${created.team_name ? `: ${created.team_name}` : ""}. Write each rider's code in the Office use only box on the paper form.`}
         </p>
+
+        {dalPanthError && (
+          <p
+            className="rounded-lg border-l-4 border-bronze bg-cream px-4 py-3 text-brown"
+            role="alert"
+          >
+            {dalPanthError}
+          </p>
+        )}
 
         <ul className={isSolo ? "space-y-4" : "grid gap-4 md:grid-cols-2"}>
           {created.riders.map((rider, index) => (
@@ -751,6 +825,18 @@ export default function PaperEntryPanel() {
                 ))}
               </div>
             </section>
+
+            <section className="rounded-lg border border-bronze/20 bg-sand p-4 sm:p-5">
+              <div className={FORM_GRID}>
+                <DalPanthField
+                  id="paper-solo-dal_panth"
+                  label="Dal Panth"
+                  value={soloDalPanth}
+                  className="sm:col-span-12 lg:col-span-2"
+                  onChange={setSoloDalPanth}
+                />
+              </div>
+            </section>
           </>
         ) : (
           <>
@@ -782,6 +868,13 @@ export default function PaperEntryPanel() {
                     onBlur={() => markTouched(definition.key)}
                   />
                 ))}
+                <DalPanthField
+                  id="paper-team-dal_panth"
+                  label="Dal Panth for the whole team"
+                  value={teamDalPanth}
+                  className="sm:col-span-12 lg:col-span-2"
+                  onChange={setTeamDalPanth}
+                />
               </div>
             </section>
 

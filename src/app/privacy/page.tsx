@@ -101,6 +101,11 @@ export default function PrivacyPolicyPage() {
                   entry.
                 </li>
                 <li>
+                  <strong className="text-ink">Dal Panth (optional).</strong> The Dal
+                  Panth a rider rides with, where an organiser records it. It is seen
+                  only by event staff and is never shown publicly.
+                </li>
+                <li>
                   <strong className="text-ink">Paper registration.</strong> If you
                   register on the printed form, an organiser types the details from
                   your form into the same registration system on your behalf. If you

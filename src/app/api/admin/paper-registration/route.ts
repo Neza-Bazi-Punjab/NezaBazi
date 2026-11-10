@@ -20,6 +20,7 @@ import {
   validatePaperTeam,
 } from "@/lib/paper-registration";
 import { readJsonBody } from "@/lib/scoring/http";
+import { DAL_PANTH_NOT_SET_UP, normalizeDalPanth } from "@/lib/dal-panth";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,16 @@ const DUPLICATE_HINT = "duplicate_registration";
 /* PostgREST's "function not in the schema cache" and Postgres's own
    "function does not exist": the migration has not been applied yet. */
 const MISSING_FUNCTION_CODES = new Set(["PGRST202", "42883"]);
+
+/* The Dal Panth migration has not been applied yet: its function, or the
+   column, is missing. */
+const DAL_PANTH_MISSING_CODES = new Set(["PGRST202", "42883", "42703"]);
+
+const DAL_PANTH_NOT_SAVED =
+  "The registration was saved, but the Dal Panth was not. Add it from the Solo Riders or Teams list.";
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 export async function POST(request: Request) {
   const adminCheck = await verifyAdminRequest();
@@ -64,6 +75,17 @@ export async function POST(request: Request) {
       { error: validation.firstError, fieldErrors: validation.errors },
       { status: 400 }
     );
+  }
+
+  // Dal Panth is a top-level key of its own, outside `registration`: it is
+  // never part of p_payload (that payload is whitelisted by the database and
+  // mirrors the printed form). Checked here, before anything is saved; it is
+  // written only after the registration has succeeded, below.
+  const rawBody: unknown = body.body;
+  const dalPanth = normalizeDalPanth(isObject(rawBody) ? rawBody.dal_panth : undefined);
+
+  if (!dalPanth.ok) {
+    return NextResponse.json({ error: dalPanth.error }, { status: 400 });
   }
 
   const serviceSupabase = createServiceRoleClient();
@@ -117,6 +139,45 @@ export async function POST(request: Request) {
     );
   }
 
+  // The registration is saved. Its Dal Panth, if one was given, goes on each
+  // new rider through the same function the lists use, one at a time. This
+  // can never undo or fail the registration: a failure is reported beside the
+  // codes so the desk can add it from the lists instead.
+  let dalPanthSaved: boolean | null = null;
+  let dalPanthError: string | null = null;
+
+  if (dalPanth.value !== null) {
+    dalPanthSaved = true;
+
+    for (const rider of created.riders) {
+      try {
+        const { error: dalPanthFailure } = await serviceSupabase.rpc("admin_set_dal_panth", {
+          p_code: rider.confirmation_code,
+          p_dal_panth: dalPanth.value,
+          p_actor_id: adminCheck.actor.id,
+          p_actor_name: adminCheck.actor.name,
+          p_actor_email: adminCheck.actor.email,
+        });
+
+        if (dalPanthFailure) {
+          dalPanthSaved = false;
+
+          if (DAL_PANTH_MISSING_CODES.has(dalPanthFailure.code)) {
+            dalPanthError = DAL_PANTH_NOT_SET_UP;
+            break;
+          }
+
+          console.error("Paper registration Dal Panth not saved", dalPanthFailure);
+          dalPanthError = DAL_PANTH_NOT_SAVED;
+        }
+      } catch (dalPanthThrown) {
+        console.error("Paper registration Dal Panth not saved", dalPanthThrown);
+        dalPanthSaved = false;
+        dalPanthError = DAL_PANTH_NOT_SAVED;
+      }
+    }
+  }
+
   // A rider who wrote an email address gets their code the same way an
   // online rider does, after the response so a slow send never holds up the
   // desk. A placeholder address is never sent to (resend.ts refuses it too).
@@ -157,5 +218,9 @@ export async function POST(request: Request) {
         has_email: !isPaperPlaceholderEmail(rider.email),
       })),
     },
+    dal_panth_saved: dalPanthSaved,
+    ...(dalPanthSaved === false
+      ? { dal_panth_error: dalPanthError ?? DAL_PANTH_NOT_SAVED }
+      : {}),
   }, { headers: { "Cache-Control": "private, no-store" } });
 }

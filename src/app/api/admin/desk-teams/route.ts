@@ -184,5 +184,18 @@ export async function POST(request: Request) {
     );
   }
 
+  // admin_desk_team copies a solo entry onto the team without its Dal Panth,
+  // so copy it across now. Best effort only: a failure (the function not
+  // there yet included) is logged and never changes this response.
+  try {
+    const { error: syncError } = await serviceSupabase.rpc("admin_sync_dal_panth");
+
+    if (syncError) {
+      console.error("Dal Panth sync after a desk team change failed", syncError);
+    }
+  } catch (syncFailure) {
+    console.error("Dal Panth sync after a desk team change failed", syncFailure);
+  }
+
   return NextResponse.json({ ok: true, result: data });
 }

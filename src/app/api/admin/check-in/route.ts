@@ -233,6 +233,59 @@ const pickPhotoTarget = (
   return teamId ? { kind: "team", id: teamId } : null;
 };
 
+/* The rider's Dal Panth, for the desk card (staff-only, see
+   src/lib/dal-panth.ts). Read on its own, after the lookup has succeeded and
+   never in the roster or search selects, so a failure of any kind (the
+   column not added yet included) only means the card shows a dash: it
+   returns null, never throws, and never changes the lookup's status. The
+   solo entry's value first, otherwise the team entry's. Each distinct
+   failure is logged once. */
+const loggedDalPanthFailures = new Set<string>();
+
+const logDalPanthFailure = (failure: unknown) => {
+  const key =
+    typeof failure === "object" && failure !== null
+      ? `${String((failure as { code?: unknown }).code ?? "")}:${String((failure as { message?: unknown }).message ?? "")}`
+      : String(failure);
+
+  if (!loggedDalPanthFailures.has(key)) {
+    loggedDalPanthFailures.add(key);
+    console.error("Check-in Dal Panth read failed; the card shows none", failure);
+  }
+};
+
+const readDalPanth = async (
+  serviceSupabase: ServiceRoleClient,
+  riderCode: string
+): Promise<string | null> => {
+  try {
+    for (const table of ["solo_registrations", "team_members"] as const) {
+      const { data, error } = await serviceSupabase
+        .from(table)
+        .select("dal_panth")
+        .eq("confirmation_code", riderCode)
+        .not("dal_panth", "is", null)
+        .limit(1);
+
+      if (error) {
+        logDalPanthFailure(error);
+        return null;
+      }
+
+      const value: unknown = data?.[0]?.dal_panth;
+
+      if (typeof value === "string" && value.trim() !== "") {
+        return value;
+      }
+    }
+
+    return null;
+  } catch (failure) {
+    logDalPanthFailure(failure);
+    return null;
+  }
+};
+
 // Generated codes are NBP- plus six characters, but stay lenient about case,
 // spacing and a missing prefix so a hurried desk entry still resolves.
 const codePattern = /^[A-Z0-9-]{4,24}$/i;
@@ -465,11 +518,18 @@ export async function POST(request: Request) {
     soloUrl ? null : headshotUrl
   );
 
+  // Never fails the lookup: null on any error (see readDalPanth).
+  const dalPanth: string | null = await readDalPanth(
+    serviceSupabase,
+    typeof rider.confirmation_code === "string" ? rider.confirmation_code : code
+  );
+
   return NextResponse.json({
     rider,
     entries,
     teammates,
     teamEmergency,
+    dalPanth,
     headshotUrl,
     photoTarget,
   });

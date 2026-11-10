@@ -306,7 +306,7 @@ test("the rider export is admin-only and carries no contact or personal details"
   for (const text of [columns, ...selects]) {
     assert.doesNotMatch(
       text,
-      /\b(phone|email|age|father_name|mother_name|emergency_contact\w*|profile_id)\b/,
+      /\b(phone|email|age|father_name|mother_name|dal_panth|emergency_contact\w*|profile_id)\b/,
       "the export never reads or writes contact or personal fields"
     );
   }
