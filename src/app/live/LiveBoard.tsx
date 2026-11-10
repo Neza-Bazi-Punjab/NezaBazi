@@ -30,6 +30,7 @@ import {
   Roster,
   Standings,
   UpNext,
+  card,
   label,
 } from "./live-parts";
 import { useRoundStandings } from "./use-round-standings";
@@ -100,33 +101,35 @@ export default function LiveBoard() {
 
   const standingsSection = state ? (
     <section aria-label="Standings and pools" className="flex flex-col">
-      <div
-        role="group"
-        aria-label="Show"
-        className="sticky top-[calc(var(--nav-height)+2.25rem)] z-30 -mx-4 grid grid-cols-2 border-b-[3px] border-[var(--ledger-rule)] bg-[var(--ledger-page)] px-4"
-      >
-        {(["standings", "pools"] as const).map((option) => (
-          <button
-            key={option}
-            type="button"
-            aria-pressed={tab === option}
-            onClick={() => setTab(option)}
-            className={`mono min-h-11 border-b-[3px] text-[13px] font-semibold uppercase ${
-              tab === option
-                ? "border-[var(--ledger-bronze)] text-[var(--ledger-ink)]"
-                : "border-transparent text-[var(--ledger-muted)]"
-            }`}
-          >
-            {option === "standings" ? "Leaderboard" : "Pools"}
-          </button>
-        ))}
+      <div className="sticky top-[calc(var(--nav-height)+2.25rem)] z-30 -mx-4 bg-[var(--ledger-page)] px-4 py-2">
+        <div
+          role="group"
+          aria-label="Show"
+          className="grid grid-cols-2 gap-1 rounded-full bg-[var(--ledger-hair)] p-1"
+        >
+          {(["standings", "pools"] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={tab === option}
+              onClick={() => setTab(option)}
+              className={`mono min-h-11 rounded-full text-[13px] font-semibold uppercase transition-colors ${
+                tab === option
+                  ? "bg-[var(--ledger-paper)] text-[var(--ledger-ink)] shadow-[0_1px_2px_rgba(46,29,14,0.18)]"
+                  : "text-[var(--ledger-muted)]"
+              }`}
+            >
+              {option === "standings" ? "Leaderboard" : "Pools"}
+            </button>
+          ))}
+        </div>
       </div>
 
       {tab === "standings" ? (
-        <div className="mt-3">
+        <div className="mt-1">
           {selectedRound ? (
             <>
-              <div className="mb-2 flex items-center justify-between gap-3">
+              <div className="mb-1.5 flex items-center justify-between gap-3 px-1">
                 <h2 className="min-w-0 break-words text-[19px] font-bold uppercase leading-tight">
                   {selectedRound.name}
                   {selectedRound.target_points ? (
@@ -144,7 +147,7 @@ export default function LiveBoard() {
                         setChosenRoundId(event.target.value);
                         setChosenPool(undefined);
                       }}
-                      className="mono min-h-11 max-w-[44vw] border border-[var(--ledger-ink)] bg-[var(--ledger-panel)] px-2 text-[12px] font-semibold uppercase text-[var(--ledger-ink)] sm:max-w-none"
+                      className="mono min-h-11 max-w-[44vw] rounded-full bg-[var(--ledger-hair)] px-3 text-[12px] font-semibold uppercase text-[var(--ledger-ink)] sm:max-w-none"
                     >
                       {roundOptions.map((option) => (
                         <option key={option.id} value={option.id}>
@@ -163,7 +166,7 @@ export default function LiveBoard() {
               {!isCurrentRound && earlier.loading ? (
                 <p className="py-6 text-center text-[var(--ledger-muted)]">Loading standings…</p>
               ) : !isCurrentRound && earlier.error ? (
-                <p className="border border-[var(--ledger-hair)] bg-[var(--ledger-panel)] px-4 py-6 text-center text-[var(--ledger-muted)]">
+                <p className={`${card} px-4 py-6 text-center text-[var(--ledger-muted)]`}>
                   {earlier.error}
                 </p>
               ) : (
@@ -171,7 +174,7 @@ export default function LiveBoard() {
                   {/* The round at a glance, on one line: through, out, still
                       riding, and how many runs are done. */}
                   {talliedRows.length > 0 && (
-                    <div className="mb-2">
+                    <div className="mb-2.5 px-1">
                       <p className="mono flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[12px] font-semibold uppercase">
                         <span className="text-[var(--ledger-green)]">{tally.through} through</span>
                         <span className="text-[var(--ledger-red)]">{tally.out} out</span>
@@ -191,10 +194,10 @@ export default function LiveBoard() {
                           aria-valuemin={0}
                           aria-valuemax={100}
                           aria-valuenow={progress.percent}
-                          className="mt-1 h-1 bg-[var(--ledger-hair)]"
+                          className="mt-1 h-1.5 overflow-hidden rounded-full bg-[var(--ledger-hair)]"
                         >
                           <div
-                            className="h-full bg-[var(--ledger-ink)]"
+                            className="h-full rounded-full bg-[var(--ledger-ink)]"
                             style={{ width: `${progress.percent}%` }}
                           />
                         </div>
@@ -221,7 +224,7 @@ export default function LiveBoard() {
                   />
 
                   {/* One line: what the numbers mean. */}
-                  <p className={`${label} mt-2`}>{SCORE_KEY.join(" · ")}</p>
+                  <p className={`${label} mt-2 px-1`}>{SCORE_KEY.join(" · ")}</p>
                 </>
               )}
             </>
@@ -230,7 +233,7 @@ export default function LiveBoard() {
           )}
         </div>
       ) : (
-        <div className="mt-3 flex flex-col gap-4">
+        <div className="mt-1 flex flex-col gap-3">
           <label className="block">
             <span className="sr-only">Find your pool</span>
             <input
@@ -239,7 +242,7 @@ export default function LiveBoard() {
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Find your pool: type a name"
               autoComplete="off"
-              className="min-h-11 w-full border border-[var(--ledger-ink)] bg-[var(--ledger-panel)] px-3 text-[16px] text-[var(--ledger-ink)] placeholder:text-[var(--ledger-muted)]"
+              className="min-h-11 w-full rounded-full bg-[var(--ledger-hair)] px-4 text-[16px] text-[var(--ledger-ink)] placeholder:text-[var(--ledger-muted)]"
             />
           </label>
 
@@ -259,9 +262,13 @@ export default function LiveBoard() {
                 <section
                   key={labelKey || "all"}
                   aria-label={labelKey ? `Pool ${labelKey}` : "Start list"}
-                  className={isRiding ? "bg-[var(--ledger-hl)]" : ""}
+                  className={`${card} overflow-hidden`}
                 >
-                  <div className="flex flex-wrap items-baseline justify-between gap-2 border-b-[3px] border-[var(--ledger-rule)] px-1 pb-0.5">
+                  <div
+                    className={`flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--ledger-hair)] px-3 py-1.5 ${
+                      isRiding ? "bg-[var(--ledger-pick)]" : ""
+                    }`}
+                  >
                     <h3 className="text-[17px] font-bold uppercase leading-tight">
                       {labelKey ? `Pool ${labelKey}` : "Start list"}
                     </h3>
@@ -292,7 +299,7 @@ export default function LiveBoard() {
 
   if (!state) {
     content = error ? (
-      <p className="border-2 border-[var(--ledger-red)] bg-[var(--ledger-panel)] px-4 py-6 text-center text-[var(--ledger-red)]">
+      <p className={`${card} px-4 py-6 text-center text-[var(--ledger-red)]`}>
         Live scores could not be loaded. Retrying…
       </p>
     ) : (
@@ -306,7 +313,7 @@ export default function LiveBoard() {
     content = (
       <div className="flex flex-col gap-3">
         {live?.message && (
-          <p className="border-2 border-[var(--ledger-rule)] bg-[var(--ledger-pick)] px-3 py-1.5 text-center text-[15px] font-bold uppercase leading-tight">
+          <p className="rounded-2xl bg-[var(--ledger-pick)] px-4 py-2 text-center text-[15px] font-bold uppercase leading-tight">
             {live.message}
           </p>
         )}
@@ -316,16 +323,16 @@ export default function LiveBoard() {
         {round && poolCall && (
           <section
             aria-labelledby="pool-call-title"
-            className="border-[3px] border-[var(--ledger-bronze)] bg-[var(--ledger-panel)] px-3 py-2"
+            className={`${card} overflow-hidden pb-1 pt-2.5 ring-2 ring-[var(--ledger-bronze)]`}
           >
-            <p className="mono text-[11px] uppercase text-[var(--ledger-bronze)]">Call-up</p>
+            <p className="mono px-3.5 text-[11px] uppercase text-[var(--ledger-bronze)]">Call-up</p>
             <h2
               id="pool-call-title"
-              className="break-words text-[26px] font-bold uppercase leading-[0.95] sm:text-[36px]"
+              className="break-words px-3.5 text-[26px] font-bold uppercase leading-[0.95] sm:text-[36px]"
             >
               Pool {poolCall}: get ready
             </h2>
-            {next && next !== poolCall && <p className={`${label} mt-1`}>Next: Pool {next}</p>}
+            {next && next !== poolCall && <p className={`${label} mt-1 px-3.5`}>Next: Pool {next}</p>}
             <Roster entries={callUpRoster(state, poolCall)} className="mt-2" />
           </section>
         )}

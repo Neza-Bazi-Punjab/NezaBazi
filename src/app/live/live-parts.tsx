@@ -2,7 +2,8 @@
 
 /* The pieces of the public live leaderboard, drawn in the same "ledger" look
    as the judges' and commentary panels: cream paper, brown rules, condensed
-   type with mono labels. Built for a hand-held screen first and kept tight,
+   type with mono labels, with the rounded cards, pills and segmented
+   control of a hand-held app. Built for a hand-held screen first and kept tight,
    so a pool's standings fit one screen with little scrolling: one line per
    rider, 44px touch targets, long names wrap instead of being cut. From `sm`
    up each row also shows the horse and home.
@@ -29,6 +30,10 @@ import {
 import type { LiveConnection } from "@/lib/scoring/use-live-state";
 
 export const label = "mono text-[11px] uppercase tracking-[0.04em] text-[var(--ledger-muted)]";
+
+/* A rounded card: soft corners, a hairline edge and a faint shadow. */
+export const card =
+  "rounded-2xl bg-[var(--ledger-paper)] shadow-[0_1px_2px_rgba(46,29,14,0.08),0_0_0_1px_rgba(90,53,23,0.08)]";
 
 const RESULT_COLOUR: Record<RunResult, string> = {
   carry: "text-[var(--ledger-green)]",
@@ -111,7 +116,7 @@ export function UpNext({
   return (
     <section
       aria-label="Riding now and up next"
-      className="flex flex-col gap-1 border-l-[3px] border-[var(--ledger-bronze)] bg-[var(--ledger-panel)] px-2.5 py-1.5"
+      className={`${card} flex flex-col gap-1 px-3.5 py-2.5`}
     >
       {current && (
         <p className={row}>
@@ -177,10 +182,10 @@ export function Podium({ round }: { round: ScoringRound }) {
       {podium.map((entry) => (
         <li
           key={`${entry.place}-${entry.entrant_key}`}
-          className={`flex items-baseline gap-3 border-2 px-3 py-1 sm:flex-col sm:gap-0.5 ${
+          className={`flex items-baseline gap-3 rounded-xl px-3.5 py-1.5 sm:flex-col sm:gap-0.5 ${
             entry.place === 1
-              ? "border-[var(--ledger-ink)] bg-[var(--ledger-ink)] text-[var(--ledger-paper)]"
-              : "border-[var(--ledger-rule)] bg-[var(--ledger-panel)]"
+              ? "bg-[var(--ledger-ink)] text-[var(--ledger-paper)]"
+              : card
           }`}
         >
           <span className="mono w-9 shrink-0 text-[13px] font-semibold uppercase">
@@ -213,7 +218,7 @@ function PoolPicker({
     <div
       role="group"
       aria-label="Choose a pool"
-      className="-mx-4 mb-2 flex gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0"
+      className="-mx-4 mb-2.5 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0"
     >
       {choices.map((pool) => {
         const active = pool === selected;
@@ -224,10 +229,10 @@ function PoolPicker({
             type="button"
             aria-pressed={active}
             onClick={() => onSelect(pool)}
-            className={`mono min-h-11 min-w-11 shrink-0 border px-3 text-[13px] font-semibold uppercase transition-colors ${
+            className={`mono min-h-11 min-w-11 shrink-0 rounded-full px-4 text-[13px] font-semibold uppercase transition-colors ${
               active
-                ? "border-[var(--ledger-ink)] bg-[var(--ledger-ink)] text-[var(--ledger-paper)]"
-                : "border-[var(--ledger-chip)] bg-transparent text-[var(--ledger-ink)] active:bg-[var(--ledger-pick)]"
+                ? "bg-[var(--ledger-ink)] text-[var(--ledger-paper)]"
+                : "bg-[var(--ledger-hair)] text-[var(--ledger-ink)] active:bg-[var(--ledger-pick)]"
             }`}
           >
             {pool === null ? (
@@ -265,7 +270,7 @@ function StatusTag({
   /* "2/4": two of the team's four riders have ridden. */
   const ridden =
     team && row.runs_total > 0 ? (
-      <span className="mono ml-1 text-[11px] font-normal text-[var(--ledger-muted)]">
+      <span className="mono text-[11px] font-normal text-[var(--ledger-muted)]">
         {row.runs_scored}/{row.runs_total}
         <span className="sr-only"> riders have ridden</span>
       </span>
@@ -273,14 +278,12 @@ function StatusTag({
 
   if (!text) {
     return riding ? (
-      <span className="mono text-[11px] font-semibold uppercase text-[var(--ledger-bronze)]">
+      <span className="mono inline-flex items-center rounded-full bg-[var(--ledger-bronze)] px-2 py-0.5 text-[10px] font-semibold uppercase text-[var(--ledger-paper)]">
         Riding
-        {ridden}
       </span>
     ) : upNext ? (
-      <span className="mono text-[11px] font-semibold uppercase text-[var(--ledger-ink)]">
+      <span className="mono inline-flex items-center rounded-full bg-[var(--ledger-hair)] px-2 py-0.5 text-[10px] font-semibold uppercase text-[var(--ledger-ink)]">
         Next
-        {ridden}
       </span>
     ) : team && row.runs_scored > 0 ? (
       ridden
@@ -291,8 +294,10 @@ function StatusTag({
 
   return (
     <span
-      className={`mono text-[11px] font-semibold uppercase ${
-        row.advanced ? "text-[var(--ledger-green)]" : "text-[var(--ledger-red)]"
+      className={`mono inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
+        row.advanced
+          ? "bg-[rgba(61,122,46,0.14)] text-[var(--ledger-green)]"
+          : "bg-[rgba(176,48,28,0.1)] text-[var(--ledger-red)]"
       }`}
     >
       {text}
@@ -326,12 +331,12 @@ function PointsBox({
   return (
     <span className="flex flex-col items-stretch">
       <span
-        className={`mono flex h-7 items-center justify-center border text-[14px] font-semibold ${
+        className={`mono flex h-7 items-center justify-center rounded-lg text-[14px] font-semibold ${
           !ridden
-            ? "border-[var(--ledger-hair)] text-[var(--ledger-faint)]"
+            ? "bg-transparent text-[var(--ledger-faint)]"
             : carried
-              ? "border-[var(--ledger-green)] bg-[var(--ledger-green)] text-[var(--ledger-paper)]"
-              : "border-[var(--ledger-chip)] bg-[var(--ledger-panel)] text-[var(--ledger-ink)]"
+              ? "bg-[var(--ledger-green)] text-[var(--ledger-paper)]"
+              : "bg-[var(--ledger-hair)] text-[var(--ledger-ink)]"
         }`}
       >
         {ridden ? points : "–"}
@@ -342,7 +347,7 @@ function PointsBox({
   );
 }
 
-const STANDING_GRID = "grid grid-cols-[22px_minmax(0,1fr)_38px_66px] items-center gap-2";
+const STANDING_GRID = "grid grid-cols-[16px_minmax(0,1fr)_34px_62px] items-center gap-1.5";
 
 export function Standings({
   rows,
@@ -384,15 +389,17 @@ export function Standings({
       {pools.length > 0 && <PoolPicker pools={pools} selected={selected} onSelect={onPoolChange} />}
 
       {shown.length === 0 ? (
-        <p className="border border-[var(--ledger-hair)] bg-[var(--ledger-panel)] px-4 py-6 text-center text-[var(--ledger-muted)]">
-          {emptyText}
-        </p>
+        <p className={`${card} px-4 py-6 text-center text-[var(--ledger-muted)]`}>{emptyText}</p>
       ) : (
-        <div role="table" aria-label={`${caption}${byPool ? `, Pool ${selected}` : ""}`}>
+        <div
+          role="table"
+          aria-label={`${caption}${byPool ? `, Pool ${selected}` : ""}`}
+          className={`${card} overflow-hidden`}
+        >
           <div role="rowgroup">
             <div
               role="row"
-              className={`${STANDING_GRID} mono border-b-[3px] border-[var(--ledger-rule)] px-1 pb-0.5 text-[10px] uppercase text-[var(--ledger-muted)]`}
+              className={`${STANDING_GRID} mono border-b border-[var(--ledger-hair)] px-2.5 py-1.5 text-[10px] uppercase text-[var(--ledger-muted)]`}
             >
               <span role="columnheader" className="text-right">
                 #
@@ -418,11 +425,11 @@ export function Standings({
               return (
                 <div
                   key={row.entrant_key}
-                  className={`border-b border-[var(--ledger-hair)] ${
-                    riding ? "bg-[var(--ledger-hl)]" : ""
+                  className={`border-b border-[var(--ledger-hair)] last:border-b-0 ${
+                    riding ? "bg-[var(--ledger-pick)]" : ""
                   }`}
                 >
-                  <div role="row" className={`${STANDING_GRID} px-1 py-1`}>
+                  <div role="row" className={`${STANDING_GRID} px-2.5 py-1.5`}>
                     <span
                       role="cell"
                       className="mono text-right text-[12px] font-semibold text-[var(--ledger-muted)]"
@@ -478,7 +485,7 @@ export function Standings({
                   {hasMembers && isOpen && row.members && (
                     <ol
                       id={detailId}
-                      className="mb-1 ml-[30px] flex flex-col border-l-[3px] border-[var(--ledger-rule)] bg-[var(--ledger-side)] px-2.5"
+                      className="mx-3 mb-2 flex flex-col rounded-xl bg-[var(--ledger-side)] px-3"
                     >
                       {row.members.map((member, index) => (
                         <li
@@ -519,7 +526,7 @@ export function Standings({
       )}
 
       {anyOverride && (
-        <p className="mt-1 text-[12px] text-[var(--ledger-muted)]">* Decided by the judges.</p>
+        <p className="mt-1.5 px-1 text-[12px] text-[var(--ledger-muted)]">* Decided by the judges.</p>
       )}
     </div>
   );
@@ -560,8 +567,8 @@ export function Roster({
         return (
           <li
             key={entry.entrant_key}
-            className={`grid grid-cols-[22px_minmax(0,1fr)] items-baseline gap-2 border-b border-[var(--ledger-hair)] px-1 py-1 ${
-              matches(entry) ? "bg-[var(--ledger-pick)] outline outline-2 outline-[var(--ledger-bronze)]" : ""
+            className={`grid grid-cols-[20px_minmax(0,1fr)] items-baseline gap-2 border-b border-[var(--ledger-hair)] px-3 py-1.5 last:border-b-0 ${
+              matches(entry) ? "bg-[var(--ledger-pick)]" : ""
             }`}
           >
             <span className="mono text-right text-[11px] text-[var(--ledger-muted)]">{index + 1}</span>
