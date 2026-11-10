@@ -2,9 +2,10 @@
 
 /* The pieces of the public live leaderboard, drawn in the same "ledger" look
    as the judges' and commentary panels: cream paper, brown rules, condensed
-   type with mono labels. Built for a hand-held screen first (one column,
-   44px touch targets, long names wrap instead of being cut), and simply
-   given more room from `sm` up.
+   type with mono labels. Built for a hand-held screen first and kept tight,
+   so a pool's standings fit one screen with little scrolling: one line per
+   rider, 44px touch targets, long names wrap instead of being cut. From `sm`
+   up each row also shows the horse and home.
 
    Everything here shows the public live state only: run snapshots and the
    public standings, never anything from a registration. */
@@ -28,14 +29,6 @@ import {
 import type { LiveConnection } from "@/lib/scoring/use-live-state";
 
 export const label = "mono text-[11px] uppercase tracking-[0.04em] text-[var(--ledger-muted)]";
-
-/* A square mono button: the tabs, the pool letters, "show standings". */
-export const ledgerButton = (active = false) =>
-  `mono min-h-12 border-2 px-4 text-[13px] font-semibold uppercase transition-colors ${
-    active
-      ? "border-[var(--ledger-ink)] bg-[var(--ledger-ink)] text-[var(--ledger-paper)]"
-      : "border-[var(--ledger-ink)] bg-transparent text-[var(--ledger-ink)] active:bg-[var(--ledger-pick)]"
-  }`;
 
 const RESULT_COLOUR: Record<RunResult, string> = {
   carry: "text-[var(--ledger-green)]",
@@ -77,11 +70,11 @@ export function LiveStatusBar({
 
   return (
     <div
-      className={`mono flex min-h-9 items-center justify-between gap-3 px-4 py-1.5 text-[12px] uppercase text-[var(--ledger-paper)] ${
+      className={`mono flex h-9 items-center justify-between gap-3 px-4 text-[11px] uppercase text-[var(--ledger-paper)] ${
         offline ? "bg-[var(--ledger-red)]" : "bg-[var(--ledger-rule)]"
       }`}
     >
-      <span className="min-w-0 break-words">{text}</span>
+      <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{text}</span>
       <span role="status" title={CONNECTION_DESCRIPTION[connection]} className="shrink-0">
         <span aria-hidden className={connection === "live" ? "nbp-pulse" : ""}>
           ●
@@ -113,46 +106,43 @@ export function UpNext({
   }
 
   const nextPool = shown[0] ? poolName(shown[0].pool_label) : null;
+  const row = "grid grid-cols-[52px_minmax(0,1fr)] items-baseline gap-2";
 
   return (
     <section
       aria-label="Riding now and up next"
-      className="border-[3px] border-[var(--ledger-rule)] bg-[var(--ledger-panel)] px-3 py-2"
+      className="flex flex-col gap-1 border-l-[3px] border-[var(--ledger-bronze)] bg-[var(--ledger-panel)] px-2.5 py-1.5"
     >
       {current && (
-        <p className="flex flex-col border-b border-[var(--ledger-hair)] pb-2">
-          <span className="mono text-[11px] uppercase text-[var(--ledger-bronze)]">
+        <p className={row}>
+          <span className="mono text-[10px] font-semibold uppercase text-[var(--ledger-bronze)]">
             <span aria-hidden className="nbp-pulse">
               ●
             </span>{" "}
-            Riding now
+            Riding
           </span>
-          <span className="break-words text-[22px] font-bold uppercase leading-tight">
+          <span className="break-words text-[17px] font-bold uppercase leading-tight">
             {current.rider_name}
           </span>
         </p>
       )}
       {shown.length > 0 && (
-        <div className={current ? "pt-2" : ""}>
-          <p className={label}>
-            Up next
-            {nextPool ? ` · ${nextPool}` : ""}
-          </p>
-          <ol className="mt-0.5 flex flex-col">
+        <div className={row}>
+          <span className="mono text-[10px] font-semibold uppercase text-[var(--ledger-muted)]">
+            Next
+            <span className="sr-only">{nextPool ? `, ${nextPool}` : ""}</span>
+          </span>
+          <ol className="flex flex-col">
             {shown.map((run, index) => (
-              <li key={run.id} className="grid grid-cols-[18px_minmax(0,1fr)] gap-2 py-0.5">
-                <span className="mono pt-[3px] text-right text-[12px] text-[var(--ledger-muted)]">
-                  {index + 1}
-                </span>
-                <span className="break-words text-[17px] font-semibold uppercase leading-tight">
-                  {run.rider_name}
-                  {run.team_name && (
-                    <span className="text-[13px] font-normal normal-case text-[var(--ledger-muted)]">
-                      {" "}
-                      · {run.team_name}
-                    </span>
-                  )}
-                </span>
+              <li
+                key={run.id}
+                className={`break-words uppercase leading-tight ${
+                  index === 0
+                    ? "text-[15px] font-semibold"
+                    : "text-[13px] text-[var(--ledger-muted)]"
+                }`}
+              >
+                {index + 1}. {run.rider_name}
               </li>
             ))}
           </ol>
@@ -177,11 +167,11 @@ export function Podium({ round }: { round: ScoringRound }) {
   }
 
   return (
-    <ol className="mb-4 grid gap-1.5 sm:grid-cols-3">
+    <ol className="mb-2 grid gap-1 sm:grid-cols-3">
       {podium.map((entry) => (
         <li
           key={`${entry.place}-${entry.entrant_key}`}
-          className={`flex items-baseline gap-3 border-2 px-3 py-2 sm:flex-col sm:gap-0.5 ${
+          className={`flex items-baseline gap-3 border-2 px-3 py-1 sm:flex-col sm:gap-0.5 ${
             entry.place === 1
               ? "border-[var(--ledger-ink)] bg-[var(--ledger-ink)] text-[var(--ledger-paper)]"
               : "border-[var(--ledger-rule)] bg-[var(--ledger-panel)]"
@@ -190,7 +180,7 @@ export function Podium({ round }: { round: ScoringRound }) {
           <span className="mono w-9 shrink-0 text-[13px] font-semibold uppercase">
             {PLACE_TEXT[entry.place] ?? entry.place}
           </span>
-          <span className="min-w-0 break-words text-[20px] font-bold uppercase leading-tight">
+          <span className="min-w-0 break-words text-[17px] font-bold uppercase leading-tight">
             {entry.name}
           </span>
         </li>
@@ -214,7 +204,11 @@ function PoolPicker({
   const choices: (string | null)[] = [...pools, null];
 
   return (
-    <div role="group" aria-label="Choose a pool" className="mb-3 flex flex-wrap gap-1.5">
+    <div
+      role="group"
+      aria-label="Choose a pool"
+      className="-mx-4 mb-2 flex gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0"
+    >
       {choices.map((pool) => {
         const active = pool === selected;
 
@@ -224,7 +218,7 @@ function PoolPicker({
             type="button"
             aria-pressed={active}
             onClick={() => onSelect(pool)}
-            className={`mono min-h-11 min-w-11 border-2 px-3 text-[13px] font-semibold uppercase transition-colors ${
+            className={`mono min-h-11 min-w-11 shrink-0 border px-3 text-[13px] font-semibold uppercase transition-colors ${
               active
                 ? "border-[var(--ledger-ink)] bg-[var(--ledger-ink)] text-[var(--ledger-paper)]"
                 : "border-[var(--ledger-chip)] bg-transparent text-[var(--ledger-ink)] active:bg-[var(--ledger-pick)]"
@@ -310,7 +304,7 @@ function PointsBox({
   return (
     <span className="flex flex-col items-stretch">
       <span
-        className={`mono flex h-9 items-center justify-center border text-[16px] font-semibold ${
+        className={`mono flex h-7 items-center justify-center border text-[14px] font-semibold ${
           !ridden
             ? "border-[var(--ledger-hair)] text-[var(--ledger-faint)]"
             : carried
@@ -321,16 +315,12 @@ function PointsBox({
         {ridden ? points : "–"}
         <span className="sr-only">{ridden ? " points" : " not ridden yet"}</span>
       </span>
-      {target ? (
-        <span className="mono mt-0.5 text-center text-[10px] text-[var(--ledger-muted)]">
-          of {target}
-        </span>
-      ) : null}
+      {target ? <span className="sr-only"> of {target}</span> : null}
     </span>
   );
 }
 
-const STANDING_GRID = "grid grid-cols-[26px_minmax(0,1fr)_46px_58px] items-center gap-2";
+const STANDING_GRID = "grid grid-cols-[22px_minmax(0,1fr)_38px_56px] items-center gap-2";
 
 export function Standings({
   rows,
@@ -380,7 +370,7 @@ export function Standings({
           <div role="rowgroup">
             <div
               role="row"
-              className={`${STANDING_GRID} mono border-b-[3px] border-[var(--ledger-rule)] px-1 pb-1 text-[10px] uppercase text-[var(--ledger-muted)]`}
+              className={`${STANDING_GRID} mono border-b-[3px] border-[var(--ledger-rule)] px-1 pb-0.5 text-[10px] uppercase text-[var(--ledger-muted)]`}
             >
               <span role="columnheader" className="text-right">
                 #
@@ -410,10 +400,10 @@ export function Standings({
                     riding ? "bg-[var(--ledger-hl)]" : ""
                   }`}
                 >
-                  <div role="row" className={`${STANDING_GRID} px-1 py-2`}>
+                  <div role="row" className={`${STANDING_GRID} px-1 py-1`}>
                     <span
                       role="cell"
-                      className="mono text-right text-[14px] font-semibold text-[var(--ledger-muted)]"
+                      className="mono text-right text-[12px] font-semibold text-[var(--ledger-muted)]"
                     >
                       {rank}
                     </span>
@@ -424,12 +414,12 @@ export function Standings({
                           onClick={() => toggle(row.entrant_key)}
                           aria-expanded={isOpen}
                           aria-controls={detailId}
-                          className="-my-1 flex min-h-11 w-full items-center gap-2 bg-transparent text-left"
+                          className="-my-1 flex min-h-11 w-full items-center gap-1.5 bg-transparent text-left"
                         >
                           <span aria-hidden className="mono shrink-0 text-[13px]">
                             {isOpen ? "▾" : "▸"}
                           </span>
-                          <span className="min-w-0 break-words text-[18px] font-bold uppercase leading-tight">
+                          <span className="min-w-0 break-words text-[15px] font-bold uppercase leading-tight">
                             {row.name}
                           </span>
                           <span className="sr-only">
@@ -437,12 +427,12 @@ export function Standings({
                           </span>
                         </button>
                       ) : (
-                        <span className="break-words text-[18px] font-bold uppercase leading-tight">
+                        <span className="break-words text-[15px] font-bold uppercase leading-tight">
                           {row.name}
                         </span>
                       )}
                       {sub && (
-                        <span className="mt-0.5 break-words text-[13px] leading-tight text-[var(--ledger-muted)]">
+                        <span className="hidden break-words text-[13px] leading-tight text-[var(--ledger-muted)] sm:block">
                           {sub}
                         </span>
                       )}
@@ -461,15 +451,15 @@ export function Standings({
                   {hasMembers && isOpen && row.members && (
                     <ol
                       id={detailId}
-                      className="mb-2 ml-[34px] flex flex-col border-l-[3px] border-[var(--ledger-rule)] bg-[var(--ledger-side)] px-3 py-1"
+                      className="mb-1 ml-[30px] flex flex-col border-l-[3px] border-[var(--ledger-rule)] bg-[var(--ledger-side)] px-2.5"
                     >
                       {row.members.map((member, index) => (
                         <li
                           key={member.team_member_id ?? `${row.entrant_key}-${index}`}
-                          className="flex items-baseline justify-between gap-3 border-b border-[var(--ledger-hair)] py-1.5 last:border-b-0"
+                          className="flex items-baseline justify-between gap-3 border-b border-[var(--ledger-hair)] py-1 last:border-b-0"
                         >
                           <span className="min-w-0 break-words">
-                            <span className="text-[16px] font-semibold">{member.rider_name}</span>
+                            <span className="text-[14px] font-semibold">{member.rider_name}</span>
                             {member.horse_name && (
                               <span className="text-[13px] text-[var(--ledger-muted)]">
                                 {" "}
@@ -502,7 +492,7 @@ export function Standings({
       )}
 
       {anyOverride && (
-        <p className="mt-2 text-[12px] text-[var(--ledger-muted)]">* Decided by the judges.</p>
+        <p className="mt-1 text-[12px] text-[var(--ledger-muted)]">* Decided by the judges.</p>
       )}
     </div>
   );
@@ -543,26 +533,20 @@ export function Roster({
         return (
           <li
             key={entry.entrant_key}
-            className={`grid grid-cols-[26px_minmax(0,1fr)] gap-2 border-b border-[var(--ledger-hair)] px-1 py-1.5 ${
+            className={`grid grid-cols-[22px_minmax(0,1fr)] items-baseline gap-2 border-b border-[var(--ledger-hair)] px-1 py-1 ${
               matches(entry) ? "bg-[var(--ledger-pick)] outline outline-2 outline-[var(--ledger-bronze)]" : ""
             }`}
           >
-            <span className="mono pt-0.5 text-right text-[12px] text-[var(--ledger-muted)]">
-              {index + 1}
-            </span>
-            <span className="flex min-w-0 flex-col">
-              <span className="break-words text-[17px] font-bold uppercase leading-tight">
-                {entry.name}
-              </span>
+            <span className="mono text-right text-[11px] text-[var(--ledger-muted)]">{index + 1}</span>
+            <span className="min-w-0 break-words leading-tight">
+              <span className="text-[15px] font-bold uppercase">{entry.name}</span>
               {hasMembers && (
-                <span className="mt-0.5 break-words text-[13px] leading-tight text-[var(--ledger-muted)]">
+                <span className="block text-[12px] text-[var(--ledger-muted)]">
                   {(entry.members ?? []).join(" · ")}
                 </span>
               )}
               {!hasMembers && entry.horse_name && (
-                <span className="break-words text-[13px] leading-tight text-[var(--ledger-muted)]">
-                  {entry.horse_name}
-                </span>
+                <span className="text-[12px] text-[var(--ledger-muted)]"> · {entry.horse_name}</span>
               )}
             </span>
           </li>

@@ -623,11 +623,15 @@ test("/live wears the panels' ledger look and keeps its hand-held layout", () =>
   assert.match(board, /nextKey=\{isCurrentRound \? \(state\.up_next\[0\]\?\.entrant_key \?\? null\) : null\}/);
   assert.match(board, /highlightKey=\{isCurrentRound \? \(state\.current_run\?\.entrant_key \?\? null\) : null\}/);
 
-  // One column, thumb-sized controls, long names wrap instead of being cut.
-  assert.match(parts, /min-h-11 min-w-11/);
-  assert.match(parts, /min-h-12/);
-  assert.match(parts, /break-words text-\[18px\] font-bold uppercase/);
+  // Tight rows so a pool fits one screen, thumb-sized controls, and long
+  // names wrap instead of being cut. The pool letters scroll sideways.
+  assert.match(parts, /min-h-11 min-w-11 shrink-0/);
+  assert.match(parts, /overflow-x-auto/);
+  assert.match(board, /mono min-h-11 border-b-\[3px\]/);
+  assert.match(parts, /break-words text-\[15px\] font-bold uppercase/);
   assert.doesNotMatch(parts, /truncate/);
+  // The tabs stay under the status bar while the list scrolls.
+  assert.match(board, /sticky top-\[calc\(var\(--nav-height\)\+2\.25rem\)\]/);
 
   // A team opens to its riders; the judges' overrides stay marked.
   assert.match(parts, /aria-expanded=\{isOpen\}/);

@@ -24,7 +24,6 @@ import {
 import { plural } from "@/lib/scoring/format";
 import { RESULT_LABELS, RESULT_POINTS, type PublicLiveState } from "@/lib/scoring/types";
 import { useLiveState } from "@/lib/scoring/use-live-state";
-import { site } from "@/lib/site";
 import {
   LiveStatusBar,
   Podium,
@@ -32,7 +31,6 @@ import {
   Standings,
   UpNext,
   label,
-  ledgerButton,
 } from "./live-parts";
 import { useRoundStandings } from "./use-round-standings";
 
@@ -102,51 +100,51 @@ export default function LiveBoard() {
 
   const standingsSection = state ? (
     <section aria-label="Standings and pools" className="flex flex-col">
-      <div role="group" aria-label="Show" className="grid grid-cols-2 gap-1.5">
+      <div
+        role="group"
+        aria-label="Show"
+        className="sticky top-[calc(var(--nav-height)+2.25rem)] z-30 -mx-4 grid grid-cols-2 border-b-[3px] border-[var(--ledger-rule)] bg-[var(--ledger-page)] px-4"
+      >
         {(["standings", "pools"] as const).map((option) => (
           <button
             key={option}
             type="button"
             aria-pressed={tab === option}
             onClick={() => setTab(option)}
-            className={ledgerButton(tab === option)}
+            className={`mono min-h-11 border-b-[3px] text-[13px] font-semibold uppercase ${
+              tab === option
+                ? "border-[var(--ledger-bronze)] text-[var(--ledger-ink)]"
+                : "border-transparent text-[var(--ledger-muted)]"
+            }`}
           >
-            {option === "standings" ? "Standings" : "Pools"}
+            {option === "standings" ? "Leaderboard" : "Pools"}
           </button>
         ))}
       </div>
 
       {tab === "standings" ? (
-        <div className="mt-4">
+        <div className="mt-3">
           {selectedRound ? (
             <>
-              <div className="mb-3 flex flex-wrap items-end justify-between gap-3 border-b-[3px] border-[var(--ledger-rule)] pb-2">
-                <div className="min-w-0">
-                  <h2 className="break-words text-[24px] font-bold uppercase leading-tight">
-                    {selectedRound.name}
-                  </h2>
-                  <p className={label}>
-                    {[
-                      eventTypeName(selectedRound.event_type),
-                      selectedRound.target_points
-                        ? `Target ${plural(selectedRound.target_points, "point")}`
-                        : null,
-                      isCurrentRound ? "Live" : "Final standings",
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                </div>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <h2 className="min-w-0 break-words text-[19px] font-bold uppercase leading-tight">
+                  {selectedRound.name}
+                  {selectedRound.target_points ? (
+                    <span className={`${label} ml-2 whitespace-nowrap`}>
+                      Target {selectedRound.target_points}
+                    </span>
+                  ) : null}
+                </h2>
                 {roundOptions.length > 1 && (
-                  <label className="flex items-center gap-2">
-                    <span className={label}>Round</span>
+                  <label className="shrink-0">
+                    <span className="sr-only">Round</span>
                     <select
                       value={selectedRound.id}
                       onChange={(event) => {
                         setChosenRoundId(event.target.value);
                         setChosenPool(undefined);
                       }}
-                      className="min-h-11 max-w-[60vw] border-2 border-[var(--ledger-ink)] bg-[var(--ledger-panel)] px-2 text-[15px] font-semibold text-[var(--ledger-ink)]"
+                      className="mono min-h-11 max-w-[44vw] border border-[var(--ledger-ink)] bg-[var(--ledger-panel)] px-2 text-[12px] font-semibold uppercase text-[var(--ledger-ink)] sm:max-w-none"
                     >
                       {roundOptions.map((option) => (
                         <option key={option.id} value={option.id}>
@@ -170,50 +168,37 @@ export default function LiveBoard() {
                 </p>
               ) : (
                 <>
-                  {/* The round at a glance, in plain words. */}
+                  {/* The round at a glance, on one line: through, out, still
+                      riding, and how many runs are done. */}
                   {talliedRows.length > 0 && (
-                    <dl className="mb-3 grid grid-cols-3 border-b border-[var(--ledger-rule)] pb-2">
-                      {(
-                        [
-                          ["Through", tally.through, "text-[var(--ledger-green)]"],
-                          ["Out", tally.out, "text-[var(--ledger-red)]"],
-                          [
-                            isCurrentRound ? "Still riding" : "Undecided",
-                            tally.riding,
-                            "text-[var(--ledger-ink)]",
-                          ],
-                        ] as const
-                      ).map(([term, count, colour]) => (
-                        <div key={term} className="flex min-w-0 flex-col-reverse gap-0.5 pr-2">
-                          <dt className={`${label} truncate`}>{term}</dt>
-                          <dd className={`text-[40px] font-bold leading-[0.9] ${colour}`}>{count}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  )}
-
-                  {/* How far through the round (or the pool shown) is. */}
-                  {progress.total > 0 && (
-                    <div className="mb-4">
-                      <p id="progress-title" className={`${label} flex justify-between gap-3`}>
-                        <span>Runs ridden</span>
+                    <div className="mb-2">
+                      <p className="mono flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[12px] font-semibold uppercase">
+                        <span className="text-[var(--ledger-green)]">{tally.through} through</span>
+                        <span className="text-[var(--ledger-red)]">{tally.out} out</span>
                         <span>
-                          {progress.scored} of {progress.total}
+                          {tally.riding} {isCurrentRound ? "riding" : "undecided"}
                         </span>
+                        {progress.total > 0 && (
+                          <span id="progress-title" className="ml-auto font-normal text-[var(--ledger-muted)]">
+                            {progress.scored}/{plural(progress.total, "run")}
+                          </span>
+                        )}
                       </p>
-                      <div
-                        role="progressbar"
-                        aria-labelledby="progress-title"
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-valuenow={progress.percent}
-                        className="mt-1 h-1.5 bg-[var(--ledger-hair)]"
-                      >
+                      {progress.total > 0 && (
                         <div
-                          className="h-full bg-[var(--ledger-ink)]"
-                          style={{ width: `${progress.percent}%` }}
-                        />
-                      </div>
+                          role="progressbar"
+                          aria-labelledby="progress-title"
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={progress.percent}
+                          className="mt-1 h-1 bg-[var(--ledger-hair)]"
+                        >
+                          <div
+                            className="h-full bg-[var(--ledger-ink)]"
+                            style={{ width: `${progress.percent}%` }}
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -236,7 +221,7 @@ export default function LiveBoard() {
                   />
 
                   {/* One line: what the numbers mean. */}
-                  <p className={`${label} mt-3`}>{SCORE_KEY.join(" · ")}</p>
+                  <p className={`${label} mt-2`}>{SCORE_KEY.join(" · ")}</p>
                 </>
               )}
             </>
@@ -245,16 +230,16 @@ export default function LiveBoard() {
           )}
         </div>
       ) : (
-        <div className="mt-4 flex flex-col gap-5">
+        <div className="mt-3 flex flex-col gap-4">
           <label className="block">
-            <span className={label}>Find your pool</span>
+            <span className="sr-only">Find your pool</span>
             <input
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Type a rider or team name"
+              placeholder="Find your pool: type a name"
               autoComplete="off"
-              className="mt-1.5 min-h-12 w-full border-2 border-[var(--ledger-ink)] bg-[var(--ledger-panel)] px-3 text-[17px] text-[var(--ledger-ink)] placeholder:text-[var(--ledger-faint)]"
+              className="min-h-11 w-full border border-[var(--ledger-ink)] bg-[var(--ledger-panel)] px-3 text-[16px] text-[var(--ledger-ink)] placeholder:text-[var(--ledger-muted)]"
             />
           </label>
 
@@ -276,8 +261,8 @@ export default function LiveBoard() {
                   aria-label={labelKey ? `Pool ${labelKey}` : "Start list"}
                   className={isRiding ? "bg-[var(--ledger-hl)]" : ""}
                 >
-                  <div className="flex flex-wrap items-baseline justify-between gap-2 border-b-[3px] border-[var(--ledger-rule)] px-1 pb-1">
-                    <h3 className="text-[20px] font-bold uppercase leading-tight">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2 border-b-[3px] border-[var(--ledger-rule)] px-1 pb-0.5">
+                    <h3 className="text-[17px] font-bold uppercase leading-tight">
                       {labelKey ? `Pool ${labelKey}` : "Start list"}
                     </h3>
                     <p
@@ -319,9 +304,9 @@ export default function LiveBoard() {
     content = <NotConfiguredNotice />;
   } else {
     content = (
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-3">
         {live?.message && (
-          <p className="border-[3px] border-[var(--ledger-rule)] bg-[var(--ledger-pick)] px-3 py-2 text-center text-[19px] font-bold uppercase leading-tight">
+          <p className="border-2 border-[var(--ledger-rule)] bg-[var(--ledger-pick)] px-3 py-1.5 text-center text-[15px] font-bold uppercase leading-tight">
             {live.message}
           </p>
         )}
@@ -331,17 +316,17 @@ export default function LiveBoard() {
         {round && poolCall && (
           <section
             aria-labelledby="pool-call-title"
-            className="border-[3px] border-[var(--ledger-bronze)] bg-[var(--ledger-panel)] p-3"
+            className="border-[3px] border-[var(--ledger-bronze)] bg-[var(--ledger-panel)] px-3 py-2"
           >
-            <p className="mono text-[12px] uppercase text-[var(--ledger-bronze)]">Call-up</p>
+            <p className="mono text-[11px] uppercase text-[var(--ledger-bronze)]">Call-up</p>
             <h2
               id="pool-call-title"
-              className="mt-1 break-words text-[36px] font-bold uppercase leading-[0.95] sm:text-[48px]"
+              className="break-words text-[26px] font-bold uppercase leading-[0.95] sm:text-[36px]"
             >
               Pool {poolCall}: get ready
             </h2>
             {next && next !== poolCall && <p className={`${label} mt-1`}>Next: Pool {next}</p>}
-            <Roster entries={callUpRoster(state, poolCall)} className="mt-3" />
+            <Roster entries={callUpRoster(state, poolCall)} className="mt-2" />
           </section>
         )}
 
@@ -358,20 +343,18 @@ export default function LiveBoard() {
     <div className={`${LEDGER_ROOT} flex-1`}>
       <div className="sticky top-[var(--nav-height)] z-40">
         <LiveStatusBar
-          text={nowNext ?? (round ? round.name : "Live scores")}
+          text={
+            [round ? round.name : "Live scores", nowNext].filter(Boolean).join(" · ")
+          }
           connection={connection}
         />
       </div>
 
-      <div className="mx-auto max-w-3xl px-4 pb-16 pt-4">
-        <header className="mono mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b-[3px] border-[var(--ledger-rule)] pb-2 text-[12px] uppercase">
-          <h1 className="font-semibold">Live Scores</h1>
-          <p className="text-[var(--ledger-muted)]">
-            {round
-              ? [round.name, eventTypeName(round.event_type)].filter(Boolean).join(" · ")
-              : `${site.title} · ${site.eventDate}`}
-          </p>
-        </header>
+      <div className="mx-auto max-w-3xl px-4 pb-10 pt-3">
+        <h1 className="sr-only">
+          Live Scores
+          {round ? `: ${[round.name, eventTypeName(round.event_type)].filter(Boolean).join(", ")}` : ""}
+        </h1>
 
         {content}
       </div>
