@@ -1,8 +1,8 @@
 "use client";
 
 /* The printable players' marksheet for manual team scoring, laid out like the
-   organisers' own paper form: the event banner, the Dal name and Jathedar
-   lines, and twelve numbered rows with Round 1 to Round 4 boxes.
+   organisers' own paper form: the event banner, the team name, Dal name and
+   Jathedar lines, and twelve numbered rows with Round 1 to Round 4 boxes.
 
    Rendered twice, like the pool sheet: once on screen as a preview, once as a
    direct child of <body> that only exists in print. While the print copy is
@@ -66,9 +66,9 @@ function Sheet({ sheet }: { sheet: MarksheetSheet }) {
             Players Marksheet
           </p>
           <p className="mt-3 flex items-end gap-3 text-lg">
-            <span className="shrink-0">ਦਲ ਦਾ ਨਾਮ :-</span>
+            <span className="shrink-0">ਟੀਮ ਦਾ ਨਾਮ :-</span>
             <span className="min-h-7 flex-1 border-b border-black px-1 font-semibold">
-              {sheet.dal ?? ""}
+              {sheet.team ?? ""}
             </span>
             {sheet.pages > 1 ? (
               <span className="shrink-0 text-xs">
@@ -80,6 +80,12 @@ function Sheet({ sheet }: { sheet: MarksheetSheet }) {
       </header>
 
       <p className="mt-3 flex items-end gap-3 px-8 text-lg">
+        <span className="shrink-0">ਦਲ ਦਾ ਨਾਮ :-</span>
+        <span className="min-h-7 flex-1 border-b border-black px-1 font-semibold">
+          {sheet.dal ?? ""}
+        </span>
+      </p>
+      <p className="mt-2 flex items-end gap-3 px-8 text-lg">
         <span className="shrink-0">ਦਲ ਦੇ ਜਥੇਦਾਰ ਸਾਹਿਬ ਦਾ ਨਾਮ :-</span>
         <span className="min-h-7 flex-1 border-b border-black" />
       </p>
@@ -178,7 +184,7 @@ export default function TeamMarksheet({ sheets }: { sheets: MarksheetSheet[] }) 
             ? "No teams yet, so the sheet is blank."
             : `${riders} team ${riders === 1 ? "rider" : "riders"} on ${sheets.length} ${
                 sheets.length === 1 ? "sheet" : "sheets"
-              }.`}{" "}
+              }, one per team.`}{" "}
           One sheet prints per A4 page.
         </p>
       </div>

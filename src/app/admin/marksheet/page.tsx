@@ -1,6 +1,6 @@
 // /admin/marksheet — the players' marksheet for manual team scoring, the
 // paper backup beside live scoring: every team rider already filled in, one
-// sheet per Dal Panth, ready to print. Administrators only, gated like every
+// sheet per team, ready to print. Administrators only, gated like every
 // /admin page. It reads team riders under the administrator's own session
 // (names, horses, teams and Dal Panth; no contact details).
 import type { Metadata } from "next";
@@ -66,7 +66,7 @@ export default async function AdminMarksheetPage() {
     <>
       <AdminPageHeading
         title={TITLE}
-        intro="The paper backup for team scoring: every team rider filled in, one sheet per Dal."
+        intro="The paper backup for team scoring: every team rider filled in, one sheet per team."
       />
 
       <section className="bg-cream">

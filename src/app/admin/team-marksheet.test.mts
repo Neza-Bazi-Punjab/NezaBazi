@@ -33,69 +33,89 @@ test("no team riders gives no sheets, and a blank sheet has twelve empty rows", 
   assert.deepEqual(buildTeamMarksheets([]), []);
 
   const blank = blankMarksheet();
+  assert.equal(blank.team, null);
   assert.equal(blank.dal, null);
   assert.equal(blank.rows.length, MARKSHEET_ROWS_PER_SHEET);
   assert.ok(blank.rows.every((row) => row === null));
 });
 
-test("one sheet per Dal, Dals by name, riders with no Dal last", () => {
+test("one sheet per team, headed with its name, teams by name, only its own riders", () => {
   const sheets = buildTeamMarksheets([
-    rider("No Dal Rider", "Zed", null),
-    rider("Tarna Rider", "Alpha", "Tarna"),
-    rider("Budha Rider", "Beta", "Budha"),
-    rider("Blank Dal Rider", "Zed", "   "),
+    rider("Zed one", "Zed", null),
+    rider("Alpha one", "alpha", "Tarna"),
+    rider("Zed two", "Zed", null),
+    rider("Beta one", "Beta", "Budha"),
+  ]);
+
+  assert.deepEqual(
+    sheets.map((sheet) => sheet.team),
+    ["alpha", "Beta", "Zed"]
+  );
+  assert.deepEqual(
+    sheets.map((sheet) => names(sheet.rows)),
+    [["Alpha one"], ["Beta one"], ["Zed one", "Zed two"]]
+  );
+  assert.equal(sheets[2].rows[1]?.team, "Zed");
+  assert.ok(sheets.every((sheet) => sheet.rows.length === MARKSHEET_ROWS_PER_SHEET));
+  assert.ok(sheets.every((sheet) => sheet.page === 1 && sheet.pages === 1));
+});
+
+test("two teams with the same name get a sheet each, the older first", () => {
+  const sheets = buildTeamMarksheets([
+    rider("Newer", "Same", null, {
+      teams: { team_name: "Same", created_at: "2026-11-10T12:00:00Z" },
+    }),
+    rider("Older", "same", null, {
+      teams: { team_name: "same", created_at: "2026-11-10T08:00:00Z" },
+    }),
+  ]);
+
+  assert.deepEqual(
+    sheets.map((sheet) => names(sheet.rows)),
+    [["Older"], ["Newer"]]
+  );
+  assert.notEqual(sheets[0].key, sheets[1].key);
+});
+
+test("the Dal line is filled only when the riders of a team agree on one Dal", () => {
+  const sheets = buildTeamMarksheets([
+    rider("A1", "Agree", "Budha Dal"),
+    rider("A2", "Agree", "budha  dal "),
+    rider("A3", "Agree", null),
+    rider("M1", "Mixed", "Budha Dal"),
+    rider("M2", "Mixed", "Tarna Dal"),
+    rider("N1", "None", "   "),
   ]);
 
   assert.deepEqual(
     sheets.map((sheet) => sheet.dal),
-    ["Budha", "Tarna", null]
+    ["Budha Dal", null, null]
   );
-  assert.deepEqual(names(sheets[2].rows), ["Blank Dal Rider", "No Dal Rider"]);
-  assert.ok(sheets.every((sheet) => sheet.rows.length === MARKSHEET_ROWS_PER_SHEET));
 });
 
-test("a Dal typed with different capitals or spacing is one Dal", () => {
-  const sheets = buildTeamMarksheets([
-    rider("A", "Team", "Budha Dal"),
-    rider("B", "Team", "budha  dal "),
-  ]);
-
-  assert.equal(sheets.length, 1);
-  assert.equal(sheets[0].dal, "Budha Dal");
-  assert.equal(names(sheets[0].rows).length, 2);
-});
-
-test("within a Dal: teams by name, the leader first, then the order entered", () => {
+test("on a sheet: the leader first, then the order entered", () => {
   const sheets = buildTeamMarksheets([
     rider("Second entered", "Bravo", "Dal", { created_at: "2026-11-10T10:02:00Z" }),
     rider("Leader", "Bravo", "Dal", { is_leader: true, created_at: "2026-11-10T10:05:00Z" }),
     rider("First entered", "Bravo", "Dal", { created_at: "2026-11-10T10:01:00Z" }),
-    rider("Alpha rider", "alpha", "Dal"),
   ]);
 
-  assert.deepEqual(names(sheets[0].rows), [
-    "Alpha rider",
-    "Leader",
-    "First entered",
-    "Second entered",
-  ]);
+  assert.deepEqual(names(sheets[0].rows), ["Leader", "First entered", "Second entered"]);
   assert.deepEqual(
-    sheets[0].rows.slice(0, 4).map((row) => row?.number),
-    [1, 2, 3, 4]
+    sheets[0].rows.slice(0, 3).map((row) => row?.number),
+    [1, 2, 3]
   );
-  assert.equal(sheets[0].rows[1]?.team, "Bravo");
-  assert.equal(sheets[0].rows[1]?.horse, "Leader horse");
+  assert.equal(sheets[0].rows[0]?.horse, "Leader horse");
 });
 
-test("more than twelve riders in a Dal continue on numbered sheets", () => {
+test("a team of more than twelve riders continues on numbered sheets", () => {
   const riders = Array.from({ length: 14 }, (_, index) =>
-    rider(`Rider ${String(index + 1).padStart(2, "0")}`, `Team ${Math.floor(index / 4) + 1}`, "Dal", {
+    rider(`Rider ${String(index + 1).padStart(2, "0")}`, "Big", "Dal", {
       created_at: `2026-11-10T10:${String(index).padStart(2, "0")}:00Z`,
     })
   );
   const sheets = buildTeamMarksheets(riders);
 
-  assert.equal(sheets.length, 2);
   assert.deepEqual(
     sheets.map((sheet) => [sheet.page, sheet.pages]),
     [
@@ -105,7 +125,6 @@ test("more than twelve riders in a Dal continue on numbered sheets", () => {
   );
   assert.equal(names(sheets[0].rows).length, 12);
   assert.deepEqual(names(sheets[1].rows), ["Rider 13", "Rider 14"]);
-  assert.equal(sheets[1].rows[0]?.number, 1);
   assert.notEqual(sheets[0].key, sheets[1].key);
 });
 
@@ -119,11 +138,26 @@ test("the embedded team may arrive as a one-item array, and text is trimmed", ()
     },
   ]);
 
-  assert.deepEqual(sheets[0].rows[0], { number: 1, name: "Spaced Name", horse: "", team: "The Team" });
+  assert.equal(sheets[0].team, "The Team");
+  assert.deepEqual(sheets[0].rows[0], {
+    number: 1,
+    name: "Spaced Name",
+    horse: "",
+    team: "The Team",
+  });
 });
 
 test("the sheet carries no contact details and the page is administrators only", () => {
-  for (const column of ["phone", "email", "age", "location", "emergency", "father", "mother", "confirmation_code"]) {
+  for (const column of [
+    "phone",
+    "email",
+    "age",
+    "location",
+    "emergency",
+    "father",
+    "mother",
+    "confirmation_code",
+  ]) {
     assert.ok(!MARKSHEET_SELECT.includes(column), `${column} must not be read`);
   }
 
@@ -135,6 +169,9 @@ test("the sheet carries no contact details and the page is administrators only",
   const sheet = read("./marksheet/TeamMarksheet.tsx");
   assert.match(sheet, /body > \*:not\(\.team-marksheet-print\) \{ display: none !important; \}/);
   assert.match(sheet, /break-after: page/);
+  // The team's name heads the sheet.
+  assert.match(sheet, /ਟੀਮ ਦਾ ਨਾਮ :-/);
+  assert.match(sheet, /\{sheet\.team \?\? ""\}/);
 
   // The lib imports nothing, so this test can load it directly.
   assert.doesNotMatch(read("../../lib/admin/team-marksheet.ts"), /^import /m);

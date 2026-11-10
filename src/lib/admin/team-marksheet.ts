@@ -1,7 +1,8 @@
 /* The players' marksheet for manual team scoring: the organisers' paper
-   backup beside live scoring. One sheet per Dal Panth, twelve riders to a
-   sheet, each rider with their horse and team already filled in, and four
-   empty boxes for Round 1 to Round 4.
+   backup beside live scoring. One sheet per team, headed with the team's
+   name, each rider with their horse and team already filled in, and four
+   empty boxes for Round 1 to Round 4. The sheet keeps the paper form's
+   twelve rows.
 
    Organisers only. The sheet carries names, horses, teams and the Dal Panth,
    and no contact details. Dal Panth is staff-only (the site names no
@@ -43,10 +44,12 @@ export type MarksheetRow = {
 
 export type MarksheetSheet = {
   key: string;
-  /* The Dal Panth printed on the "Dal name" line; null leaves the line empty
-     to be written in by hand. */
+  /* Printed on the "Team name" line at the top; null leaves the line empty
+     to be written in by hand (a blank sheet). */
+  team: string | null;
+  /* Printed on the "Dal name" line; null leaves it empty to be written in. */
   dal: string | null;
-  /* 1-based page of this Dal's sheets, and how many it has. */
+  /* 1-based page of this team's sheets, and how many it has. */
   page: number;
   pages: number;
   /* Always MARKSHEET_ROWS_PER_SHEET long; null is an empty row. */
@@ -75,52 +78,60 @@ const emptyRows = (): Array<MarksheetRow | null> =>
 /* One sheet with nothing filled in, for a team formed after printing. */
 export const blankMarksheet = (key = "blank"): MarksheetSheet => ({
   key,
+  team: null,
   dal: null,
   page: 1,
   pages: 1,
   rows: emptyRows(),
 });
 
-/* Sheets in printing order: the Dals by name, then the riders with no Dal
-   Panth. Within a Dal the teams go by name (the older team first when two
-   share one), and within a team the leader first, then the riders in the
-   order they were entered. Two spellings of a Dal that differ only in
-   capitals or spacing are one Dal. No riders gives no sheets. */
+/* One sheet per team, in printing order: the teams by name (the older team
+   first when two share a name). On a sheet the leader comes first, then the
+   riders in the order they were entered. The "Dal name" line is filled in
+   when every rider on the team who has a Dal Panth has the same one (capitals
+   and spacing aside); a team with none, or with two different ones, leaves
+   the line empty. A team is four riders, so one page; a longer one would
+   continue on numbered sheets. No riders gives no sheets. */
 export const buildTeamMarksheets = (rows: readonly MarksheetSource[]): MarksheetSheet[] => {
-  const groups = new Map<string, { dal: string | null; riders: MarksheetSource[] }>();
+  const groups = new Map<string, { name: string; created: number; riders: MarksheetSource[] }>();
 
   for (const row of rows) {
-    const dal = text(row.dal_panth);
-    const key = dal.toLowerCase();
-    const group = groups.get(key) ?? { dal: dal === "" ? null : dal, riders: [] };
+    const team = teamOf(row);
+    const name = text(team.team_name);
+    const created = time(team.created_at);
+    // Two teams may share a name; the moment each was made keeps them apart.
+    const key = `${name.toLowerCase()}|${created}`;
+    const group = groups.get(key) ?? { name, created, riders: [] };
     group.riders.push(row);
     groups.set(key, group);
   }
 
-  const ordered = [...groups.entries()].sort(([first], [second]) => {
-    if ((first === "") !== (second === "")) {
-      return first === "" ? 1 : -1;
-    }
-
-    return compareText(first, second);
-  });
+  const ordered = [...groups.entries()].sort(
+    ([, first], [, second]) =>
+      compareText(first.name, second.name) || first.created - second.created
+  );
 
   const sheets: MarksheetSheet[] = [];
 
   for (const [key, group] of ordered) {
-    const riders = [...group.riders].sort((first, second) => {
-      const firstTeam = teamOf(first);
-      const secondTeam = teamOf(second);
-
-      return (
-        compareText(text(firstTeam.team_name), text(secondTeam.team_name)) ||
-        time(firstTeam.created_at) - time(secondTeam.created_at) ||
+    const riders = [...group.riders].sort(
+      (first, second) =>
         Number(Boolean(second.is_leader)) - Number(Boolean(first.is_leader)) ||
         time(first.created_at) - time(second.created_at) ||
         compareText(text(first.full_name), text(second.full_name))
-      );
-    });
+    );
 
+    const dals = new Map<string, string>();
+
+    for (const rider of riders) {
+      const dal = text(rider.dal_panth);
+
+      if (dal !== "" && !dals.has(dal.toLowerCase())) {
+        dals.set(dal.toLowerCase(), dal);
+      }
+    }
+
+    const dal = dals.size === 1 ? [...dals.values()][0] : null;
     const pages = Math.ceil(riders.length / MARKSHEET_ROWS_PER_SHEET);
 
     for (let page = 1; page <= pages; page += 1) {
@@ -132,13 +143,14 @@ export const buildTeamMarksheets = (rows: readonly MarksheetSource[]): Marksheet
           number: index + 1,
           name: text(rider.full_name),
           horse: text(rider.horse_name),
-          team: text(teamOf(rider).team_name),
+          team: group.name,
         };
       });
 
       sheets.push({
-        key: `${key === "" ? "no-dal" : key}-${page}`,
-        dal: group.dal,
+        key: `${key}-${page}`,
+        team: group.name === "" ? null : group.name,
+        dal,
         page,
         pages,
         rows: sheetRows,
