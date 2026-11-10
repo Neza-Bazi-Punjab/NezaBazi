@@ -73,23 +73,31 @@ as $$
 declare
   v_definition text;
   v_found integer;
+  -- Line endings are made the same on BOTH sides. The SQL editor sends this
+  -- file with Windows line endings when it is pasted from a Windows machine,
+  -- so a patch text that spans lines arrives with CR LF while the function
+  -- body is compared with LF. Without this such a patch is "found 0 times"
+  -- (which is what the first run of this file did, changing nothing).
+  v_anchor constant text := replace(p_anchor, E'\r\n', E'\n');
+  v_replacement constant text := replace(p_replacement, E'\r\n', E'\n');
+  v_marker constant text := replace(p_marker, E'\r\n', E'\n');
 begin
   v_definition := replace(pg_catalog.pg_get_functiondef(p_function), E'\r\n', E'\n');
 
-  if position(p_marker in v_definition) > 0 then
+  if position(v_marker in v_definition) > 0 then
     return 'already applied';
   end if;
 
-  v_found := (length(v_definition) - length(replace(v_definition, p_anchor, ''))) / length(p_anchor);
+  v_found := (length(v_definition) - length(replace(v_definition, v_anchor, ''))) / length(v_anchor);
 
   if v_found <> 1 then
     raise exception '%: expected the text to patch exactly once, found % times: %',
-      p_function, v_found, left(p_anchor, 70);
+      p_function, v_found, left(v_anchor, 70);
   end if;
 
-  execute replace(v_definition, p_anchor, p_replacement);
+  execute replace(v_definition, v_anchor, v_replacement);
 
-  if position(p_marker in replace(pg_catalog.pg_get_functiondef(p_function), E'\r\n', E'\n')) = 0 then
+  if position(v_marker in replace(pg_catalog.pg_get_functiondef(p_function), E'\r\n', E'\n')) = 0 then
     raise exception '%: the patch did not take.', p_function;
   end if;
 
