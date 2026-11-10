@@ -324,9 +324,6 @@ export default function RulesPage() {
                 <p className="font-display text-sm font-semibold uppercase tracking-[0.2em] text-brown/60">
                   Video coming soon
                 </p>
-                <p className="text-xs text-brown/45">
-                  Set rulesVideoUrl in src/lib/site.ts
-                </p>
               </div>
             )}
           </div>
