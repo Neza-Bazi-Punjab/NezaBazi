@@ -286,9 +286,28 @@ export type RiderDetail = {
   total_points_today: number;
 };
 
+/* Between riders (nobody on course): the run just scored, when it belongs to
+   the live round. The commentary panel and the vMix "current" feed keep that
+   rider up until the judge starts the next one, instead of going blank. */
+export const justRodeRun = (state: {
+  current_run: ScoringRun | null;
+  current_round: ScoringRound | null;
+  last_scored_run: ScoringRun | null;
+}): ScoringRun | null =>
+  !state.current_run &&
+  state.current_round &&
+  state.last_scored_run &&
+  state.last_scored_run.round_id === state.current_round.id
+    ? state.last_scored_run
+    : null;
+
 /* GET /api/commentary/state — judge, commentator or admin. */
 export type CommentaryState = PublicLiveState & {
   current_rider: RiderDetail | null;
+  /* Between riders: the rider who has just ridden in the live round (the run
+     is last_scored_run), so the panel keeps them up until the judge starts
+     the next. Null while someone is on course. */
+  last_rider: RiderDetail | null;
   up_next_riders: (ScoringRun & { rider: RiderDetail })[];
   /* Standings for every round, keyed by round id, for the "earlier today" column. */
   leaderboards_by_round: Record<string, LeaderboardRow[]>;

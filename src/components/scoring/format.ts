@@ -235,6 +235,7 @@ export const normalizeCommentaryState = (
   return {
     ...base,
     current_rider: isRecord(base.current_rider) ? base.current_rider : null,
+    last_rider: isRecord(base.last_rider) ? base.last_rider : null,
     up_next_riders: asArray<CommentaryState["up_next_riders"][number]>(base.up_next_riders),
     leaderboards_by_round: asRecord<LeaderboardRow[]>(base.leaderboards_by_round),
     runs: asArray<ScoringRun>(base.runs),

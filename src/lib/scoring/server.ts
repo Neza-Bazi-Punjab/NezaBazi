@@ -33,6 +33,7 @@ import {
   type ScoringRound,
   type ScoringRun,
 } from "@/lib/scoring/types";
+import { justRodeRun } from "@/lib/scoring/types";
 
 export type ScoringDbClient = ServiceRoleClient;
 
@@ -571,7 +572,14 @@ export const buildCommentaryState = async (
   const { state } = snapshot;
 
   if (!state.configured) {
-    return { ...state, current_rider: null, up_next_riders: [], leaderboards_by_round: {}, runs: [] };
+    return {
+      ...state,
+      current_rider: null,
+      last_rider: null,
+      up_next_riders: [],
+      leaderboards_by_round: {},
+      runs: [],
+    };
   }
 
   if (error) {
@@ -579,12 +587,19 @@ export const buildCommentaryState = async (
   }
 
   const nextRuns = state.up_next.slice(0, UP_NEXT_RIDERS);
-  const subjects = state.current_run ? [state.current_run, ...nextRuns] : nextRuns;
+  /* Between riders the panel keeps the rider who has just ridden. */
+  const justRode = justRodeRun(state);
+  const subjects = state.current_run
+    ? [state.current_run, ...nextRuns]
+    : justRode
+      ? [justRode, ...nextRuns]
+      : nextRuns;
   const details = await loadRiderDetails(client, subjects, state.rounds);
 
   return {
     ...state,
     current_rider: state.current_run ? details.get(state.current_run.id) ?? null : null,
+    last_rider: justRode ? details.get(justRode.id) ?? null : null,
     up_next_riders: nextRuns.flatMap((run) => {
       const rider = details.get(run.id);
       return rider ? [{ ...run, rider }] : [];

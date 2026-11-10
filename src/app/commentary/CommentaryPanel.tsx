@@ -44,6 +44,7 @@ import {
   type RunResult,
   type ScoringRun,
 } from "@/lib/scoring/types";
+import { justRodeRun } from "@/lib/scoring/types";
 import { plural } from "@/lib/scoring/format";
 import { TRAINING_BANNER, TRAINING_LABEL, type TrainingScope } from "@/lib/scoring/training";
 import { STAFF_RESYNC_MS, useLiveState } from "@/lib/scoring/use-live-state";
@@ -191,7 +192,10 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
   const currentRun: ScoringRun | null =
     runs.find((run) => run.id === currentRunId) ??
     (state?.current_run && state.current_run.id === currentRunId ? state.current_run : null);
-  const rider = currentRun ? (state?.current_rider ?? null) : null;
+  /* Between riders the rider who has just ridden stays up. */
+  const justRode = state ? justRodeRun({ ...state, current_run: currentRun }) : null;
+  const shownRun = currentRun ?? justRode;
+  const rider = currentRun ? (state?.current_rider ?? null) : justRode ? (state?.last_rider ?? null) : null;
   const calledPool = live?.called_pool_label ?? null;
   const leaderboard = useMemo(() => state?.leaderboard ?? [], [state]);
   const attempts = round?.attempts_per_rider ?? 1;
@@ -332,23 +336,23 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
       </div>
     );
   } else {
-    const cells: TodayCell[] = currentRun
+    const cells: TodayCell[] = shownRun
       ? manyAttempts
-        ? attemptMarks(runs, currentRun.entrant_key, attempts).map((mark, index) => markCell(mark, index + 1))
+        ? attemptMarks(runs, shownRun.entrant_key, attempts).map((mark, index) => markCell(mark, index + 1))
         : todayCells(rider)
       : [];
     const horse = [
-      rider?.horse_name ?? currentRun?.horse_name,
+      rider?.horse_name ?? shownRun?.horse_name,
       rider?.horse_breed,
       rider?.horse_age !== null && rider?.horse_age !== undefined ? plural(rider.horse_age, "yr") : null,
     ]
       .filter(Boolean)
       .join(", ");
-    const team = rider?.team_name ?? currentRun?.team_name ?? null;
+    const team = rider?.team_name ?? shownRun?.team_name ?? null;
     const facts: [string, string | null][] = [
       ["Father", rider?.father_name ?? null],
       ["Mother", rider?.mother_name ?? null],
-      ["Hometown", rider?.location ?? currentRun?.rider_location ?? null],
+      ["Hometown", rider?.location ?? shownRun?.rider_location ?? null],
       ["Age", rider?.age !== null && rider?.age !== undefined ? plural(rider.age, "year") : null],
       [
         "Years riding",
@@ -391,20 +395,22 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
           <span className="mono text-[13px] uppercase text-[var(--ledger-bronze)]">
             {currentRun
               ? `● On course · Rider ${blockPosition(runs, currentRun).index} of ${blockPosition(runs, currentRun).size}`
-              : "Nobody on course"}
+              : justRode
+                ? "Just rode · waiting for the next rider"
+                : "Nobody on course"}
           </span>
           <h1
             id="rider-name"
             className="break-words text-[36px] font-bold uppercase leading-[0.92] tracking-[-0.02em] sm:text-[60px] xl:text-[72px]"
           >
-            {currentRun
-              ? (rider?.full_name ?? currentRun.rider_name)
+            {shownRun
+              ? (rider?.full_name ?? shownRun.rider_name)
               : roundComplete
                 ? `${round.name} complete`
                 : "Waiting for the next rider"}
           </h1>
 
-          {currentRun && (
+          {shownRun && (
             <>
               <div className="flex flex-col border-t border-[var(--ledger-rule)]">
                 {facts.map(([term, value]) => (
@@ -430,7 +436,7 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
               ))}
             </div>
           )}
-          {currentRun && !manyAttempts && cells.length === 0 && (
+          {shownRun && !manyAttempts && cells.length === 0 && (
             <p className="mt-auto border-t-[3px] border-[var(--ledger-rule)] pt-2.5 text-[var(--ledger-muted)]">
               First run of the day.
             </p>
