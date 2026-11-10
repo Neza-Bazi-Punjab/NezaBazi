@@ -338,10 +338,12 @@ test("the Check-in tab has a desk and a Who's checked in overview, from the same
   const panel = repoFile("src/app/admin/CheckInPanel.tsx");
   const status = repoFile("src/app/admin/CheckInStatus.tsx");
 
-  // Two switches; the desk stays the default view.
-  assert.match(panel, /useState<"desk" \| "status">\("desk"\)/);
+  // Three switches; the desk stays the default view.
+  assert.match(panel, /useState<"desk" \| "status" \| "teams">\("desk"\)/);
   assert.match(panel, />\s*Check-in desk\s*</);
   assert.match(panel, />\s*Who&apos;s checked in\s*</);
+  assert.match(panel, />\s*Form teams\s*</);
+  assert.match(panel, /<FormTeamsPanel \/>/);
   // The overview reads the desk's own refreshed list, never its own copy.
   assert.match(panel, /<CheckInStatus roster=\{roster\} failed=\{rosterFailed\} onSelect=\{openFromStatus\} \/>/);
   assert.doesNotMatch(status, /fetch\(/);
