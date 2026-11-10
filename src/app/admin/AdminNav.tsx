@@ -25,6 +25,7 @@ export const ADMIN_NAV: readonly { group: string | null; items: readonly NavItem
     group: "Event day",
     items: [
       { href: "/admin/check-in", label: "Check-in" },
+      { href: "/admin/form-teams", label: "Form teams" },
       { href: "/admin/scoring", label: "Scoring" },
     ],
   },

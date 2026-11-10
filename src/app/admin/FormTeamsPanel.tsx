@@ -1,17 +1,22 @@
 "use client";
 
-/* Form teams: the third switch on the Check-in tab.
+/* Form teams: its own admin page, /admin/form-teams (Event day, under
+   Check-in).
 
-   Most riders registered solo although they ride with a team. Here the desk
-   puts riders who have already checked in onto a team: a new team of 1 to 4,
-   or a missing rider added to a team made here earlier. Each rider keeps
-   their solo entry, code and check-in; nothing is emailed.
+   Most riders registered solo although they ride with a team. Here staff put
+   solo riders onto a team, checked in or not: a new team of 1 to 4, or a
+   missing rider added to a team made here earlier. Each rider keeps their
+   solo entry, code and check-in state; nothing is emailed. A rider who has
+   not arrived yet is checked in at the desk as usual, by code, which marks
+   their solo entry and their team place together.
 
    Teams made here can be renamed, given a new leader or emergency contact,
    have a rider removed, or be deleted. Teams registered online or on paper
    are never changed from here. A team rides only once it has 4 riders, all
    checked in (the same rule as every team). All checks happen again in the
-   database (supabase/migrations/20261109120000_desk_teams.sql). */
+   database (supabase/migrations/20261109120000_desk_teams.sql, and
+   20261110120000_desk_teams_any_solo.sql for riders not checked in yet). */
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DeskTeam, DeskTeamRider } from "@/app/api/admin/desk-teams/route";
 import { DESK_TEAM_SIZE } from "@/lib/desk-teams";
@@ -51,7 +56,18 @@ const matches = (rider: DeskTeamRider, query: string) => {
   );
 };
 
-/* Checked-in solo riders not on a team, to tick onto one. */
+type ArrivalFilter = "all" | "in" | "out";
+
+const ARRIVAL_FILTERS: { value: ArrivalFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "in", label: "Checked in" },
+  { value: "out", label: "Not checked in" },
+];
+
+const arrivalMatches = (rider: DeskTeamRider, filter: ArrivalFilter) =>
+  filter === "all" || (filter === "in") === Boolean(rider.checked_in_at);
+
+/* Solo riders not on a team, checked in or not, to tick onto one. */
 function RiderPicker({
   riders,
   selected,
@@ -66,13 +82,17 @@ function RiderPicker({
   idPrefix: string;
 }) {
   const [query, setQuery] = useState("");
-  const shown = riders.filter((rider) => selected.includes(rider.id) || matches(rider, query));
+  const [arrival, setArrival] = useState<ArrivalFilter>("all");
+  /* Riders already ticked stay in view whatever the search or filter. */
+  const shown = riders.filter(
+    (rider) => selected.includes(rider.id) || (matches(rider, query) && arrivalMatches(rider, arrival))
+  );
   const full = selected.length >= max;
 
   return (
     <div className="space-y-2">
       <label htmlFor={`${idPrefix}-search`} className={label}>
-        Checked-in riders not on a team
+        Solo riders not on a team
         <span className="ml-2 normal-case tracking-normal text-brown/60">
           {selected.length} of {max} chosen
         </span>
@@ -85,9 +105,25 @@ function RiderPicker({
         autoComplete="off"
         className={input}
       />
+      <div role="group" aria-label="Show riders" className="flex flex-wrap gap-2">
+        {ARRIVAL_FILTERS.map(({ value, label: text }) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={arrival === value}
+            onClick={() => setArrival(value)}
+            className={switchClass(arrival === value)}
+          >
+            {text}
+            <span className="ml-1.5 opacity-70">
+              {riders.filter((rider) => arrivalMatches(rider, value)).length}
+            </span>
+          </button>
+        ))}
+      </div>
       {riders.length === 0 ? (
         <p className="text-sm text-brown/70">
-          No checked-in solo riders are free. Check riders in at the desk first.
+          Every solo rider is already on a team. New riders are registered in Paper entry first.
         </p>
       ) : (
         <ul className="max-h-80 divide-y divide-bronze/10 overflow-y-auto rounded-lg border border-bronze/20 bg-sand">
@@ -123,8 +159,18 @@ function RiderPicker({
                       {rider.horse_name ? ` · ${rider.horse_name}` : ""} · {rider.phone}
                     </span>
                   </span>
-                  <span className="shrink-0 font-mono text-xs tracking-[0.1em] text-bronze-deep">
-                    {rider.confirmation_code}
+                  {/* Stacked on a phone so the name keeps its room; side by side from sm up. */}
+                  <span className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
+                    <span
+                      className={`whitespace-nowrap rounded-full px-2 py-0.5 font-display text-[0.65rem] font-semibold uppercase tracking-[0.1em] ${
+                        rider.checked_in_at ? "bg-green-100 text-green-900" : "bg-amber-100 text-amber-900"
+                      }`}
+                    >
+                      {rider.checked_in_at ? "Checked in" : "Not checked in"}
+                    </span>
+                    <span className="font-mono text-xs tracking-[0.1em] text-bronze-deep">
+                      {rider.confirmation_code}
+                    </span>
                   </span>
                 </button>
               </li>
@@ -284,7 +330,7 @@ export default function FormTeamsPanel() {
         emergency_contact_phone: contactPhone,
       },
       `Team ${teamName.trim()} saved with ${chosen.length} ${chosen.length === 1 ? "rider" : "riders"}.${
-        chosen.length < DESK_TEAM_SIZE ? ` Add ${DESK_TEAM_SIZE - chosen.length} more below when they arrive.` : ""
+        chosen.length < DESK_TEAM_SIZE ? ` Add ${DESK_TEAM_SIZE - chosen.length} more below.` : ""
       }`,
       resetNewTeam
     );
@@ -298,9 +344,15 @@ export default function FormTeamsPanel() {
   return (
     <div className="space-y-8">
       <p className="text-sm leading-6 text-brown/80">
-        Put riders who registered solo onto a team. Only riders who have checked in are listed.
-        Each keeps their solo entry and their code; nothing is emailed. A team rides once it has{" "}
-        {DESK_TEAM_SIZE} riders, all checked in.
+        Put riders who registered solo onto a team, whether they have checked in yet or not. Each
+        keeps their solo entry and their code; nothing is emailed. Riders who have not arrived are
+        checked in at the Check-in desk as usual, and that covers their team place too. A team rides
+        once it has {DESK_TEAM_SIZE} riders, all checked in. Someone who never registered goes
+        through{" "}
+        <Link href="/admin/paper" className="font-semibold text-bronze-deep underline underline-offset-2">
+          Paper entry
+        </Link>{" "}
+        first.
       </p>
 
       {loadError && (
@@ -572,7 +624,7 @@ export default function FormTeamsPanel() {
               {confirming === `delete:${team.id}` && (
                 <div className="space-y-3 rounded-lg border border-red-700/30 bg-red-50 p-3">
                   <p className="text-sm text-red-900">
-                    Delete {team.team_name}? Its riders stay registered as solo riders, still checked in.
+                    Delete {team.team_name}? Its riders stay registered as solo riders; their check-in does not change.
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <button
@@ -676,7 +728,7 @@ export default function FormTeamsPanel() {
                               send(
                                 removeKey,
                                 { action: "remove", team_id: team.id, team_member_id: member.id },
-                                `${member.full_name} is off ${team.team_name}. They are still a solo rider and still checked in.`
+                                `${member.full_name} is off ${team.team_name}. They are still a solo rider; their check-in did not change.`
                               )
                             }
                             className={dangerSolid}

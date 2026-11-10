@@ -83,6 +83,7 @@ test("every admin section is its own page, in one grouped menu", () => {
     ["/admin/teams", "Teams"],
     ["/admin/paper", "Paper entry"],
     ["/admin/check-in", "Check-in"],
+    ["/admin/form-teams", "Form teams"],
     ["/admin/scoring", "Scoring"],
     ["/admin/staff", "Staff"],
     ["/admin/audit", "Audit log"],
@@ -115,6 +116,14 @@ test("every admin section is its own page, in one grouped menu", () => {
   }
   const section = readFileSync(new URL("./AdminDashboardSection.tsx", import.meta.url), "utf8");
   assert.match(section, /const access = await getAdminAccess\(\);\s+if \(access\.kind !== "admin"\)/);
+  // Form teams sits right under Check-in, behind the same gate.
+  assert.match(
+    nav,
+    /\{ href: "\/admin\/check-in", label: "Check-in" \},\s*\{ href: "\/admin\/form-teams", label: "Form teams" \},/
+  );
+  const formTeams = readFileSync(new URL("./form-teams/page.tsx", import.meta.url), "utf8");
+  assert.match(formTeams, /const access = await getAdminAccess\(\);\s+if \(access\.kind !== "admin"\)/);
+  assert.match(formTeams, /<FormTeamsPanel \/>/);
   const gate = readFileSync(new URL("./admin-access.tsx", import.meta.url), "utf8");
   assert.match(gate, /profile\.role !== "admin"/);
 });

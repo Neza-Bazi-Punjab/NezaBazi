@@ -12,7 +12,6 @@ import { searchRiders } from "@/lib/check-in-search";
 import { displayEmail } from "@/lib/paper-registration";
 import CheckInStatus, { switchClass } from "./CheckInStatus";
 import DalPanthCell from "./DalPanthCell";
-import FormTeamsPanel from "./FormTeamsPanel";
 import RiderHeadshotCell from "./SoloHeadshotCell";
 
 /* Which row a photo added at the desk goes on (see /api/admin/check-in):
@@ -170,7 +169,7 @@ export default function CheckInPanel() {
   /* The two switches at the top of the tab: the desk, or the overview. */
   /* The switches at the top of the tab: the desk, the overview, or forming
      teams from riders who registered solo. */
-  const [view, setView] = useState<"desk" | "status" | "teams">("desk");
+  const [view, setView] = useState<"desk" | "status">("desk");
   const [code, setCode] = useState("");
   const [query, setQuery] = useState("");
   const [rider, setRider] = useState<Rider | null>(null);
@@ -663,19 +662,9 @@ export default function CheckInPanel() {
         >
           Who&apos;s checked in
         </button>
-        <button
-          type="button"
-          aria-pressed={view === "teams"}
-          onClick={() => setView("teams")}
-          className={switchClass(view === "teams")}
-        >
-          Form teams
-        </button>
       </div>
 
-      {view === "teams" ? (
-        <FormTeamsPanel />
-      ) : view === "status" ? (
+      {view === "status" ? (
         <CheckInStatus roster={roster} failed={rosterFailed} onSelect={openFromStatus} />
       ) : (
         <>
