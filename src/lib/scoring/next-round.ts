@@ -13,11 +13,18 @@
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/* Singles ("single") or Teams ("section"). */
+export type EngineEvent = "single" | "section";
+
+export const isEngineEvent = (value: unknown): value is EngineEvent =>
+  value === "single" || value === "section";
+
 export type NextRoundAction =
   | { action: "start_qualifying" }
+  | { action: "start_teams" }
   | { action: "start"; round_id: string }
   | { action: "undo"; round_id: string }
-  | { action: "switch"; auto_on: boolean };
+  | { action: "switch"; auto_on: boolean; event_type: EngineEvent };
 
 export type NextRoundActionParsed =
   | { ok: true; value: NextRoundAction }
@@ -29,19 +36,21 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const hasOnlyKeys = (record: Record<string, unknown>, keys: readonly string[]) =>
   Object.keys(record).every((key) => keys.includes(key));
 
-/* { action: "start_qualifying" }, { action: "start" | "undo", round_id } or
-   { action: "switch", auto_on } (true = Automatic, false = Manual). */
+/* { action: "start_qualifying" | "start_teams" },
+   { action: "start" | "undo", round_id } or
+   { action: "switch", auto_on, event_type? } (true = Automatic, false =
+   Manual; event_type "single" when left out). */
 export const parseNextRoundRequest = (body: unknown): NextRoundActionParsed => {
   if (!isRecord(body)) {
     return { ok: false, error: "Invalid request." };
   }
 
-  if (body.action === "start_qualifying") {
+  if (body.action === "start_qualifying" || body.action === "start_teams") {
     if (!hasOnlyKeys(body, ["action"])) {
       return { ok: false, error: "Invalid request." };
     }
 
-    return { ok: true, value: { action: "start_qualifying" } };
+    return { ok: true, value: { action: body.action } };
   }
 
   if (body.action === "start" || body.action === "undo") {
@@ -53,11 +62,22 @@ export const parseNextRoundRequest = (body: unknown): NextRoundActionParsed => {
   }
 
   if (body.action === "switch") {
-    if (!hasOnlyKeys(body, ["action", "auto_on"]) || typeof body.auto_on !== "boolean") {
-      return { ok: false, error: "Send auto_on: true or false." };
+    if (
+      !hasOnlyKeys(body, ["action", "auto_on", "event_type"]) ||
+      typeof body.auto_on !== "boolean" ||
+      (body.event_type !== undefined && !isEngineEvent(body.event_type))
+    ) {
+      return { ok: false, error: "Send auto_on: true or false, for Singles or Teams." };
     }
 
-    return { ok: true, value: { action: "switch", auto_on: body.auto_on } };
+    return {
+      ok: true,
+      value: {
+        action: "switch",
+        auto_on: body.auto_on,
+        event_type: isEngineEvent(body.event_type) ? body.event_type : "single",
+      },
+    };
   }
 
   return { ok: false, error: "Unknown action." };
@@ -77,7 +97,9 @@ export type NextRoundState =
   | "nobody_through"
   | "ready";
 
-export type NextRoundRule = "carry" | "strike" | "all_zero";
+/* Singles: carry / strike (no 4s) / all_zero. Teams: target / highest
+   (no team reached the target). */
+export type NextRoundRule = "carry" | "strike" | "all_zero" | "target" | "highest";
 
 export type NextRoundPlan = {
   state: NextRoundState;
@@ -89,8 +111,12 @@ export type NextRoundPlan = {
   rule: NextRoundRule | null;
   through_count: number | null;
   entrant_count: number | null;
-  through: { entrant_key: string; name: string }[];
-  next_stage: "aarhi" | "final" | null;
+  /* Teams: the team's total in the round; null for singles. */
+  through: { entrant_key: string; name: string; total: number | null }[];
+  next_stage: "aarhi" | "final" | "section" | null;
+  /* Teams: this round's target and the next round's (null for the Final). */
+  target: number | null;
+  next_target: number | null;
   next_name: string | null;
   first_up: string | null;
   left: number | null;
@@ -98,8 +124,9 @@ export type NextRoundPlan = {
 };
 
 export type NextStep = {
+  event_type: EngineEvent;
   engine: { auto_on: boolean; changed_at: string | null; changed_by: string | null };
-  /* Solo riders checked in right now (Start qualifying's preview). Null
+  /* Singles: riders checked in. Teams: teams with all 4 checked in. Null
      until 20261110140000_scoring_auto_qualifying.sql is applied, which is
      also what Start qualifying needs. */
   checked_in_count: number | null;
@@ -137,12 +164,22 @@ export const toNextStep = (value: unknown): NextStep | null => {
     return null;
   }
 
-  const rule = plan.rule === "carry" || plan.rule === "strike" || plan.rule === "all_zero" ? plan.rule : null;
-  const nextStage = plan.next_stage === "aarhi" || plan.next_stage === "final" ? plan.next_stage : null;
+  const rule =
+    plan.rule === "carry" ||
+    plan.rule === "strike" ||
+    plan.rule === "all_zero" ||
+    plan.rule === "target" ||
+    plan.rule === "highest"
+      ? plan.rule
+      : null;
+  const nextStage =
+    plan.next_stage === "aarhi" || plan.next_stage === "final" || plan.next_stage === "section"
+      ? plan.next_stage
+      : null;
   const through = Array.isArray(plan.through)
     ? plan.through.flatMap((entry) =>
         isRecord(entry) && typeof entry.entrant_key === "string" && typeof entry.name === "string"
-          ? [{ entrant_key: entry.entrant_key, name: entry.name }]
+          ? [{ entrant_key: entry.entrant_key, name: entry.name, total: whole(entry.total) }]
           : []
       )
     : [];
@@ -152,6 +189,7 @@ export const toNextStep = (value: unknown): NextStep | null => {
       : null;
 
   return {
+    event_type: value.event_type === "section" ? "section" : "single",
     engine: {
       auto_on: engine.auto_on,
       changed_at: text(engine.changed_at),
@@ -169,6 +207,8 @@ export const toNextStep = (value: unknown): NextStep | null => {
       entrant_count: whole(plan.entrant_count),
       through,
       next_stage: nextStage,
+      target: whole(plan.target),
+      next_target: whole(plan.next_target),
       next_name: text(plan.next_name),
       first_up: text(plan.first_up),
       left: whole(plan.left),
@@ -178,13 +218,28 @@ export const toNextStep = (value: unknown): NextStep | null => {
   };
 };
 
-/* "Start Aarhi Round 2" / "Start the Final". */
+/* "Start Aarhi Round 2" / "Start the Final" / "Start Teams Round 2" /
+   "Start the Teams Final". */
 export const startButtonLabel = (plan: NextRoundPlan) =>
-  plan.next_stage === "final" ? "Start the Final" : `Start ${plan.next_name ?? "next round"}`;
+  plan.next_stage === "final"
+    ? `Start the ${plan.next_name ?? "Final"}`
+    : `Start ${plan.next_name ?? "next round"}`;
 
 /* The confirm bar's detail line. */
 export const startConfirmDetail = (plan: NextRoundPlan) => {
   const count = plan.through_count ?? 0;
+
+  if (plan.rule === "target" || plan.rule === "highest") {
+    const teams = count === 1 ? "1 team" : `${count} teams`;
+    const goal =
+      plan.next_stage === "final"
+        ? "Its points decide 1st, 2nd and 3rd."
+        : `Target: ${plan.next_target ?? "?"} points.`;
+    const firstTeam = plan.first_up ? ` First up: ${plan.first_up}.` : "";
+
+    return `${plan.message} ${teams} ride ${plan.next_name ?? "the next round"} once each (all 4 riders), in the same order. ${goal}${firstTeam} You can undo it until the first rider has ridden.`;
+  }
+
   const riders = count === 1 ? "1 rider" : `${count} riders`;
   const first = plan.first_up ? ` First up: ${plan.first_up}.` : "";
 
@@ -222,4 +277,13 @@ export const qualifyingPreview = (riders: number) => {
   const poolsText = sizes.length === 1 ? "1 pool" : `${sizes.length} pools`;
 
   return `${ridersText} checked in → ${poolsText} of ${range}, 3 attempts each`;
+};
+
+/* "6 teams with all 4 riders checked in → one queue, Round 1 needs 8". */
+export const teamsPreview = (teams: number) => {
+  if (!Number.isInteger(teams) || teams <= 0) {
+    return "No team has all 4 riders checked in yet.";
+  }
+
+  return `${teams === 1 ? "1 team" : `${teams} teams`} with all 4 riders checked in → one queue, Round 1 needs 8 points`;
 };

@@ -8,6 +8,7 @@ import {
   qualifyingPreview,
   startButtonLabel,
   startConfirmDetail,
+  teamsPreview,
   toNextStep,
 } from "./next-round.ts";
 
@@ -21,6 +22,8 @@ const admin = repoFile("src/app/admin/scoring/ScoringAdmin.tsx");
 const qualifying = repoFile("supabase/migrations/20261110140000_scoring_auto_qualifying.sql");
 const checkInRoute = repoFile("src/app/api/admin/check-in/route.ts");
 const checkInPanel = repoFile("src/app/admin/CheckInPanel.tsx");
+const teamsMigration = repoFile("supabase/migrations/20261110150000_scoring_auto_teams.sql");
+const teamsRevert = repoFile("supabase/migrations/revert/20261110150000_scoring_auto_teams.revert.sql");
 
 test("start and undo take one round id, lower-cased; nothing else", () => {
   assert.deepEqual(parseNextRoundRequest({ action: "start", round_id: ROUND }), {
@@ -36,11 +39,16 @@ test("start and undo take one round id, lower-cased; nothing else", () => {
   assert.equal(parseNextRoundRequest([]).ok, false);
 });
 
-test("the switch takes a boolean only", () => {
+test("the switch takes a boolean only, for Singles unless Teams is named", () => {
   assert.deepEqual(parseNextRoundRequest({ action: "switch", auto_on: false }), {
     ok: true,
-    value: { action: "switch", auto_on: false },
+    value: { action: "switch", auto_on: false, event_type: "single" },
   });
+  assert.deepEqual(parseNextRoundRequest({ action: "switch", auto_on: true, event_type: "section" }), {
+    ok: true,
+    value: { action: "switch", auto_on: true, event_type: "section" },
+  });
+  assert.equal(parseNextRoundRequest({ action: "switch", auto_on: true, event_type: "pairs" }).ok, false);
   assert.equal(parseNextRoundRequest({ action: "switch", auto_on: "off" }).ok, false);
   assert.equal(parseNextRoundRequest({ action: "switch" }).ok, false);
 });
@@ -75,8 +83,8 @@ test("the next step payload is read safely", () => {
   assert.equal(step.plan.state, "ready");
   assert.equal(step.plan.rule, "strike");
   assert.deepEqual(step.plan.through, [
-    { entrant_key: "solo:a", name: "Rider A" },
-    { entrant_key: "solo:b", name: "Rider B" },
+    { entrant_key: "solo:a", name: "Rider A", total: null },
+    { entrant_key: "solo:b", name: "Rider B", total: null },
   ]);
   assert.equal(step.undo, null);
   assert.equal(toNextStep(null), null);
@@ -207,4 +215,84 @@ test("the desk says the rider's pool; a failed lookup never fails the check-in",
   assert.match(checkInRoute, /rpc\("scoring_desk_pool", \{ p_code: code \}\)/);
   assert.match(checkInPanel, /Pool given when qualifying starts\./);
   assert.match(checkInPanel, /` Pool \$\{pool\.pool\} · rider \$\{pool\.position\}\.`/);
+});
+
+test("Start teams takes no other fields; the preview counts complete teams", () => {
+  assert.deepEqual(parseNextRoundRequest({ action: "start_teams" }), {
+    ok: true,
+    value: { action: "start_teams" },
+  });
+  assert.equal(parseNextRoundRequest({ action: "start_teams", round_id: ROUND }).ok, false);
+  assert.equal(teamsPreview(0), "No team has all 4 riders checked in yet.");
+  assert.equal(teamsPreview(1), "1 team with all 4 riders checked in → one queue, Round 1 needs 8 points");
+  assert.equal(teamsPreview(9), "9 teams with all 4 riders checked in → one queue, Round 1 needs 8 points");
+});
+
+test("teams plan: target rule, totals and the Teams Final", () => {
+  const step = toNextStep({
+    event_type: "section",
+    engine: { auto_on: true, changed_at: null, changed_by: null },
+    checked_in_count: 6,
+    plan: {
+      state: "ready",
+      message: "No team reached 16 in Teams Round 3 — the highest total goes through.",
+      round_id: ROUND,
+      round_name: "Teams Round 3 · Full House",
+      stage: "section",
+      rule: "highest",
+      through_count: 2,
+      entrant_count: 5,
+      through: [
+        { entrant_key: "team:a", name: "Team A", total: 14 },
+        { entrant_key: "team:b", name: "Team B", total: 14 },
+      ],
+      next_stage: "final",
+      next_name: "Teams Final",
+      target: 16,
+      next_target: null,
+    },
+    undo: null,
+  });
+  assert.ok(step);
+  assert.equal(step.event_type, "section");
+  assert.equal(step.plan.rule, "highest");
+  assert.equal(step.plan.through[0]?.total, 14);
+  assert.equal(startButtonLabel(step.plan), "Start the Teams Final");
+});
+
+test("migration: Teams engine rules", () => {
+  assert.match(teamsMigration, /add column if not exists teams_auto_on boolean/);
+  assert.match(teamsMigration, /'section', 'Teams Round 1', 1, 1, 8,/);
+  assert.match(teamsMigration, /Teams are in Manual mode\. Switch Teams to Automatic, or create the round by hand\./);
+  assert.match(teamsMigration, /'next_name', 'Teams Final'/);
+  assert.match(teamsMigration, /' · Full House'/);
+  assert.match(teamsMigration, /Keep the previous round\\'s team order: no shuffle \(20261110150000\)/);
+  assert.match(teamsMigration, /after insert or update of checked_in_at on public\.team_members/);
+  assert.match(teamsMigration, /exception when others then/);
+
+  for (const signature of [
+    "scoring_set_engine_mode(text, boolean, uuid, text, text)",
+    "scoring_start_teams(uuid, text, text)",
+    "scoring_team_target(integer)",
+    "scoring_next_team_round_plan(uuid)",
+    "scoring_next_step(text)",
+    "scoring_auto_place_team(uuid, uuid)",
+  ]) {
+    const escaped = signature.replace(/[()]/g, "\\$&");
+    assert.match(teamsMigration, new RegExp(`revoke execute on function public\\.${escaped}\\s+from public, anon, authenticated;`));
+    assert.match(teamsRevert, new RegExp(`drop function if exists public\\.${escaped};`));
+  }
+
+  assert.match(teamsRevert, /drop column if exists teams_auto_on/);
+});
+
+test("route and card: Singles and Teams each have their own step and switch", () => {
+  assert.match(route, /rpc\("scoring_next_step", \{ p_event_type: event \}\)/);
+  assert.match(route, /rpc\("scoring_set_engine_mode", \{/);
+  assert.match(route, /rpc\("scoring_start_teams", actor\)/);
+  assert.match(route, /searchParams\.get\("event"\)/);
+  assert.match(admin, /\["single", "Singles"\],\s+\["section", "Teams"\],/);
+  assert.match(admin, /`\/api\/admin\/scoring\/next-round\?event=\$\{event\}`/);
+  assert.match(admin, /\{ action: "switch", auto_on: autoOn, event_type: engineEvent \}/);
+  assert.match(admin, /\{ action: "start_teams" \}/);
 });

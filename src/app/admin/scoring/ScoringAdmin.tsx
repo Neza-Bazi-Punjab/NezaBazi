@@ -31,10 +31,12 @@ import {
 import { plural } from "@/lib/scoring/format";
 import {
   qualifyingPreview,
+  teamsPreview,
   startButtonLabel,
   startConfirmDetail,
   toNextStep,
   type NextRoundPlan,
+  type EngineEvent,
   type NextStep,
 } from "@/lib/scoring/next-round";
 import { startListMatcher } from "@/lib/scoring/start-list-search";
@@ -501,23 +503,54 @@ const advancedLabel = (row: LeaderboardRow) =>
    new round is unridden. Manual: the card shrinks to the mode switch and the
    page works exactly as it does without the engine. */
 function NextStepCard({
+  event,
+  onEvent,
   step,
   busy,
   onStartQualifying,
+  onStartTeams,
   onStart,
   onUndo,
   onSwitch,
   children,
 }: {
+  /* Singles or Teams: each has its own Automatic / Manual switch. */
+  event: EngineEvent;
+  onEvent: (event: EngineEvent) => void;
   step: NextStep | null | undefined;
   busy: boolean;
   onStartQualifying: (checkedIn: number) => void;
+  onStartTeams: (teams: number) => void;
   onStart: (plan: NextRoundPlan) => void;
   onUndo: (undo: NonNullable<NextStep["undo"]>) => void;
   onSwitch: (autoOn: boolean) => void;
   /* The Manual tab's contents: the whole Rounds section. */
   children: ReactNode;
 }) {
+  const eventTabs = (
+    <div role="tablist" aria-label="Event" className="flex gap-1 border-b border-bronze/20 print:hidden">
+      {([
+        ["single", "Singles"],
+        ["section", "Teams"],
+      ] as const).map(([value, label]) => (
+        <button
+          key={value}
+          type="button"
+          role="tab"
+          aria-selected={event === value}
+          onClick={() => onEvent(value)}
+          className={`-mb-px whitespace-nowrap border-b-2 px-4 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] transition-colors ${
+            event === value
+              ? "border-bronze-deep text-ink"
+              : "border-transparent text-bronze-dark hover:text-ink"
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
   if (step === undefined) {
     return null;
   }
@@ -525,14 +558,15 @@ function NextStepCard({
   if (step === null) {
     return (
       <section aria-labelledby="next-step-heading" className="space-y-5 rounded-lg border border-bronze/20 p-4 sm:p-5">
+        {eventTabs}
         <div className="space-y-2 print:hidden">
           <h2 id="next-step-heading" className={subheadingClass}>
             Rounds · Manual
           </h2>
-          <p className="text-sm leading-6 text-brown/85">
-            Automatic mode is not set up yet. Apply
-            supabase/migrations/20261110130000_scoring_auto_next_round.sql and then
-            20261110140000_scoring_auto_qualifying.sql in the Supabase SQL editor, then reload.
+          <p className="text-sm leading-6 text-brown/85 [overflow-wrap:anywhere]">
+            {event === "section"
+              ? "Automatic mode for Teams is not set up yet. Apply supabase/migrations/20261110150000_scoring_auto_teams.sql in the Supabase SQL editor, then reload."
+              : "Automatic mode is not set up yet. Apply supabase/migrations/20261110130000_scoring_auto_next_round.sql, then 20261110140000_scoring_auto_qualifying.sql and 20261110150000_scoring_auto_teams.sql in the Supabase SQL editor, then reload."}{" "}
             Rounds work by hand below until then.
           </p>
         </div>
@@ -541,9 +575,11 @@ function NextStepCard({
     );
   }
 
+  const teams = event === "section";
+
   const { engine, plan, undo } = step;
   const modeSwitch = (
-    <div role="group" aria-label="Scoring mode" className="inline-flex shrink-0 self-start overflow-hidden rounded-lg border border-bronze/30 sm:self-auto">
+    <div role="group" aria-label={teams ? "Teams scoring mode" : "Singles scoring mode"} className="inline-flex shrink-0 self-start overflow-hidden rounded-lg border border-bronze/30 sm:self-auto">
       {([
         [true, "Automatic"],
         [false, "Manual"],
@@ -573,14 +609,16 @@ function NextStepCard({
   if (!engine.auto_on) {
     return (
       <section aria-labelledby="next-step-heading" className="space-y-6 rounded-lg border border-bronze/20 p-4 sm:p-5">
+        {eventTabs}
         <div className="flex flex-col gap-3 border-b border-bronze/15 pb-4 sm:flex-row sm:items-center sm:justify-between print:hidden">
           <div className="min-w-0">
             <h2 id="next-step-heading" className={subheadingClass}>
-              Manual mode
+              {teams ? "Teams" : "Singles"} · Manual mode
             </h2>
             <p className="mt-1 text-sm leading-6 text-brown/85">
-              Create, draw, move riders, overrides and the podium, all by hand. Check-ins do not
-              join pools on their own.
+              {teams
+                ? "Create, draw, move teams, overrides and the podium, all by hand. A team completing check-in does not join a round on its own."
+                : "Create, draw, move riders, overrides and the podium, all by hand. Check-ins do not join pools on their own."}
             </p>
           </div>
           {modeSwitch}
@@ -598,6 +636,7 @@ function NextStepCard({
 
   return (
     <section aria-labelledby="next-step-heading" className={`${cardClass} space-y-4 print:hidden`}>
+      {eventTabs}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 id="next-step-heading" className={`${subheadingClass} min-w-0`}>
           Next step{plan.round_name ? ` · after ${plan.round_name}` : ""}
@@ -615,15 +654,31 @@ function NextStepCard({
         {plan.message}
       </p>
 
-      {plan.state === "no_rounds" && step.checked_in_count === null && (
-        <p className="rounded-lg border-l-4 border-amber-600 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
+      {!teams && plan.state === "no_rounds" && step.checked_in_count === null && (
+        <p className="rounded-lg border-l-4 border-amber-600 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950 [overflow-wrap:anywhere]">
           Start qualifying needs one more database update: apply
           supabase/migrations/20261110140000_scoring_auto_qualifying.sql in the Supabase SQL
           editor, then reload.
         </p>
       )}
 
-      {plan.state === "no_rounds" && step.checked_in_count !== null && (
+      {teams && plan.state === "no_rounds" && (
+        <>
+          <p className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
+            {teamsPreview(step.checked_in_count ?? 0)}
+          </p>
+          <button
+            type="button"
+            onClick={() => onStartTeams(step.checked_in_count ?? 0)}
+            disabled={busy || !step.checked_in_count}
+            className={`${primaryButton} w-full sm:w-auto`}
+          >
+            Start teams
+          </button>
+        </>
+      )}
+
+      {!teams && plan.state === "no_rounds" && step.checked_in_count !== null && (
         <>
           <p className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
             {qualifyingPreview(step.checked_in_count)}
@@ -650,7 +705,10 @@ function NextStepCard({
             </summary>
             <ol className="mt-2 list-decimal space-y-0.5 pl-6">
               {plan.through.map((entrant) => (
-                <li key={entrant.entrant_key}>{entrant.name}</li>
+                <li key={entrant.entrant_key}>
+                  {entrant.name}
+                  {entrant.total !== null ? ` · ${plural(entrant.total, "point")}` : ""}
+                </li>
               ))}
             </ol>
           </details>
@@ -668,6 +726,12 @@ function NextStepCard({
       {plan.state === "riding" && plan.stage === "qualifier" && (
         <p className="text-sm leading-6 text-brown/80">
           Riders who check in now join the last pool on their own, with all three attempts.
+        </p>
+      )}
+
+      {plan.state === "riding" && plan.round_name === "Teams Round 1" && (
+        <p className="text-sm leading-6 text-brown/80">
+          A team whose 4th rider checks in now joins the end of Round 1 on its own.
         </p>
       )}
 
@@ -716,17 +780,26 @@ export default function ScoringAdmin({
 
   /* The auto engine's next step: undefined while loading, null when the
      migration is not applied yet. */
-  const [nextStep, setNextStep] = useState<NextStep | null | undefined>(undefined);
+  const [engineEvent, setEngineEvent] = useState<EngineEvent>("single");
+  const [nextSteps, setNextSteps] = useState<Record<EngineEvent, NextStep | null | undefined>>({
+    single: undefined,
+    section: undefined,
+  });
 
-  // Read again whenever the scoring payload changes (load, Refresh, any write).
+  // Read both again whenever the scoring payload changes (load, Refresh, any write).
   useEffect(() => {
     let cancelled = false;
 
-    void callApi("/api/admin/scoring/next-round", "GET").then((result) => {
-      if (!cancelled) {
-        setNextStep(result.ok ? toNextStep(result.body.step) : null);
-      }
-    });
+    for (const event of ["single", "section"] as const) {
+      void callApi(`/api/admin/scoring/next-round?event=${event}`, "GET").then((result) => {
+        if (!cancelled) {
+          setNextSteps((current) => ({
+            ...current,
+            [event]: result.ok ? toNextStep(result.body.step) : null,
+          }));
+        }
+      });
+    }
 
     return () => {
       cancelled = true;
@@ -1037,6 +1110,33 @@ export default function ScoringAdmin({
       },
     });
 
+  const startTeams = (teams: number) =>
+    ask({
+      title: "Start teams?",
+      detail: `${teamsPreview(teams)}. Teams are shuffled once; that order is kept for every later round. A team whose 4th rider checks in during Round 1 joins its end on its own. You can undo it until the first team has ridden.`,
+      confirmLabel: "Start teams",
+      danger: false,
+      run: async () => {
+        await perform(
+          "/api/admin/scoring/next-round",
+          "POST",
+          { action: "start_teams" },
+          (response) => {
+            const result = response.result as { round_id?: unknown; teams?: unknown } | null;
+
+            if (result && typeof result.round_id === "string") {
+              setSelectedRoundId(result.round_id);
+            }
+
+            return `Teams Round 1 is drawn: ${plural(
+              typeof result?.teams === "number" ? result.teams : 0,
+              "team"
+            )} in one queue. Set it live when the riding starts.`;
+          }
+        );
+      },
+    });
+
   const startNextRound = (plan: NextRoundPlan) => {
     if (!plan.round_id) {
       return;
@@ -1063,7 +1163,7 @@ export default function ScoringAdmin({
 
             return `${typeof result?.round_name === "string" ? result.round_name : "The next round"} is ready: ${plural(
               typeof result?.runs_created === "number" ? result.runs_created : 0,
-              "rider"
+              "run"
             )} in start order. Set it live when the riding starts.`;
           }
         );
@@ -1091,7 +1191,7 @@ export default function ScoringAdmin({
     void perform(
       "/api/admin/scoring/next-round",
       "POST",
-      { action: "switch", auto_on: autoOn },
+      { action: "switch", auto_on: autoOn, event_type: engineEvent },
       // No message: the highlighted tab already shows the mode.
       () => ""
     );
@@ -1618,11 +1718,14 @@ export default function ScoringAdmin({
         </p>
       )}
 
-      {/* Next step: the auto engine (Single) */}
+      {/* Next step: the auto engine, Singles or Teams */}
       <NextStepCard
-        step={nextStep}
+        event={engineEvent}
+        onEvent={setEngineEvent}
+        step={nextSteps[engineEvent]}
         busy={busy}
         onStartQualifying={startQualifying}
+        onStartTeams={startTeams}
         onStart={startNextRound}
         onUndo={undoNextRound}
         onSwitch={switchEngine}

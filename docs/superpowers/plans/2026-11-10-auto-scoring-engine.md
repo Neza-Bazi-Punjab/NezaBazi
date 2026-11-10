@@ -220,3 +220,54 @@ entered by hand on the Scoring page as today.
 4. After qualifier Round 3, the engine **prepares** Aarhi Round 1 (who is
    through, in start order) and an admin **confirms** it, like every other
    next round.
+
+## 6. Teams (Section) — rules confirmed 10 Nov with Mani
+
+Same engine, same endpoint (`/api/admin/scoring/next-round`, with the event
+type), same Next step card with a Singles / Teams switch. Judging,
+commentary, `/live`, overlays and vMix need no change: they already ride a
+team's four riders back to back (captain first), add up the team total and
+show the team.
+
+### Rules
+
+- **Start teams** (one button): every team with all **4 riders checked in**,
+  shuffled **once** into one queue, no pools. Round 1, target **8**.
+  A team that is not complete cannot start.
+- **Late team** (its 4th rider checks in after teams have started): joins the
+  **end of Round 1** automatically while Round 1 is still being ridden
+  (Automatic mode only). After Round 1, an admin decides.
+- **Order** is kept for every later round, like singles: teams drop out,
+  nobody is reshuffled.
+- **Targets:** Round 1 = 8, Round 2 = 12, Round 3 onward = **16 (Full House)**.
+- **Who goes through:** total ≥ the round's target. If **no team** reaches
+  the target, the team(s) with the **highest total** go through (all teams
+  tied on it).
+- **What comes next:**
+  - more than 4 through → the next round (12, then 16, then 16 again…);
+  - **4 or fewer through, at any point** (even straight after Round 1) →
+    the next round is the **Final**. Fewer than 4 still ride a Final.
+- **Final:** each team rides once (all 4 riders); **points alone** decide
+  1st, 2nd, 3rd — no target.
+- **Ties for a place in the Final:** **team ride-off** — the tied teams ride
+  again (all 4 riders each), highest total takes the place, repeat while
+  tied (3rd place first, then 1st/2nd, as for singles).
+- **Mid-event missing rider** (lame horse, rider out): that rider's run
+  scores 0 (Skip → Out on the judges' panel), the team rides on.
+- **Separate Automatic / Manual switch** for teams, so teams can run by hand
+  while singles stay automatic, or the other way round.
+
+### What changes
+
+1. DB: per-event-type switch (`scoring_engine_switch` gets a teams column);
+   `scoring_build_start_list` keeps the previous order for Section
+   "advanced" draws too.
+2. DB: `scoring_start_teams(actor…)`; `scoring_next_round_plan` learns the
+   Section rules (targets, highest-total fallback, Final at ≤4);
+   `scoring_start_next_round` sets the new round's `target_points`.
+3. DB: trigger on `team_members` check-in → a team that just became
+   complete joins the end of Round 1 (Automatic, Round 1 not finished).
+4. Page: Singles / Teams switch on the Next step card; each with its own
+   Automatic / Manual tab.
+5. Final placings and team ride-offs come with the singles ride-off work
+   (plan step 4), sharing `decidePlacings`.
