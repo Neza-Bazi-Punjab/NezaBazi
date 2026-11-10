@@ -123,6 +123,11 @@ export function UpNext({
           </span>
           <span className="break-words text-[17px] font-bold uppercase leading-tight">
             {current.rider_name}
+            {current.team_name && (
+              <span className="block text-[12px] font-semibold text-[var(--ledger-muted)]">
+                {current.team_name}
+              </span>
+            )}
           </span>
         </p>
       )}
@@ -143,6 +148,7 @@ export function UpNext({
                 }`}
               >
                 {index + 1}. {run.rider_name}
+                {run.team_name && run.team_name !== current?.team_name ? ` · ${run.team_name}` : ""}
               </li>
             ))}
           </ol>
@@ -248,20 +254,36 @@ function StatusTag({
   row,
   riding,
   upNext,
+  team,
 }: {
   row: LeaderboardRow;
   riding: boolean;
   upNext: boolean;
+  team: boolean;
 }) {
   const text = advanceText(row);
+  /* "2/4": two of the team's four riders have ridden. */
+  const ridden =
+    team && row.runs_total > 0 ? (
+      <span className="mono ml-1 text-[11px] font-normal text-[var(--ledger-muted)]">
+        {row.runs_scored}/{row.runs_total}
+        <span className="sr-only"> riders have ridden</span>
+      </span>
+    ) : null;
 
   if (!text) {
     return riding ? (
       <span className="mono text-[11px] font-semibold uppercase text-[var(--ledger-bronze)]">
         Riding
+        {ridden}
       </span>
     ) : upNext ? (
-      <span className="mono text-[11px] font-semibold uppercase text-[var(--ledger-ink)]">Next</span>
+      <span className="mono text-[11px] font-semibold uppercase text-[var(--ledger-ink)]">
+        Next
+        {ridden}
+      </span>
+    ) : team && row.runs_scored > 0 ? (
+      ridden
     ) : (
       <span className="mono text-[11px] text-[var(--ledger-faint)]">—</span>
     );
@@ -284,10 +306,10 @@ function StatusTag({
   );
 }
 
-/* The points box: green once the rider has carried, plain otherwise, and a
-   dash until they have ridden. A rider's box shows their best run (4, 2 or
-   0), which is what decides a round with several attempts; a team's shows
-   its total. */
+/* The points box: a dash until they have ridden. A rider's box shows their
+   best run (4, 2 or 0), which is what decides a round with several attempts,
+   and turns green on a carry. A team's box shows its total and turns green
+   once the team is through. */
 function PointsBox({
   row,
   target,
@@ -298,7 +320,7 @@ function PointsBox({
   total: boolean;
 }) {
   const ridden = row.runs_scored > 0;
-  const carried = !total && row.best_result === "carry";
+  const carried = total ? row.advanced === true : row.best_result === "carry";
   const points = !total && row.best_result ? RESULT_POINTS[row.best_result] : row.points;
 
   return (
@@ -320,7 +342,7 @@ function PointsBox({
   );
 }
 
-const STANDING_GRID = "grid grid-cols-[22px_minmax(0,1fr)_38px_56px] items-center gap-2";
+const STANDING_GRID = "grid grid-cols-[22px_minmax(0,1fr)_38px_66px] items-center gap-2";
 
 export function Standings({
   rows,
@@ -445,7 +467,12 @@ export function Standings({
                       />
                     </span>
                     <span role="cell">
-                      <StatusTag row={row} riding={riding} upNext={row.entrant_key === nextKey} />
+                      <StatusTag
+                        row={row}
+                        riding={riding}
+                        upNext={row.entrant_key === nextKey && !riding}
+                        team={isSection}
+                      />
                     </span>
                   </div>
                   {hasMembers && isOpen && row.members && (
