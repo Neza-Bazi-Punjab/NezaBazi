@@ -43,6 +43,7 @@ test("every expected route exists", () => {
   assert.deepEqual(adminRoutes, [
     "src/app/api/admin/scoring/advance/route.ts",
     "src/app/api/admin/scoring/demo-switch/route.ts",
+    "src/app/api/admin/scoring/next-round/route.ts",
     "src/app/api/admin/scoring/pool/route.ts",
     "src/app/api/admin/scoring/rehearsal/route.ts",
     "src/app/api/admin/scoring/rounds/[id]/entrants/[entrantKey]/route.ts",

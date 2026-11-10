@@ -93,6 +93,27 @@ type LookupResponse = {
 
 const formatTime = (value: string) => new Date(value).toLocaleString();
 
+/* The rider's qualifying pool after check-in (Automatic mode), as PATCH
+   /api/admin/check-in returns it. Null for a team-only rider. */
+type DeskPool = { started: boolean; pool: string | null; position: number | null };
+
+/* " Pool C · rider 4." / " Pool given when qualifying starts." / "". */
+const deskPoolText = (pool: DeskPool | null | undefined) => {
+  if (!pool) {
+    return "";
+  }
+
+  if (!pool.started) {
+    return " Pool given when qualifying starts.";
+  }
+
+  if (pool.pool && pool.position) {
+    return ` Pool ${pool.pool} · rider ${pool.position}.`;
+  }
+
+  return "";
+};
+
 /* The code box (and the server search, while the rider list is not loaded)
    waits this long after the last keystroke. */
 const SEARCH_DELAY_MS = 100;
@@ -488,7 +509,7 @@ export default function CheckInPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: rider.confirmation_code, checkedIn }),
       });
-      const result = (await response.json()) as { error?: string };
+      const result = (await response.json()) as { error?: string; pool?: DeskPool | null };
 
       if (!response.ok) {
         setError(result.error ?? "Could not update this rider.");
@@ -496,7 +517,7 @@ export default function CheckInPanel() {
       }
 
       const message = checkedIn
-        ? `${rider.full_name} is checked in.`
+        ? `${rider.full_name} is checked in.${deskPoolText(result.pool)}`
         : `Check-in for ${rider.full_name} was undone.`;
 
       setRider(null);

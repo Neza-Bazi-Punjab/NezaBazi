@@ -631,5 +631,39 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: error.message }, { status });
   }
 
-  return NextResponse.json({ ok: true, rider: data });
+  return NextResponse.json({
+    ok: true,
+    rider: data,
+    pool: checkedIn ? await readDeskPool(serviceSupabase, code.trim(), data) : null,
+  });
 }
+
+/* The qualifying pool a solo rider is in now, for the desk to tell them
+   (supabase/migrations/20261110140000_scoring_auto_qualifying.sql): null for a
+   team-only rider, before that migration, or on any error — the check-in has
+   already been saved either way. */
+const readDeskPool = async (
+  serviceSupabase: ServiceRoleClient,
+  code: string,
+  rider: unknown
+): Promise<{ started: boolean; pool: string | null; position: number | null } | null> => {
+  if (!isRecord(rider) || typeof rider.solo_entries !== "number" || rider.solo_entries < 1) {
+    return null;
+  }
+
+  try {
+    const { data, error } = await serviceSupabase.rpc("scoring_desk_pool", { p_code: code });
+
+    if (error || !isRecord(data) || typeof data.started !== "boolean") {
+      return null;
+    }
+
+    return {
+      started: data.started,
+      pool: typeof data.pool === "string" ? data.pool : null,
+      position: typeof data.position === "number" ? data.position : null,
+    };
+  } catch {
+    return null;
+  }
+};

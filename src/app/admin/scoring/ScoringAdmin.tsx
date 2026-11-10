@@ -11,7 +11,7 @@
    write returns the fresh payload, so the panel never guesses. Every action
    that removes or replaces something asks first and says what will happen. */
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { DISPLAY_MODE_CHOICES } from "@/components/scoring/format";
 import type {
   AdminScoringState,
@@ -29,6 +29,14 @@ import {
   type ScoringRun,
 } from "@/lib/scoring/types";
 import { plural } from "@/lib/scoring/format";
+import {
+  qualifyingPreview,
+  startButtonLabel,
+  startConfirmDetail,
+  toNextStep,
+  type NextRoundPlan,
+  type NextStep,
+} from "@/lib/scoring/next-round";
 import { startListMatcher } from "@/lib/scoring/start-list-search";
 import PoolSheet from "./PoolSheet";
 import {
@@ -450,6 +458,13 @@ function RoundForm({
 
 /* Small pieces ------------------------------------------------------------------- */
 
+/* A Single round drawn from the previous round keeps its start order
+   (20261110130000); every other draw is shuffled. */
+const drawOrderText = (eventType: EventType, mode: "all_checked_in" | "advanced") =>
+  eventType === "single" && mode === "advanced"
+    ? "in the previous round's start order"
+    : "in a random order";
+
 function RunStatusChip({ run }: { run: ScoringRun }) {
   const tone =
     run.status === "on_course"
@@ -479,6 +494,197 @@ const advancedLabel = (row: LeaderboardRow) =>
 
 /* Main ------------------------------------------------------------------------------ */
 
+/* Next step (Automatic mode) ---------------------------------------------------- */
+
+/* Automatic / Manual for Single tent pegging. Automatic: Start qualifying
+   when check-in is done, then one button for each next round, Undo while the
+   new round is unridden. Manual: the card shrinks to the mode switch and the
+   page works exactly as it does without the engine. */
+function NextStepCard({
+  step,
+  busy,
+  onStartQualifying,
+  onStart,
+  onUndo,
+  onSwitch,
+  children,
+}: {
+  step: NextStep | null | undefined;
+  busy: boolean;
+  onStartQualifying: (checkedIn: number) => void;
+  onStart: (plan: NextRoundPlan) => void;
+  onUndo: (undo: NonNullable<NextStep["undo"]>) => void;
+  onSwitch: (autoOn: boolean) => void;
+  /* The Manual tab's contents: the whole Rounds section. */
+  children: ReactNode;
+}) {
+  if (step === undefined) {
+    return null;
+  }
+
+  if (step === null) {
+    return (
+      <section aria-labelledby="next-step-heading" className="space-y-5 rounded-lg border border-bronze/20 p-4 sm:p-5">
+        <div className="space-y-2 print:hidden">
+          <h2 id="next-step-heading" className={subheadingClass}>
+            Rounds · Manual
+          </h2>
+          <p className="text-sm leading-6 text-brown/85">
+            Automatic mode is not set up yet. Apply
+            supabase/migrations/20261110130000_scoring_auto_next_round.sql and then
+            20261110140000_scoring_auto_qualifying.sql in the Supabase SQL editor, then reload.
+            Rounds work by hand below until then.
+          </p>
+        </div>
+        {children}
+      </section>
+    );
+  }
+
+  const { engine, plan, undo } = step;
+  const modeSwitch = (
+    <div role="group" aria-label="Scoring mode" className="inline-flex shrink-0 self-start overflow-hidden rounded-lg border border-bronze/30 sm:self-auto">
+      {([
+        [true, "Automatic"],
+        [false, "Manual"],
+      ] as const).map(([value, label]) => (
+        <button
+          key={label}
+          type="button"
+          onClick={() => {
+            if (engine.auto_on !== value) {
+              onSwitch(value);
+            }
+          }}
+          disabled={busy}
+          aria-pressed={engine.auto_on === value}
+          className={`whitespace-nowrap px-4 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] transition-colors disabled:opacity-60 ${
+            engine.auto_on === value ? "bg-bronze-deep text-cream" : "text-bronze-dark hover:bg-bronze/10"
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
+  // Manual tab: one panel holding the switch and the whole Rounds section.
+  // Not print:hidden, so the pool sheet inside it still prints.
+  if (!engine.auto_on) {
+    return (
+      <section aria-labelledby="next-step-heading" className="space-y-6 rounded-lg border border-bronze/20 p-4 sm:p-5">
+        <div className="flex flex-col gap-3 border-b border-bronze/15 pb-4 sm:flex-row sm:items-center sm:justify-between print:hidden">
+          <div className="min-w-0">
+            <h2 id="next-step-heading" className={subheadingClass}>
+              Manual mode
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-brown/85">
+              Create, draw, move riders, overrides and the podium, all by hand. Check-ins do not
+              join pools on their own.
+            </p>
+          </div>
+          {modeSwitch}
+        </div>
+        {children}
+      </section>
+    );
+  }
+
+  const blocked =
+    plan.state === "no_show" ||
+    plan.state === "nobody_through" ||
+    plan.state === "later_round" ||
+    plan.state === "manual_setup";
+
+  return (
+    <section aria-labelledby="next-step-heading" className={`${cardClass} space-y-4 print:hidden`}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 id="next-step-heading" className={`${subheadingClass} min-w-0`}>
+          Next step{plan.round_name ? ` · after ${plan.round_name}` : ""}
+        </h2>
+        {modeSwitch}
+      </div>
+
+      <p
+        className={
+          blocked
+            ? "rounded-lg border-l-4 border-amber-600 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950"
+            : "text-sm leading-6 text-brown/85"
+        }
+      >
+        {plan.message}
+      </p>
+
+      {plan.state === "no_rounds" && step.checked_in_count === null && (
+        <p className="rounded-lg border-l-4 border-amber-600 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
+          Start qualifying needs one more database update: apply
+          supabase/migrations/20261110140000_scoring_auto_qualifying.sql in the Supabase SQL
+          editor, then reload.
+        </p>
+      )}
+
+      {plan.state === "no_rounds" && step.checked_in_count !== null && (
+        <>
+          <p className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
+            {qualifyingPreview(step.checked_in_count)}
+          </p>
+          <button
+            type="button"
+            onClick={() => onStartQualifying(step.checked_in_count ?? 0)}
+            disabled={busy || step.checked_in_count === 0}
+            className={`${primaryButton} w-full sm:w-auto`}
+          >
+            Start qualifying
+          </button>
+        </>
+      )}
+
+      {plan.state === "ready" && (
+        <>
+          <p className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
+            {plan.through_count} of {plan.entrant_count} through → {plan.next_name}
+          </p>
+          <details className="text-sm text-brown/85">
+            <summary className="cursor-pointer font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark">
+              Who goes through, in start order
+            </summary>
+            <ol className="mt-2 list-decimal space-y-0.5 pl-6">
+              {plan.through.map((entrant) => (
+                <li key={entrant.entrant_key}>{entrant.name}</li>
+              ))}
+            </ol>
+          </details>
+          <button
+            type="button"
+            onClick={() => onStart(plan)}
+            disabled={busy}
+            className={`${primaryButton} w-full sm:w-auto`}
+          >
+            {startButtonLabel(plan)}
+          </button>
+        </>
+      )}
+
+      {plan.state === "riding" && plan.stage === "qualifier" && (
+        <p className="text-sm leading-6 text-brown/80">
+          Riders who check in now join the last pool on their own, with all three attempts.
+        </p>
+      )}
+
+      {undo && (
+        <div className="flex flex-col gap-2 border-t border-bronze/15 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm leading-6 text-brown/85">
+            Nobody has ridden {undo.round_name} yet, so it can still be undone.
+          </p>
+          <button type="button" onClick={() => onUndo(undo)} disabled={busy} className={dangerButton}>
+            Undo {undo.round_name}
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function ScoringAdmin({
   initialState,
 }: {
@@ -507,6 +713,25 @@ export default function ScoringAdmin({
   /* The "Close the demo" switch: undefined while loading, null when it is not
      set up yet (the demo then counts as open). */
   const [demoSwitch, setDemoSwitch] = useState<DemoSwitchState | null | undefined>(undefined);
+
+  /* The auto engine's next step: undefined while loading, null when the
+     migration is not applied yet. */
+  const [nextStep, setNextStep] = useState<NextStep | null | undefined>(undefined);
+
+  // Read again whenever the scoring payload changes (load, Refresh, any write).
+  useEffect(() => {
+    let cancelled = false;
+
+    void callApi("/api/admin/scoring/next-round", "GET").then((result) => {
+      if (!cancelled) {
+        setNextStep(result.ok ? toNextStep(result.body.step) : null);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [data]);
 
   // The demo switch is not part of the scoring payload: read it once on load.
   useEffect(() => {
@@ -783,6 +1008,95 @@ export default function ScoringAdmin({
     setConfirmation(next);
   };
 
+  /* The auto engine ------------------------------------------------------------- */
+
+  const startQualifying = (checkedIn: number) =>
+    ask({
+      title: "Start qualifying?",
+      detail: `${qualifyingPreview(checkedIn)}, shuffled once into even pools. Riders who check in after this join the last pool on their own. You can undo it until the first rider has ridden.`,
+      confirmLabel: "Start qualifying",
+      danger: false,
+      run: async () => {
+        await perform(
+          "/api/admin/scoring/next-round",
+          "POST",
+          { action: "start_qualifying" },
+          (response) => {
+            const result = response.result as { round_id?: unknown; riders?: unknown; pools?: unknown } | null;
+
+            if (result && typeof result.round_id === "string") {
+              setSelectedRoundId(result.round_id);
+            }
+
+            return `Qualifying is drawn: ${plural(
+              typeof result?.riders === "number" ? result.riders : 0,
+              "rider"
+            )} in ${plural(typeof result?.pools === "number" ? result.pools : 0, "pool")}. Set it live when the riding starts.`;
+          }
+        );
+      },
+    });
+
+  const startNextRound = (plan: NextRoundPlan) => {
+    if (!plan.round_id) {
+      return;
+    }
+
+    const fromRoundId = plan.round_id;
+
+    ask({
+      title: `${startButtonLabel(plan)}?`,
+      detail: startConfirmDetail(plan),
+      confirmLabel: startButtonLabel(plan),
+      danger: false,
+      run: async () => {
+        await perform(
+          "/api/admin/scoring/next-round",
+          "POST",
+          { action: "start", round_id: fromRoundId },
+          (response) => {
+            const result = response.result as { round_id?: unknown; round_name?: unknown; runs_created?: unknown } | null;
+
+            if (result && typeof result.round_id === "string") {
+              setSelectedRoundId(result.round_id);
+            }
+
+            return `${typeof result?.round_name === "string" ? result.round_name : "The next round"} is ready: ${plural(
+              typeof result?.runs_created === "number" ? result.runs_created : 0,
+              "rider"
+            )} in start order. Set it live when the riding starts.`;
+          }
+        );
+      },
+    });
+  };
+
+  const undoNextRound = (undo: NonNullable<NextStep["undo"]>) =>
+    ask({
+      title: `Undo ${undo.round_name}?`,
+      detail: `This deletes ${undo.round_name} and its start list, and removes any “Auto:” decisions the engine wrote on the round before. Nobody in it has ridden yet. Fix what you need, then start it again.`,
+      confirmLabel: `Undo ${undo.round_name}`,
+      danger: true,
+      run: async () => {
+        await perform(
+          "/api/admin/scoring/next-round",
+          "POST",
+          { action: "undo", round_id: undo.round_id },
+          () => `${undo.round_name} undone.`
+        );
+      },
+    });
+
+  const switchEngine = (autoOn: boolean) => {
+    void perform(
+      "/api/admin/scoring/next-round",
+      "POST",
+      { action: "switch", auto_on: autoOn },
+      // No message: the highlighted tab already shows the mode.
+      () => ""
+    );
+  };
+
   const submitRoundForm = (payload: Record<string, unknown>) => {
     if (roundForm === "create") {
       void perform("/api/admin/scoring/rounds", "POST", payload, (response) => {
@@ -1016,7 +1330,7 @@ export default function ScoringAdmin({
 
     ask({
       title: `Draw ${plural(drawPreview.count, noun)} into ${poolText}?`,
-      detail: `${plural(drawPreview.runs, "run")} in a random order.${
+      detail: `${plural(drawPreview.runs, "run")} ${drawOrderText(target.event_type, drawMode)}.${
         runs.length > 0
           ? ` This replaces the current start list of ${plural(runs.length, "run")}.`
           : ""
@@ -1304,238 +1618,16 @@ export default function ScoringAdmin({
         </p>
       )}
 
-      {/* Screens: display mode, message, clear the live round */}
-      <section aria-labelledby="screens-heading" className={`${cardClass} space-y-4 print:hidden`}>
-        <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <h2 id="screens-heading" className={subheadingClass}>
-            Screens
-          </h2>
-          <p className="text-sm text-brown/75">
-            What the public scoreboard and the stream overlays show right now.
-          </p>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
-          {DISPLAY_MODE_CHOICES.map((choice) => {
-            const active = data.live?.display_mode === choice.mode;
-
-            return (
-              <button
-                key={choice.mode}
-                type="button"
-                aria-pressed={active}
-                disabled={busy || active}
-                onClick={() => setDisplayMode(choice.mode)}
-                className={`rounded-lg border px-3 py-2 text-left transition-colors disabled:cursor-default ${
-                  active
-                    ? "border-bronze bg-bronze-deep text-cream"
-                    : "border-bronze/20 bg-cream text-ink hover:border-bronze/40"
-                }`}
-              >
-                <span className="block font-display text-xs font-semibold uppercase tracking-[0.12em]">
-                  {choice.label}
-                </span>
-                <span className={`mt-1 block text-xs leading-5 ${active ? "text-cream/85" : "text-brown/75"}`}>
-                  {active ? "On screen now" : choice.hint}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-          <label className="block">
-            <span className={labelClass}>Message (up to 200 characters)</span>
-            <input
-              type="text"
-              maxLength={200}
-              value={messageDraft ?? data.live?.message ?? ""}
-              onChange={(event) => setMessageDraft(event.target.value)}
-              placeholder="e.g. Short break — Pool C rides at 2:30"
-              className={inputClass}
-            />
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={busy || (messageDraft ?? data.live?.message ?? "").trim() === ""}
-              onClick={() => setLiveMessage((messageDraft ?? data.live?.message ?? "").trim())}
-              className={primaryButton}
-            >
-              Set Message
-            </button>
-            <button
-              type="button"
-              disabled={busy || !data.live?.message}
-              onClick={() => setLiveMessage(null)}
-              className={secondaryButton}
-            >
-              Clear Message
-            </button>
-            <button
-              type="button"
-              disabled={busy || !liveRound}
-              onClick={clearLiveRound}
-              className={dangerButton}
-            >
-              Clear Live Round
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* Rider list for the graphics team */}
-      <section aria-labelledby="export-heading" className={`${cardClass} flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between print:hidden`}>
-        <div>
-          <h2 id="export-heading" className={subheadingClass}>
-            Rider List for Graphics
-          </h2>
-          <p className="mt-1 text-sm leading-6 text-brown/80">
-            For the graphics team: every registered rider with horse, location, check-in and
-            pool. It contains no phone numbers, email addresses, ages or other contact details.
-          </p>
-        </div>
-        <a
-          href="/api/admin/scoring/export?format=csv"
-          download
-          className={`${primaryButton} shrink-0 text-center`}
-        >
-          Download rider list (CSV)
-        </a>
-      </section>
-
-      {/* Rehearsal feeds for the graphics team: the scripted loop behind a
-          switch, and the shared demo, always on */}
-      <section aria-labelledby="rehearsal-heading" className={`${cardClass} space-y-4 print:hidden`}>
-        <h2 id="rehearsal-heading" className={subheadingClass}>
-          Graphics Rehearsal Feed
-        </h2>
-
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-brown">
-              Scripted loop (
-              <code className="rounded bg-bronze/10 px-1 font-mono text-xs">?sample=solo</code>)
-            </h3>
-            <p className="mt-1 text-sm leading-6 text-brown/80">
-              For the graphics team to test their titles: while it runs, feed addresses ending in{" "}
-              <code className="rounded bg-bronze/10 px-1 font-mono text-xs">?sample=solo</code> play
-              a scripted qualification with invented riders, on a loop. Real scores and every
-              screen stay as they are, so it is safe to leave running.
-            </p>
-            <p className="mt-2 text-sm text-brown">
-              {data?.rehearsal ? (
-                <>
-                  <span className="font-semibold">
-                    {data.rehearsal.solo_sample_enabled ? "Running" : "Stopped"}
-                  </span>
-                  {data.rehearsal.updated_by_name && (
-                    <span className="text-brown/70">
-                      {" "}
-                      · {data.rehearsal.solo_sample_enabled ? "started" : "stopped"} by{" "}
-                      {data.rehearsal.updated_by_name},{" "}
-                      {new Date(data.rehearsal.updated_at).toLocaleString()}
-                    </span>
-                  )}
-                </>
-              ) : (
-                <span className="text-brown/70">
-                  Not set up yet: apply the rehearsal feed migration
-                  (20261028120000_scoring_rehearsal_feed.sql).
-                </span>
-              )}
-            </p>
-          </div>
-          {data?.rehearsal && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => setSoloSample(!data.rehearsal?.solo_sample_enabled)}
-              className={`${data.rehearsal.solo_sample_enabled ? secondaryButton : primaryButton} shrink-0`}
-            >
-              {data.rehearsal.solo_sample_enabled ? "Stop" : "Start"}
-            </button>
-          )}
-        </div>
-
-        <div className="border-t border-bronze/20 pt-4">
-          <h3 className="text-sm font-semibold text-brown">
-            Follows the demo (
-            <code className="rounded bg-bronze/10 px-1 font-mono text-xs">?sample=demo</code>)
-          </h3>
-          <p className="mt-1 text-sm leading-6 text-brown/80">
-            Everything the judges do on{" "}
-            <code className="rounded bg-bronze/10 px-1 font-mono text-xs">/judge/demo</code> shows
-            here within two seconds. Invented riders only; real scores are never touched. Close the
-            demo on event day: the practice pages then say so, and these addresses show the frozen
-            sample rows, still marked SAMPLE.
-          </p>
-          <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-brown">
-              {demoSwitch === undefined ? (
-                <span className="text-brown/70">Checking the demo…</span>
-              ) : demoSwitch === null ? (
-                <span className="text-brown/70">
-                  Open. The Close demo switch is not set up yet: apply
-                  20261107120000_scoring_training_sessions.sql.
-                </span>
-              ) : (
-                <>
-                  <span className="font-semibold">
-                    {demoSwitch.demo_closed ? "Closed for the event" : "Open"}
-                  </span>
-                  {demoSwitch.changed_at && (
-                    <span className="text-brown/70">
-                      {" "}
-                      · {demoSwitch.demo_closed ? "closed" : "opened"}{" "}
-                      {new Date(demoSwitch.changed_at).toLocaleString()}
-                    </span>
-                  )}
-                </>
-              )}
-            </p>
-            {demoSwitch && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => setDemoClosed(!demoSwitch.demo_closed)}
-                className={`${demoSwitch.demo_closed ? primaryButton : secondaryButton} shrink-0`}
-              >
-                {demoSwitch.demo_closed ? "Open demo" : "Close demo"}
-              </button>
-            )}
-          </div>
-          {/* Straight into either practice panel. Both were only reachable
-              from a link at the foot of the live panel, so the commentary
-              demo in particular was hard to find; the judges' and the
-              commentators' practice open from here, in a new tab so this
-              page keeps its place. */}
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-            <Link
-              href="/judge/demo"
-              target="_blank"
-              rel="noopener"
-              className={`${secondaryButton} text-center`}
-            >
-              Open the judges&rsquo; practice panel
-            </Link>
-            <Link
-              href="/commentary/demo"
-              target="_blank"
-              rel="noopener"
-              className={`${secondaryButton} text-center`}
-            >
-              Open the commentary practice panel
-            </Link>
-          </div>
-          <ul className="mt-2 space-y-1 text-sm text-brown">
-            {DEMO_FEED_ADDRESSES.map((address) => (
-              <li key={address}>
-                <code className="break-all rounded bg-bronze/10 px-1 font-mono text-xs">{address}</code>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
+      {/* Next step: the auto engine (Single) */}
+      <NextStepCard
+        step={nextStep}
+        busy={busy}
+        onStartQualifying={startQualifying}
+        onStart={startNextRound}
+        onUndo={undoNextRound}
+        onSwitch={switchEngine}
+      >
+        {/* Manual tab: every round tool */}
       <div className="grid gap-8 lg:grid-cols-[320px_minmax(0,1fr)]">
         {/* Rounds list */}
         <aside className="space-y-4">
@@ -1766,7 +1858,7 @@ export default function ScoringAdmin({
                                   .map((size, index) => `${poolLabelForIndex(index)} ${size}`)
                                   .join(" · ")}`
                               : "one start list, no pools"
-                          } · ${plural(drawPreview.runs, "run")}, in a random order.`}
+                          } · ${plural(drawPreview.runs, "run")}, ${drawOrderText(round.event_type, drawMode)}.`}
                     {scoredCount > 0 && " Results are recorded in this round — clear them before redrawing."}
                   </p>
                 )}
@@ -2317,6 +2409,241 @@ export default function ScoringAdmin({
           )}
         </div>
       </div>
+      </NextStepCard>
+
+
+      {/* Screens: display mode, message, clear the live round */}
+      <section aria-labelledby="screens-heading" className={`${cardClass} space-y-4 print:hidden`}>
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <h2 id="screens-heading" className={subheadingClass}>
+            Screens
+          </h2>
+          <p className="text-sm text-brown/75">
+            What the public scoreboard and the stream overlays show right now.
+          </p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
+          {DISPLAY_MODE_CHOICES.map((choice) => {
+            const active = data.live?.display_mode === choice.mode;
+
+            return (
+              <button
+                key={choice.mode}
+                type="button"
+                aria-pressed={active}
+                disabled={busy || active}
+                onClick={() => setDisplayMode(choice.mode)}
+                className={`rounded-lg border px-3 py-2 text-left transition-colors disabled:cursor-default ${
+                  active
+                    ? "border-bronze bg-bronze-deep text-cream"
+                    : "border-bronze/20 bg-cream text-ink hover:border-bronze/40"
+                }`}
+              >
+                <span className="block font-display text-xs font-semibold uppercase tracking-[0.12em]">
+                  {choice.label}
+                </span>
+                <span className={`mt-1 block text-xs leading-5 ${active ? "text-cream/85" : "text-brown/75"}`}>
+                  {active ? "On screen now" : choice.hint}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+          <label className="block">
+            <span className={labelClass}>Message (up to 200 characters)</span>
+            <input
+              type="text"
+              maxLength={200}
+              value={messageDraft ?? data.live?.message ?? ""}
+              onChange={(event) => setMessageDraft(event.target.value)}
+              placeholder="e.g. Short break — Pool C rides at 2:30"
+              className={inputClass}
+            />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy || (messageDraft ?? data.live?.message ?? "").trim() === ""}
+              onClick={() => setLiveMessage((messageDraft ?? data.live?.message ?? "").trim())}
+              className={primaryButton}
+            >
+              Set Message
+            </button>
+            <button
+              type="button"
+              disabled={busy || !data.live?.message}
+              onClick={() => setLiveMessage(null)}
+              className={secondaryButton}
+            >
+              Clear Message
+            </button>
+            <button
+              type="button"
+              disabled={busy || !liveRound}
+              onClick={clearLiveRound}
+              className={dangerButton}
+            >
+              Clear Live Round
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Rider list for the graphics team */}
+      <section aria-labelledby="export-heading" className={`${cardClass} flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between print:hidden`}>
+        <div>
+          <h2 id="export-heading" className={subheadingClass}>
+            Rider List for Graphics
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-brown/80">
+            For the graphics team: every registered rider with horse, location, check-in and
+            pool. It contains no phone numbers, email addresses, ages or other contact details.
+          </p>
+        </div>
+        <a
+          href="/api/admin/scoring/export?format=csv"
+          download
+          className={`${primaryButton} shrink-0 text-center`}
+        >
+          Download rider list (CSV)
+        </a>
+      </section>
+
+      {/* Rehearsal feeds for the graphics team: the scripted loop behind a
+          switch, and the shared demo, always on */}
+      <section aria-labelledby="rehearsal-heading" className={`${cardClass} space-y-4 print:hidden`}>
+        <h2 id="rehearsal-heading" className={subheadingClass}>
+          Graphics Rehearsal Feed
+        </h2>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-brown">
+              Scripted loop (
+              <code className="rounded bg-bronze/10 px-1 font-mono text-xs">?sample=solo</code>)
+            </h3>
+            <p className="mt-1 text-sm leading-6 text-brown/80">
+              For the graphics team to test their titles: while it runs, feed addresses ending in{" "}
+              <code className="rounded bg-bronze/10 px-1 font-mono text-xs">?sample=solo</code> play
+              a scripted qualification with invented riders, on a loop. Real scores and every
+              screen stay as they are, so it is safe to leave running.
+            </p>
+            <p className="mt-2 text-sm text-brown">
+              {data?.rehearsal ? (
+                <>
+                  <span className="font-semibold">
+                    {data.rehearsal.solo_sample_enabled ? "Running" : "Stopped"}
+                  </span>
+                  {data.rehearsal.updated_by_name && (
+                    <span className="text-brown/70">
+                      {" "}
+                      · {data.rehearsal.solo_sample_enabled ? "started" : "stopped"} by{" "}
+                      {data.rehearsal.updated_by_name},{" "}
+                      {new Date(data.rehearsal.updated_at).toLocaleString()}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="text-brown/70">
+                  Not set up yet: apply the rehearsal feed migration
+                  (20261028120000_scoring_rehearsal_feed.sql).
+                </span>
+              )}
+            </p>
+          </div>
+          {data?.rehearsal && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setSoloSample(!data.rehearsal?.solo_sample_enabled)}
+              className={`${data.rehearsal.solo_sample_enabled ? secondaryButton : primaryButton} shrink-0`}
+            >
+              {data.rehearsal.solo_sample_enabled ? "Stop" : "Start"}
+            </button>
+          )}
+        </div>
+
+        <div className="border-t border-bronze/20 pt-4">
+          <h3 className="text-sm font-semibold text-brown">
+            Follows the demo (
+            <code className="rounded bg-bronze/10 px-1 font-mono text-xs">?sample=demo</code>)
+          </h3>
+          <p className="mt-1 text-sm leading-6 text-brown/80">
+            Everything the judges do on{" "}
+            <code className="rounded bg-bronze/10 px-1 font-mono text-xs">/judge/demo</code> shows
+            here within two seconds. Invented riders only; real scores are never touched. Close the
+            demo on event day: the practice pages then say so, and these addresses show the frozen
+            sample rows, still marked SAMPLE.
+          </p>
+          <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-brown">
+              {demoSwitch === undefined ? (
+                <span className="text-brown/70">Checking the demo…</span>
+              ) : demoSwitch === null ? (
+                <span className="text-brown/70">
+                  Open. The Close demo switch is not set up yet: apply
+                  20261107120000_scoring_training_sessions.sql.
+                </span>
+              ) : (
+                <>
+                  <span className="font-semibold">
+                    {demoSwitch.demo_closed ? "Closed for the event" : "Open"}
+                  </span>
+                  {demoSwitch.changed_at && (
+                    <span className="text-brown/70">
+                      {" "}
+                      · {demoSwitch.demo_closed ? "closed" : "opened"}{" "}
+                      {new Date(demoSwitch.changed_at).toLocaleString()}
+                    </span>
+                  )}
+                </>
+              )}
+            </p>
+            {demoSwitch && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setDemoClosed(!demoSwitch.demo_closed)}
+                className={`${demoSwitch.demo_closed ? primaryButton : secondaryButton} shrink-0`}
+              >
+                {demoSwitch.demo_closed ? "Open demo" : "Close demo"}
+              </button>
+            )}
+          </div>
+          {/* Straight into either practice panel. Both were only reachable
+              from a link at the foot of the live panel, so the commentary
+              demo in particular was hard to find; the judges' and the
+              commentators' practice open from here, in a new tab so this
+              page keeps its place. */}
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <Link
+              href="/judge/demo"
+              target="_blank"
+              rel="noopener"
+              className={`${secondaryButton} text-center`}
+            >
+              Open the judges&rsquo; practice panel
+            </Link>
+            <Link
+              href="/commentary/demo"
+              target="_blank"
+              rel="noopener"
+              className={`${secondaryButton} text-center`}
+            >
+              Open the commentary practice panel
+            </Link>
+          </div>
+          <ul className="mt-2 space-y-1 text-sm text-brown">
+            {DEMO_FEED_ADDRESSES.map((address) => (
+              <li key={address}>
+                <code className="break-all rounded bg-bronze/10 px-1 font-mono text-xs">{address}</code>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
 
       {confirmation && (
         <ConfirmBar confirmation={confirmation} busy={busy} onCancel={() => setConfirmation(null)} />
