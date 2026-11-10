@@ -74,8 +74,7 @@ test("the database does the change and its audit record together, desk teams onl
   assert.match(route, /p_actor_id: adminCheck\.actor\.id/);
   assert.match(route, /verifyAdminRequest\(\)/);
 
-  // Only checked-in solo riders, not already on a team, at most four.
-  assert.match(migration, /solo_row\.checked_in_at is null/);
+  // Solo riders not already on a team, at most four.
   assert.match(migration, /is already on a team/);
   assert.match(migration, /member_count \+ cardinality\(solo_ids\) > 4/);
 
@@ -94,4 +93,33 @@ test("the database does the change and its audit record together, desk teams onl
 
   // The undo refuses while desk teams are left.
   assert.match(revert, /registration_source = 'desk'/);
+});
+
+test("Form teams takes solo riders whether or not they have checked in", () => {
+  const anySolo = repoFile("supabase/migrations/20261110120000_desk_teams_any_solo.sql");
+  const anySoloRevert = repoFile("supabase/migrations/revert/20261110120000_desk_teams_any_solo.revert.sql");
+  const route = repoFile("src/app/api/admin/desk-teams/route.ts");
+  const panel = repoFile("src/app/admin/FormTeamsPanel.tsx");
+
+  // The replacement function drops only the checked-in rule, keeps every
+  // other check, and stays service role only.
+  assert.doesNotMatch(anySolo, /has not checked in yet\. Check them in first/);
+  assert.match(anySolo, /is already on a team/);
+  assert.match(anySolo, /member_count \+ cardinality\(solo_ids\) > 4/);
+  assert.match(anySolo, /created_code is distinct from solo_row\.confirmation_code/);
+  assert.match(anySolo, /registration_source <> 'desk'/);
+  assert.match(anySolo, /'desk_team_' \|\| p_action/);
+  assert.match(anySolo, /grant execute on function public\.admin_desk_team\(text, jsonb, uuid, text, text\)\s+to service_role;/);
+  assert.match(anySolo, /still requires riders to be checked in/);
+  // The undo puts the rule back.
+  assert.match(anySoloRevert, /solo_row\.checked_in_at is null/);
+
+  // The list is every solo rider not on a team; until the update is run, the
+  // route says which update is missing.
+  assert.doesNotMatch(route, /\.not\("checked_in_at", "is", null\)/);
+  assert.match(route, /20261110120000_desk_teams_any_solo\.sql/);
+
+  // Each rider shows whether they have checked in, with a filter that opens on All.
+  assert.match(panel, /useState<ArrivalFilter>\("all"\)/);
+  assert.match(panel, /rider\.checked_in_at \? "Checked in" : "Not checked in"/);
 });

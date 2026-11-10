@@ -1,7 +1,7 @@
-// Form teams at the check-in desk.
+// Form teams (/admin/form-teams).
 //
-// GET lists what the tab needs: every solo rider who has checked in and is
-// not on a team yet, and every team formed at the desk with its riders.
+// GET lists what the page needs: every solo rider not on a team yet, checked
+// in or not, and every team formed here with its riders.
 // POST creates a team, adds or removes a rider, renames a team, changes its
 // leader or emergency contact, or deletes it.
 //
@@ -9,7 +9,7 @@
 // actor; nothing in the body can name one. The body is checked here
 // (src/lib/desk-teams.ts) and again by the service-role-only database
 // function admin_desk_team, which does the change and writes its audit
-// record in one transaction. No email is sent: the riders are at the desk.
+// record in one transaction. No email is sent.
 import { NextResponse } from "next/server";
 import { createServiceRoleClient, verifyAdminRequest } from "@/lib/admin/server";
 import { parseDeskTeamRequest } from "@/lib/desk-teams";
@@ -38,7 +38,8 @@ export type DeskTeamRider = {
   horse_name: string | null;
   emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
-  checked_in_at: string;
+  /* Null until the rider checks in at the desk. */
+  checked_in_at: string | null;
 };
 
 export type DeskTeamMember = {
@@ -73,7 +74,6 @@ export async function GET() {
       .select(
         "id, full_name, confirmation_code, phone, email, location, horse_name, emergency_contact_name, emergency_contact_phone, checked_in_at"
       )
-      .not("checked_in_at", "is", null)
       .order("full_name")
       .limit(LIST_LIMIT),
     serviceSupabase
@@ -159,6 +159,18 @@ export async function POST(request: Request) {
   });
 
   if (error) {
+    // The database still has the first version of admin_desk_team, which
+    // takes checked-in riders only: say which update is missing.
+    if (error.code === "22023" && /has not checked in yet/.test(error.message)) {
+      return NextResponse.json(
+        {
+          error:
+            "Form teams needs a database update to use riders who have not checked in (supabase/migrations/20261110120000_desk_teams_any_solo.sql).",
+        },
+        { status: 503 }
+      );
+    }
+
     if (error.code === "22023") {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
