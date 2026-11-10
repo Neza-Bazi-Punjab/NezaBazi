@@ -279,7 +279,7 @@ function DuplicateNotice({ name, phone, email }: { name: string; phone: string; 
             {match.source === "solo"
               ? "Solo entry"
               : `${match.team_name ?? "Team"}${match.is_leader ? " (team leader)" : ""}`}
-            {match.registration_source === "paper" ? " · paper" : " · online"}
+            {match.registration_source === "paper" ? " · paper" : match.registration_source === "desk" ? " · desk" : " · online"}
             {match.phone && ` · ${match.phone}`}
             {match.email && ` · ${match.email}`}
             {match.confirmation_code && (
