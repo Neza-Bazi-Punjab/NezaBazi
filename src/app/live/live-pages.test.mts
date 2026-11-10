@@ -377,11 +377,12 @@ test("administrators and the stream control the screens, not judges; modes chang
   }
   assert.match(read("../overlay/leaderboard/LeaderboardOverlay.tsx"), /live\.display_mode === "rider"\s*\) \{\s*return <OverlayFrame name="leaderboard" \/>;/);
 
-  // /live: standings first in leaderboard mode, collapsed in rider mode.
+  // /live is the leaderboard in every mode: the modes only change the
+  // stream graphics, and never hide or collapse the standings.
   const board = read("./LiveBoard.tsx");
-  assert.match(board, /\{mode === "leaderboard" && standingsSection\}/);
-  assert.match(board, /mode === "rider" && !standingsOpen/);
-  assert.match(board, /Show standings and pools/);
+  assert.match(board, /\n        \{standingsSection\}\n/);
+  assert.doesNotMatch(board, /display_mode === "(leaderboard|rider)"|\bmode === "/);
+  assert.doesNotMatch(board, /Show standings and pools/);
 });
 
 test("a decided round's podium shows on /live, the live round included", () => {
@@ -613,20 +614,20 @@ test("/live wears the panels' ledger look and keeps its hand-held layout", () =>
   // The same paper, rules and type as the judges' and commentary panels.
   assert.match(board, /<div className=\{`\$\{LEDGER_ROOT\} flex-1`\}>/);
   assert.match(board, /<LiveStatusBar/);
-  assert.match(board, /<OnCourse run=\{state\.current_run\} round=\{round\} \/>/);
-  assert.match(board, /<LastResult run=\{state\.last_scored_run\} ready \/>/);
-  assert.match(board, /<NextRiders runs=\{state\.up_next\} round=\{round\} limit=\{5\} \/>/);
   assert.match(board, /<Standings\s/);
+  // The leaderboard is the page: no large on-course or last-result blocks.
+  // A small strip says who is riding and who is up next, and both are
+  // tagged in the standings.
+  assert.doesNotMatch(board, /OnCourse|LastResult|NextRiders|last_scored_run/);
+  assert.match(board, /<UpNext current=\{state\.current_run\} next=\{state\.up_next\} \/>/);
+  assert.match(board, /nextKey=\{isCurrentRound \? \(state\.up_next\[0\]\?\.entrant_key \?\? null\) : null\}/);
+  assert.match(board, /highlightKey=\{isCurrentRound \? \(state\.current_run\?\.entrant_key \?\? null\) : null\}/);
 
   // One column, thumb-sized controls, long names wrap instead of being cut.
   assert.match(parts, /min-h-11 min-w-11/);
   assert.match(parts, /min-h-12/);
-  assert.match(parts, /break-words text-\[40px\]/);
+  assert.match(parts, /break-words text-\[18px\] font-bold uppercase/);
   assert.doesNotMatch(parts, /truncate/);
-
-  // A new result is announced, and an old one is never replayed on opening.
-  assert.match(parts, /const flashing = useResultFlash\(run, ready\);/);
-  assert.match(parts, /aria-live="polite"/);
 
   // A team opens to its riders; the judges' overrides stay marked.
   assert.match(parts, /aria-expanded=\{isOpen\}/);

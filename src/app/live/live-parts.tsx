@@ -1,6 +1,6 @@
 "use client";
 
-/* The pieces of the public live scoreboard, drawn in the same "ledger" look
+/* The pieces of the public live leaderboard, drawn in the same "ledger" look
    as the judges' and commentary panels: cream paper, brown rules, condensed
    type with mono labels. Built for a hand-held screen first (one column,
    44px touch targets, long names wrap instead of being cut), and simply
@@ -9,13 +9,7 @@
    Everything here shows the public live state only: run snapshots and the
    public standings, never anything from a registration. */
 import { useState } from "react";
-import {
-  advanceText,
-  attemptTextIfMany,
-  poolName,
-  standingsFor,
-} from "@/components/scoring/format";
-import { useResultFlash } from "@/components/scoring/ResultFlash";
+import { advanceText, poolName, standingsFor } from "@/components/scoring/format";
 import "@/components/scoring/scoring.css";
 import { plural } from "@/lib/scoring/format";
 import {
@@ -34,9 +28,6 @@ import {
 import type { LiveConnection } from "@/lib/scoring/use-live-state";
 
 export const label = "mono text-[11px] uppercase tracking-[0.04em] text-[var(--ledger-muted)]";
-
-export const blockTitle =
-  "border-t-[3px] border-[var(--ledger-rule)] pt-2 text-[20px] font-bold uppercase leading-tight";
 
 /* A square mono button: the tabs, the pool letters, "show standings". */
 export const ledgerButton = (active = false) =>
@@ -103,195 +94,69 @@ export function LiveStatusBar({
 }
 
 /* ------------------------------------------------------------------------ */
-/* The rider on course: the name as large as the screen allows, then what a
-   spectator wants to know, one fact to a line. */
+/* Who is riding and who is up next, kept small: riders watch this to know
+   when to get ready. The leaderboard below stays the main thing. */
 
-function Fact({ term, value }: { term: string; value: string }) {
-  return (
-    <div className="grid grid-cols-[84px_minmax(0,1fr)] gap-2 border-b border-[var(--ledger-hair)] py-1.5 sm:grid-cols-[110px_minmax(0,1fr)]">
-      <dt className="mono pt-[3px] text-[11px] uppercase text-[var(--ledger-muted)]">{term}</dt>
-      <dd className="min-w-0 break-words text-[17px] font-semibold leading-tight sm:text-[19px]">
-        {value}
-      </dd>
-    </div>
-  );
-}
-
-export function OnCourse({
-  run,
-  round,
+export function UpNext({
+  current,
+  next,
+  limit = 3,
 }: {
-  run: ScoringRun | null | undefined;
-  round: ScoringRound | null | undefined;
+  current: ScoringRun | null | undefined;
+  next: ScoringRun[];
+  limit?: number;
 }) {
-  if (!run) {
-    return (
-      <section aria-labelledby="on-course-name" className="flex flex-col gap-2">
-        <p className="mono text-[12px] uppercase text-[var(--ledger-muted)]">Nobody on course</p>
-        <h2
-          id="on-course-name"
-          className="break-words text-[30px] font-bold uppercase leading-[0.95] tracking-[-0.01em] sm:text-[40px]"
-        >
-          Waiting for the next rider
-        </h2>
-      </section>
-    );
-  }
+  const shown = next.slice(0, limit);
 
-  const where = [poolName(run.pool_label), attemptTextIfMany(run, round)].filter(Boolean);
-  const location = shortLocation(run.rider_location);
-  const facts: [string, string | null][] = [
-    ["Team", run.team_name],
-    ["Horse", run.horse_name],
-    ["From", location],
-  ];
-  const shown = facts.filter((fact): fact is [string, string] => Boolean(fact[1]));
-
-  return (
-    <section aria-labelledby="on-course-name" className="flex flex-col gap-2.5">
-      <p className="mono flex flex-wrap gap-x-2 text-[12px] uppercase text-[var(--ledger-bronze)]">
-        <span>
-          <span aria-hidden className="nbp-pulse">
-            ●
-          </span>{" "}
-          On course now
-        </span>
-        {where.map((part) => (
-          <span key={part}>· {part}</span>
-        ))}
-      </p>
-      {/* Keyed by run so a new rider rises in (static under reduced motion). */}
-      <div key={run.id} className="nbp-rise-in flex flex-col gap-2.5">
-        <h2
-          id="on-course-name"
-          className="break-words text-[40px] font-bold uppercase leading-[0.92] tracking-[-0.02em] sm:text-[60px]"
-        >
-          {run.rider_name}
-        </h2>
-        {shown.length > 0 && (
-          <dl className="flex flex-col border-t border-[var(--ledger-rule)]">
-            {shown.map(([term, value]) => (
-              <Fact key={term} term={term} value={value} />
-            ))}
-          </dl>
-        )}
-      </div>
-    </section>
-  );
-}
-
-/* ------------------------------------------------------------------------ */
-/* The latest result. Always shown once there is one, and lit for four
-   seconds when a new one lands. Opening the page never replays an old one
-   (useResultFlash waits for the first payload). */
-
-export function LastResult({
-  run,
-  ready,
-}: {
-  run: ScoringRun | null | undefined;
-  ready: boolean;
-}) {
-  const flashing = useResultFlash(run, ready);
-  const shown = flashing ?? run ?? null;
-
-  if (!shown || !shown.result) {
+  if (!current && shown.length === 0) {
     return null;
   }
 
-  const isFlashing = flashing !== null;
-  const pool = poolName(shown.pool_label);
+  const nextPool = shown[0] ? poolName(shown[0].pool_label) : null;
 
   return (
     <section
-      aria-live="polite"
-      aria-atomic="true"
-      className={`border-[3px] px-3 py-2.5 ${
-        isFlashing
-          ? "nbp-flash border-[var(--ledger-bronze)] bg-[var(--ledger-pick)]"
-          : "border-[var(--ledger-rule)] bg-[var(--ledger-panel)]"
-      }`}
+      aria-label="Riding now and up next"
+      className="border-[3px] border-[var(--ledger-rule)] bg-[var(--ledger-panel)] px-3 py-2"
     >
-      <p className={label}>
-        {isFlashing ? "Just scored" : "Last result"}
-        {pool ? ` · ${pool}` : ""}
-      </p>
-      <div className="mt-1 flex items-end justify-between gap-3">
-        <p className="min-w-0 break-words text-[24px] font-bold uppercase leading-[0.95] sm:text-[30px]">
-          {shown.rider_name}
-        </p>
-        <p className={`flex shrink-0 items-baseline gap-2 ${RESULT_COLOUR[shown.result]}`}>
-          <span className="text-[15px] font-semibold uppercase">{RESULT_LABELS[shown.result]}</span>
-          <span className="text-[52px] font-bold leading-[0.8] sm:text-[64px]">
-            {RESULT_POINTS[shown.result]}
-            <span className="sr-only"> points</span>
+      {current && (
+        <p className="flex flex-col border-b border-[var(--ledger-hair)] pb-2">
+          <span className="mono text-[11px] uppercase text-[var(--ledger-bronze)]">
+            <span aria-hidden className="nbp-pulse">
+              ●
+            </span>{" "}
+            Riding now
+          </span>
+          <span className="break-words text-[22px] font-bold uppercase leading-tight">
+            {current.rider_name}
           </span>
         </p>
-      </div>
-    </section>
-  );
-}
-
-/* ------------------------------------------------------------------------ */
-/* The next riders in start order. */
-
-export function NextRiders({
-  runs,
-  round,
-  limit = 5,
-}: {
-  runs: ScoringRun[];
-  round: ScoringRound | null | undefined;
-  limit?: number;
-}) {
-  const shown = runs.slice(0, limit);
-  const whereOf = (run: ScoringRun) =>
-    [poolName(run.pool_label), attemptTextIfMany(run, round)].filter(Boolean).join(" · ");
-  const firstWhere = shown[0] ? whereOf(shown[0]) : "";
-
-  return (
-    <section aria-labelledby="next-riders-title" className="flex flex-col gap-1.5">
-      <div className={`${blockTitle} flex flex-wrap items-baseline justify-between gap-x-3`}>
-        <h2 id="next-riders-title">Next riders</h2>
-        {firstWhere && <span className={label}>{firstWhere}</span>}
-      </div>
-      {shown.length === 0 ? (
-        <p className="text-[var(--ledger-muted)]">No more riders waiting in this round.</p>
-      ) : (
-        <ol className="flex flex-col">
-          {shown.map((run, index) => {
-            const sub = [run.team_name, run.horse_name, shortLocation(run.rider_location)]
-              .filter(Boolean)
-              .join(" · ");
-            const where = whereOf(run) === firstWhere ? "" : whereOf(run);
-
-            return (
-              <li
-                key={run.id}
-                className="grid grid-cols-[22px_minmax(0,1fr)] gap-2 border-b border-[var(--ledger-hair)] py-2"
-              >
-                <span className="mono pt-1 text-right text-[12px] text-[var(--ledger-muted)]">
+      )}
+      {shown.length > 0 && (
+        <div className={current ? "pt-2" : ""}>
+          <p className={label}>
+            Up next
+            {nextPool ? ` · ${nextPool}` : ""}
+          </p>
+          <ol className="mt-0.5 flex flex-col">
+            {shown.map((run, index) => (
+              <li key={run.id} className="grid grid-cols-[18px_minmax(0,1fr)] gap-2 py-0.5">
+                <span className="mono pt-[3px] text-right text-[12px] text-[var(--ledger-muted)]">
                   {index + 1}
                 </span>
-                <span className="flex min-w-0 flex-col">
-                  <span
-                    className={`break-words font-bold uppercase leading-none ${
-                      index === 0 ? "text-[26px]" : "text-[19px]"
-                    }`}
-                  >
-                    {run.rider_name}
-                  </span>
-                  {sub && (
-                    <span className="mt-1 break-words text-[14px] leading-tight text-[var(--ledger-muted)]">
-                      {sub}
+                <span className="break-words text-[17px] font-semibold uppercase leading-tight">
+                  {run.rider_name}
+                  {run.team_name && (
+                    <span className="text-[13px] font-normal normal-case text-[var(--ledger-muted)]">
+                      {" "}
+                      · {run.team_name}
                     </span>
                   )}
-                  {where && <span className={`${label} mt-0.5`}>{where}</span>}
                 </span>
               </li>
-            );
-          })}
-        </ol>
+            ))}
+          </ol>
+        </div>
       )}
     </section>
   );
@@ -385,7 +250,15 @@ function PoolPicker({
    rider with their points. Section: one row per team with its total against
    the round's target; tap a team to see its four riders. */
 
-function StatusTag({ row, riding }: { row: LeaderboardRow; riding: boolean }) {
+function StatusTag({
+  row,
+  riding,
+  upNext,
+}: {
+  row: LeaderboardRow;
+  riding: boolean;
+  upNext: boolean;
+}) {
   const text = advanceText(row);
 
   if (!text) {
@@ -393,6 +266,8 @@ function StatusTag({ row, riding }: { row: LeaderboardRow; riding: boolean }) {
       <span className="mono text-[11px] font-semibold uppercase text-[var(--ledger-bronze)]">
         Riding
       </span>
+    ) : upNext ? (
+      <span className="mono text-[11px] font-semibold uppercase text-[var(--ledger-ink)]">Next</span>
     ) : (
       <span className="mono text-[11px] text-[var(--ledger-faint)]">—</span>
     );
@@ -465,6 +340,7 @@ export function Standings({
   onPoolChange,
   targetPoints = null,
   highlightKey = null,
+  nextKey = null,
   caption = "Standings",
   emptyText = "No results yet.",
 }: {
@@ -476,6 +352,8 @@ export function Standings({
   onPoolChange: (pool: string | null) => void;
   targetPoints?: number | null;
   highlightKey?: string | null;
+  /* The entrant who rides next: tagged "Next" until they are on course. */
+  nextKey?: string | null;
   caption?: string;
   emptyText?: string;
 }) {
@@ -577,7 +455,7 @@ export function Standings({
                       />
                     </span>
                     <span role="cell">
-                      <StatusTag row={row} riding={riding} />
+                      <StatusTag row={row} riding={riding} upNext={row.entrant_key === nextKey} />
                     </span>
                   </div>
                   {hasMembers && isOpen && row.members && (

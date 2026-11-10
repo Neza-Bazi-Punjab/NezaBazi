@@ -1,10 +1,13 @@
 "use client";
 
-/* The public live scoreboard, in the same "ledger" look as the judges' and
+/* The public live leaderboard, in the same "ledger" look as the judges' and
    commentary panels. Hand-held screens first: spectators and riders follow
-   it at the ground and at home. Reads only the public live state (and, for
-   earlier rounds, the public standings view): run snapshots, nothing from a
-   registration. */
+   it at the ground and at home. It is the standings first: who is through,
+   who is out, who is still riding, with the pools one tap away. A small strip
+   above says who is riding and who is up next, so riders know when to get
+   ready. Reads only the public live state
+   (and, for earlier rounds, the public standings view): run snapshots,
+   nothing from a registration. */
 import { useMemo, useState } from "react";
 import { LEDGER_ROOT } from "@/components/scoring/ledger/Ledger";
 import NotConfiguredNotice from "@/components/scoring/NotConfiguredNotice";
@@ -16,19 +19,18 @@ import {
   nowNextText,
   callUpRoster,
   rosterFor,
+  roundProgress,
 } from "@/components/scoring/format";
 import { plural } from "@/lib/scoring/format";
 import { RESULT_LABELS, RESULT_POINTS, type PublicLiveState } from "@/lib/scoring/types";
 import { useLiveState } from "@/lib/scoring/use-live-state";
 import { site } from "@/lib/site";
 import {
-  LastResult,
   LiveStatusBar,
-  NextRiders,
-  OnCourse,
   Podium,
   Roster,
   Standings,
+  UpNext,
   label,
   ledgerButton,
 } from "./live-parts";
@@ -47,14 +49,10 @@ export default function LiveBoard() {
   /* undefined: follow the pool that is riding; null: whole round. */
   const [chosenPool, setChosenPool] = useState<string | null | undefined>(undefined);
   const [search, setSearch] = useState("");
-  /* "rider" mode collapses the standings; a visitor can still open them. */
-  const [standingsOpen, setStandingsOpen] = useState(false);
 
   const live = state?.live ?? null;
-  /* "leaderboard": standings first. "rider": the rider on course alone. The
-     other modes keep the normal layout ("blank" and "message" only change
-     the stream graphics). */
-  const mode = live?.display_mode ?? "scoreboard";
+  /* The Screens modes (scoreboard, standings, rider, …) only change the
+     stream graphics; this page is the leaderboard in every one of them. */
   const round = state?.current_round ?? null;
   const { riding, next } = state
     ? nowAndNextPools(state)
@@ -91,6 +89,7 @@ export default function LiveBoard() {
     out: talliedRows.filter((row) => row.advanced === false).length,
     riding: talliedRows.filter((row) => row.advanced === null).length,
   };
+  const progress = roundProgress(talliedRows);
 
   /* Pools tab: every pool of the live round (unpooled rounds use ""). */
   const rosterLabels = state
@@ -193,6 +192,31 @@ export default function LiveBoard() {
                     </dl>
                   )}
 
+                  {/* How far through the round (or the pool shown) is. */}
+                  {progress.total > 0 && (
+                    <div className="mb-4">
+                      <p id="progress-title" className={`${label} flex justify-between gap-3`}>
+                        <span>Runs ridden</span>
+                        <span>
+                          {progress.scored} of {progress.total}
+                        </span>
+                      </p>
+                      <div
+                        role="progressbar"
+                        aria-labelledby="progress-title"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={progress.percent}
+                        className="mt-1 h-1.5 bg-[var(--ledger-hair)]"
+                      >
+                        <div
+                          className="h-full bg-[var(--ledger-ink)]"
+                          style={{ width: `${progress.percent}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   <Standings
                     key={selectedRound.id}
                     rows={standingsRows}
@@ -202,6 +226,7 @@ export default function LiveBoard() {
                     onPoolChange={setChosenPool}
                     targetPoints={selectedRound.target_points}
                     highlightKey={isCurrentRound ? (state.current_run?.entrant_key ?? null) : null}
+                    nextKey={isCurrentRound ? (state.up_next[0]?.entrant_key ?? null) : null}
                     caption={`${selectedRound.name} standings`}
                     emptyText={
                       isCurrentRound
@@ -278,20 +303,6 @@ export default function LiveBoard() {
     </section>
   ) : null;
 
-  /* Where the standings go for the display mode. */
-  const standingsPlacement =
-    mode === "leaderboard" ? null : mode === "rider" && !standingsOpen ? (
-      <button
-        type="button"
-        onClick={() => setStandingsOpen(true)}
-        className={`${ledgerButton()} w-full`}
-      >
-        Show standings and pools
-      </button>
-    ) : (
-      standingsSection
-    );
-
   let content: React.ReactNode;
 
   if (!state) {
@@ -315,38 +326,30 @@ export default function LiveBoard() {
           </p>
         )}
 
-        {mode === "leaderboard" && standingsSection}
-
-        {round ? (
-          poolCall ? (
-            <section
-              aria-labelledby="pool-call-title"
-              className="border-[3px] border-[var(--ledger-bronze)] bg-[var(--ledger-panel)] p-3"
+        {/* A pool being called is the one thing shown above the standings:
+            it is how riders know to get ready. */}
+        {round && poolCall && (
+          <section
+            aria-labelledby="pool-call-title"
+            className="border-[3px] border-[var(--ledger-bronze)] bg-[var(--ledger-panel)] p-3"
+          >
+            <p className="mono text-[12px] uppercase text-[var(--ledger-bronze)]">Call-up</p>
+            <h2
+              id="pool-call-title"
+              className="mt-1 break-words text-[36px] font-bold uppercase leading-[0.95] sm:text-[48px]"
             >
-              <p className="mono text-[12px] uppercase text-[var(--ledger-bronze)]">Call-up</p>
-              <h2
-                id="pool-call-title"
-                className="mt-1 break-words text-[36px] font-bold uppercase leading-[0.95] sm:text-[48px]"
-              >
-                Pool {poolCall}: get ready
-              </h2>
-              {next && next !== poolCall && <p className={`${label} mt-1`}>Next: Pool {next}</p>}
-              <Roster entries={callUpRoster(state, poolCall)} className="mt-3" />
-            </section>
-          ) : (
-            <OnCourse run={state.current_run} round={round} />
-          )
-        ) : (
-          <p className="border border-[var(--ledger-hair)] bg-[var(--ledger-panel)] px-4 py-5 text-[var(--ledger-muted)]">
-            No round is being ridden right now. Results from earlier rounds are below.
-          </p>
+              Pool {poolCall}: get ready
+            </h2>
+            {next && next !== poolCall && <p className={`${label} mt-1`}>Next: Pool {next}</p>}
+            <Roster entries={callUpRoster(state, poolCall)} className="mt-3" />
+          </section>
         )}
 
-        {mode !== "rider" && <LastResult run={state.last_scored_run} ready />}
+        {/* Small, so riders can see when they are up; the leaderboard is
+            the page. */}
+        {round && !poolCall && <UpNext current={state.current_run} next={state.up_next} />}
 
-        {mode !== "rider" && round && <NextRiders runs={state.up_next} round={round} limit={5} />}
-
-        {standingsPlacement}
+        {standingsSection}
       </div>
     );
   }
