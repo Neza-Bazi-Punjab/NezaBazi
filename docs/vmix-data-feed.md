@@ -74,10 +74,6 @@ For example, the leaderboard of Pool B, at most 10 rows, as CSV:
 
 # Setting up — Data Sources in vMix, and rehearsal
 
-## Capitals
-
-Names and other words meant for the screen arrive in CAPITALS, ready to use: `round_name`, `name`, `rider_name`, `team_name`, `horse_name`, `location_short`, `members`, `pool_label`, `next_pool_label`, `message`, `last_rider_name` and `last_team_name`. The values a graphic switches on are unchanged and exactly as listed below: `display_mode`, `status`, `event_type`, `last_result`, `best_result`, `advanced`, `is_live` and `sample`, as are ids, numbers and times. Punjabi text has no capitals and is sent as written.
-
 ## Adding a feed in vMix
 
 1. **Settings › Data Sources › Add › JSON** (or **CSV** if you used `?format=csv`).
