@@ -308,3 +308,32 @@ test("route and card: Singles and Teams each have their own step and switch", ()
   assert.match(admin, /\{ action: "switch", auto_on: autoOn, event_type: engineEvent \}/);
   assert.match(admin, /\{ action: "start_teams" \}/);
 });
+
+test("the engine fixes: plain ASCII, asserted anchors, and the corrections the review asked for", () => {
+  const fixes = readFileSync(
+    new URL("../../../supabase/migrations/20261110190000_scoring_engine_fixes.sql", import.meta.url),
+    "utf8"
+  );
+
+  // 150000 was damaged by mis-decoded punctuation: this file cannot be.
+  assert.doesNotMatch(fixes, /[^\x00-\x7F]/);
+  assert.match(fixes, /chr\(8218\) \|\| chr\(196\) \|\| chr\(238\), chr\(8212\)/);
+
+  // Every patch goes through the helper: one anchor, a marker, a second run is a no-op.
+  assert.match(fixes, /if v_found <> 1 then\s+raise exception/);
+  assert.match(fixes, /return 'already applied';/);
+  assert.equal((fixes.match(/select pg_temp\.patch_scoring_function\(/g) ?? []).length, 7);
+
+  // The rule is chosen from every rider not overridden Out.
+  assert.match(fixes, /coalesce\(\(element ->> 'override'\)::integer, 1\) = 1 and \(element ->> 'carried'\)::boolean/);
+  assert.match(fixes, /coalesce\(\(element ->> 'override'\)::integer, 1\) = 1 and \(element ->> 'struck'\)::boolean/);
+  // Undo keeps an administrator's Out.
+  assert.match(fixes, /and advance_override\.advanced is true\s+and advance_override\.note in \(/);
+  // Check-in never waits long, and a late rider gets only the passes still to ride.
+  assert.match(fixes, /alter function public\.scoring_auto_place_rider\(uuid, boolean, uuid\) set lock_timeout = '1500ms';/);
+  assert.match(fixes, /alter function public\.scoring_auto_place_team\(uuid, uuid\) set lock_timeout = '1500ms';/);
+  assert.match(fixes, /and ridden\.attempt_number > v_attempt/);
+  assert.match(fixes, /return 'too_late';/);
+  // A team round made by hand stays by hand.
+  assert.match(fixes, /if v_round\.stage is null then\s+return jsonb_build_object\(/);
+});

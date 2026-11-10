@@ -1,3 +1,19 @@
+-- REVERT ORDER (review of 10 Nov 2026): revert 20261110150000 and then
+-- 20261110140000 before this file. Their functions and check-in triggers use
+-- the table and columns dropped here, and would fail (silently, for the
+-- check-in triggers) once they are gone.
+do $revert_order$
+begin
+  if exists (
+    select 1 from pg_catalog.pg_proc as procedure
+    where procedure.pronamespace = 'public'::regnamespace
+      and procedure.proname in ('scoring_start_qualifying', 'scoring_start_teams')
+  ) then
+    raise exception 'Revert 20261110150000 and 20261110140000 first.';
+  end if;
+end
+$revert_order$;
+
 -- Revert 20261110130000_scoring_auto_next_round.sql.
 --
 -- The next Single round is shuffled again, the engine's functions and its

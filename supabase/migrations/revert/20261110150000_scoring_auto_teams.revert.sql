@@ -1,3 +1,9 @@
+-- REVERT ORDER (review of 10 Nov 2026): this file alone leaves Singles broken.
+-- It drops scoring_next_step(text) and the teams_auto_on column, which the
+-- Singles functions left in place still use: the Singles Next step card and
+-- Start next round fail until 20261110130000 and then 20261110140000 are run
+-- again, in that order, straight after this file. Do all three steps together.
+--
 -- Revert 20261110150000_scoring_auto_teams.sql.
 --
 -- Teams go back to Manual only: no Start teams, no team check-in trigger,
