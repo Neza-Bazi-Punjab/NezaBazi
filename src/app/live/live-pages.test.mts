@@ -655,3 +655,8 @@ test("the qualifier's three attempts show as three boxes on /live, as on the com
   assert.match(parts, /<AttemptBox/);
   assert.match(parts, /<PointsBox/);
 });
+
+test("/live never calls a rider Out before the rules have settled it", () => {
+  const board = read("./LiveBoard.tsx");
+  assert.match(board, /const standingsRows = withProvisionalOuts\(\s+isCurrentRound \? \(state\?\.leaderboard \?\? \[\]\) : \(earlier\.rows \?\? \[\]\),\s+selectedRound\s+\);/);
+});

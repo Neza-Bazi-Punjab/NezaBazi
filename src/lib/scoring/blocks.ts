@@ -402,6 +402,42 @@ export const withAttemptMarks = <Row extends { entrant_key: string }>(
   }));
 };
 
+/* Standings for the public leaderboard, with an "Out" the rules have not
+   settled yet shown as undecided.
+
+   The standings view marks an entrant Out the moment their runs are in and
+   they have not carried (Single) or reached the target (Section). That is
+   final in the qualifier, where only a 4 goes through. In every other round
+   it is final only once somebody is Through:
+
+     - Aarhi rounds: the 4s go through; with no 4, the 2s do; with everyone
+       on 0, everyone rides again.
+     - Team rounds: a team at or over the target goes through; if no team
+       reaches it, the highest total does.
+
+   So while nobody in the round is Through, a rule-made Out may still turn
+   into Through when the next round is started (the engine records it then),
+   and the public must not be told a rider is out before that. An
+   administrator's own decision is always shown as it is. */
+export const withProvisionalOuts = <
+  Row extends { advanced: boolean | null; advanced_overridden: boolean },
+>(
+  rows: Row[],
+  round: { event_type: string; attempts_per_rider: number } | null | undefined
+): Row[] => {
+  if (!round || (round.event_type === "single" && round.attempts_per_rider > 1)) {
+    return rows;
+  }
+
+  if (rows.some((row) => row.advanced === true)) {
+    return rows;
+  }
+
+  return rows.map((row) =>
+    row.advanced === false && !row.advanced_overridden ? { ...row, advanced: null } : row
+  );
+};
+
 /* Where a run sits in its pool and round: "3 / 10" is the third of Pool A's
    ten rides in Round 1. Every ride counts (skipped ones too), so a rider's
    number never shifts while the pool rides. */

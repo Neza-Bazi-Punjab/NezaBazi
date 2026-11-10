@@ -358,3 +358,32 @@ test("withAttemptMarks: a box per attempt for a Single qualifier, nothing for ot
   assert.equal(withAttemptMarks(rows, runs, { event_type: "section", attempts_per_rider: 3 }), rows);
   assert.equal(withAttemptMarks(rows, runs, null), rows);
 });
+
+test("withProvisionalOuts: nobody is shown Out in an Aarhi or team round until somebody is Through", async () => {
+  const { withProvisionalOuts } = await import("./blocks.ts");
+  const row = (advanced: boolean | null, advanced_overridden = false) => ({ advanced, advanced_overridden });
+  const aarhi = { event_type: "single", attempts_per_rider: 1 };
+  const qualifier = { event_type: "single", attempts_per_rider: 3 };
+  const teams = { event_type: "section", attempts_per_rider: 1 };
+  const shown = (rows: ReturnType<typeof row>[]) => rows.map((entry) => entry.advanced);
+
+  // No 4 yet: a rider on 2 (Out by the view) may still go through.
+  const noCarry = [row(false), row(false), row(null)];
+  assert.deepEqual(shown(withProvisionalOuts(noCarry, aarhi)), [null, null, null]);
+  assert.deepEqual(shown(noCarry), [false, false, null], "the input is not changed");
+
+  // Somebody carried: the others really are out.
+  const carried = [row(true), row(false), row(null)];
+  assert.equal(withProvisionalOuts(carried, aarhi), carried);
+
+  // An administrator's Out stands even with nobody through.
+  assert.deepEqual(shown(withProvisionalOuts([row(false, true), row(false)], aarhi)), [false, null]);
+
+  // Teams: the same until a team reaches the target.
+  assert.deepEqual(shown(withProvisionalOuts([row(false), row(false)], teams)), [null, null]);
+  assert.equal(withProvisionalOuts(carried, teams), carried);
+
+  // The qualifier: only a 4 goes through, so Out is final.
+  assert.equal(withProvisionalOuts(noCarry, qualifier), noCarry);
+  assert.equal(withProvisionalOuts(noCarry, null), noCarry);
+});

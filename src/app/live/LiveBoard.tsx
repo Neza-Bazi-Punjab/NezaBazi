@@ -21,6 +21,7 @@ import {
   rosterFor,
   roundProgress,
 } from "@/components/scoring/format";
+import { withProvisionalOuts } from "@/lib/scoring/blocks";
 import { plural } from "@/lib/scoring/format";
 import { RESULT_LABELS, RESULT_POINTS, type PublicLiveState } from "@/lib/scoring/types";
 import { useLiveState } from "@/lib/scoring/use-live-state";
@@ -71,7 +72,13 @@ export default function LiveBoard() {
     null;
   const isCurrentRound = selectedRound !== null && selectedRound.id === round?.id;
   const earlier = useRoundStandings(selectedRound && !isCurrentRound ? selectedRound.id : null);
-  const standingsRows = isCurrentRound ? (state?.leaderboard ?? []) : (earlier.rows ?? []);
+  /* An "Out" the rules have not settled yet is shown as undecided (see
+     withProvisionalOuts): in an Aarhi or team round nobody is out for sure
+     until somebody is through. */
+  const standingsRows = withProvisionalOuts(
+    isCurrentRound ? (state?.leaderboard ?? []) : (earlier.rows ?? []),
+    selectedRound
+  );
   const standingsPools = isCurrentRound
     ? (state?.pools ?? [])
     : [...new Set(standingsRows.map((row) => row.pool_label).filter((label): label is string => !!label))].sort(
@@ -350,9 +357,7 @@ export default function LiveBoard() {
     <div className={`${LEDGER_ROOT} flex-1`}>
       <div className="sticky top-[var(--nav-height)] z-40">
         <LiveStatusBar
-          text={
-            [round ? round.name : "Live scores", nowNext].filter(Boolean).join(" · ")
-          }
+          text={nowNext ?? (round ? round.name : "Live scores")}
           connection={connection}
         />
       </div>
