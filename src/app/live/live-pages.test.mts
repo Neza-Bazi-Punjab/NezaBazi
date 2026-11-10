@@ -605,3 +605,30 @@ test("both practice panels open from the admin scoring page's demo card", () => 
     "the links come before the feed addresses"
   );
 });
+
+test("/live wears the panels' ledger look and keeps its hand-held layout", () => {
+  const board = read("./LiveBoard.tsx");
+  const parts = read("./live-parts.tsx");
+
+  // The same paper, rules and type as the judges' and commentary panels.
+  assert.match(board, /<div className=\{`\$\{LEDGER_ROOT\} flex-1`\}>/);
+  assert.match(board, /<LiveStatusBar/);
+  assert.match(board, /<OnCourse run=\{state\.current_run\} round=\{round\} \/>/);
+  assert.match(board, /<LastResult run=\{state\.last_scored_run\} ready \/>/);
+  assert.match(board, /<NextRiders runs=\{state\.up_next\} round=\{round\} limit=\{5\} \/>/);
+  assert.match(board, /<Standings\s/);
+
+  // One column, thumb-sized controls, long names wrap instead of being cut.
+  assert.match(parts, /min-h-11 min-w-11/);
+  assert.match(parts, /min-h-12/);
+  assert.match(parts, /break-words text-\[40px\]/);
+  assert.doesNotMatch(parts, /truncate/);
+
+  // A new result is announced, and an old one is never replayed on opening.
+  assert.match(parts, /const flashing = useResultFlash\(run, ready\);/);
+  assert.match(parts, /aria-live="polite"/);
+
+  // A team opens to its riders; the judges' overrides stay marked.
+  assert.match(parts, /aria-expanded=\{isOpen\}/);
+  assert.match(parts, /\* Decided by the judges\./);
+});

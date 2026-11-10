@@ -1,17 +1,13 @@
 "use client";
 
-/* The public live scoreboard. Mobile first: spectators and riders follow it
-   on their phones at the ground and at home. Reads only the public live
-   state (and, for earlier rounds, the public standings view) — run
-   snapshots, nothing from a registration. */
+/* The public live scoreboard, in the same "ledger" look as the judges' and
+   commentary panels. Hand-held screens first: spectators and riders follow
+   it at the ground and at home. Reads only the public live state (and, for
+   earlier rounds, the public standings view): run snapshots, nothing from a
+   registration. */
 import { useMemo, useState } from "react";
-import ConnectionBadge from "@/components/scoring/ConnectionBadge";
-import LeaderboardTable from "@/components/scoring/LeaderboardTable";
+import { LEDGER_ROOT } from "@/components/scoring/ledger/Ledger";
 import NotConfiguredNotice from "@/components/scoring/NotConfiguredNotice";
-import OnCourseCard from "@/components/scoring/OnCourseCard";
-import PoolRoster from "@/components/scoring/PoolRoster";
-import ResultFlash from "@/components/scoring/ResultFlash";
-import UpNextList from "@/components/scoring/UpNextList";
 import {
   LIVE_STATE_URL,
   eventTypeName,
@@ -22,46 +18,29 @@ import {
   rosterFor,
 } from "@/components/scoring/format";
 import { plural } from "@/lib/scoring/format";
-import type { PodiumEntry, PublicLiveState, ScoringRound } from "@/lib/scoring/types";
+import { RESULT_LABELS, RESULT_POINTS, type PublicLiveState } from "@/lib/scoring/types";
 import { useLiveState } from "@/lib/scoring/use-live-state";
 import { site } from "@/lib/site";
+import {
+  LastResult,
+  LiveStatusBar,
+  NextRiders,
+  OnCourse,
+  Podium,
+  Roster,
+  Standings,
+  label,
+  ledgerButton,
+} from "./live-parts";
 import { useRoundStandings } from "./use-round-standings";
 
-const PLACE_TEXT: Record<PodiumEntry["place"], string> = { 1: "1st", 2: "2nd", 3: "3rd" };
-
-const sectionTitle =
-  "font-display text-sm font-semibold uppercase tracking-[0.2em] text-bronze-dark";
-
-function Podium({ round }: { round: ScoringRound }) {
-  const podium = Array.isArray(round.podium)
-    ? [...round.podium].sort((a, b) => a.place - b.place)
-    : [];
-
-  if (podium.length === 0) {
-    return null;
-  }
-
-  return (
-    <ol className="mb-4 grid gap-2 sm:grid-cols-3">
-      {podium.map((entry) => (
-        <li
-          key={`${entry.place}-${entry.entrant_key}`}
-          className={`rounded-xl border px-4 py-3 ${
-            entry.place === 1 ? "border-bronze bg-bronze text-cream" : "border-bronze/30 bg-cream"
-          }`}
-        >
-          <p className="font-display text-xs font-semibold uppercase tracking-[0.2em] opacity-80">
-            {PLACE_TEXT[entry.place] ?? entry.place}
-          </p>
-          <p className="font-display text-lg font-bold uppercase leading-tight">{entry.name}</p>
-        </li>
-      ))}
-    </ol>
-  );
-}
+/* How a result scores, in the order a spectator asks: 4, 2, 0. */
+const SCORE_KEY = (["carry", "strike", "miss"] as const).map(
+  (result) => `${RESULT_POINTS[result]} = ${RESULT_LABELS[result]}`
+);
 
 export default function LiveBoard() {
-  const { data, error, connection, lastUpdated } = useLiveState<PublicLiveState>(LIVE_STATE_URL);
+  const { data, error, connection } = useLiveState<PublicLiveState>(LIVE_STATE_URL);
   const state = useMemo(() => normalizePublicState(data), [data]);
   const [tab, setTab] = useState<"standings" | "pools">("standings");
   const [chosenRoundId, setChosenRoundId] = useState<string | null>(null);
@@ -103,6 +82,15 @@ export default function LiveBoard() {
       );
   const followPool = isCurrentRound ? riding : null;
   const tablePool = chosenPool === undefined ? followPool : chosenPool;
+  /* Through / out / still to ride, for the pool shown (or the whole round). */
+  const shownPool = tablePool !== null && standingsPools.includes(tablePool) ? tablePool : null;
+  const talliedRows =
+    shownPool === null ? standingsRows : standingsRows.filter((row) => row.pool_label === shownPool);
+  const tally = {
+    through: talliedRows.filter((row) => row.advanced === true).length,
+    out: talliedRows.filter((row) => row.advanced === false).length,
+    riding: talliedRows.filter((row) => row.advanced === null).length,
+  };
 
   /* Pools tab: every pool of the live round (unpooled rounds use ""). */
   const rosterLabels = state
@@ -114,19 +102,15 @@ export default function LiveBoard() {
     : [];
 
   const standingsSection = state ? (
-    <section aria-label="Standings and pools">
-      <div role="group" aria-label="Show" className="grid grid-cols-2 gap-2">
+    <section aria-label="Standings and pools" className="flex flex-col">
+      <div role="group" aria-label="Show" className="grid grid-cols-2 gap-1.5">
         {(["standings", "pools"] as const).map((option) => (
           <button
             key={option}
             type="button"
             aria-pressed={tab === option}
             onClick={() => setTab(option)}
-            className={`min-h-12 rounded-xl border font-display text-sm font-semibold uppercase tracking-[0.15em] transition-colors ${
-              tab === option
-                ? "border-bronze-deep bg-bronze-deep text-cream"
-                : "border-brown/25 text-brown hover:border-bronze"
-            }`}
+            className={ledgerButton(tab === option)}
           >
             {option === "standings" ? "Standings" : "Pools"}
           </button>
@@ -134,15 +118,15 @@ export default function LiveBoard() {
       </div>
 
       {tab === "standings" ? (
-        <div className="mt-5">
+        <div className="mt-4">
           {selectedRound ? (
             <>
-              <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-brown">
+              <div className="mb-3 flex flex-wrap items-end justify-between gap-3 border-b-[3px] border-[var(--ledger-rule)] pb-2">
+                <div className="min-w-0">
+                  <h2 className="break-words text-[24px] font-bold uppercase leading-tight">
                     {selectedRound.name}
                   </h2>
-                  <p className="text-sm text-brown/75">
+                  <p className={label}>
                     {[
                       eventTypeName(selectedRound.event_type),
                       selectedRound.target_points
@@ -155,17 +139,15 @@ export default function LiveBoard() {
                   </p>
                 </div>
                 {roundOptions.length > 1 && (
-                  <label className="flex items-center gap-2 text-sm text-brown">
-                    <span className="font-display font-semibold uppercase tracking-[0.12em]">
-                      Round
-                    </span>
+                  <label className="flex items-center gap-2">
+                    <span className={label}>Round</span>
                     <select
                       value={selectedRound.id}
                       onChange={(event) => {
                         setChosenRoundId(event.target.value);
                         setChosenPool(undefined);
                       }}
-                      className="min-h-11 rounded-lg border border-brown/30 bg-cream px-3 text-ink"
+                      className="min-h-11 max-w-[60vw] border-2 border-[var(--ledger-ink)] bg-[var(--ledger-panel)] px-2 text-[15px] font-semibold text-[var(--ledger-ink)]"
                     >
                       {roundOptions.map((option) => (
                         <option key={option.id} value={option.id}>
@@ -182,50 +164,77 @@ export default function LiveBoard() {
               <Podium round={selectedRound} />
 
               {!isCurrentRound && earlier.loading ? (
-                <p className="py-6 text-center text-brown/75">Loading standings…</p>
+                <p className="py-6 text-center text-[var(--ledger-muted)]">Loading standings…</p>
               ) : !isCurrentRound && earlier.error ? (
-                <p className="rounded-xl border border-bronze/20 bg-cream px-4 py-6 text-center text-brown/85">
+                <p className="border border-[var(--ledger-hair)] bg-[var(--ledger-panel)] px-4 py-6 text-center text-[var(--ledger-muted)]">
                   {earlier.error}
                 </p>
               ) : (
-                <LeaderboardTable
-                  key={selectedRound.id}
-                  rows={standingsRows}
-                  eventType={selectedRound.event_type}
-                  pools={standingsPools}
-                  pool={tablePool}
-                  onPoolChange={setChosenPool}
-                  targetPoints={selectedRound.target_points}
-                  highlightKey={isCurrentRound ? (state.current_run?.entrant_key ?? null) : null}
-                  caption={`${selectedRound.name} standings`}
-                  emptyText={
-                    isCurrentRound ? "No results yet — standings fill in as riders finish." : "No results recorded for this round."
-                  }
-                />
+                <>
+                  {/* The round at a glance, in plain words. */}
+                  {talliedRows.length > 0 && (
+                    <dl className="mb-3 grid grid-cols-3 border-b border-[var(--ledger-rule)] pb-2">
+                      {(
+                        [
+                          ["Through", tally.through, "text-[var(--ledger-green)]"],
+                          ["Out", tally.out, "text-[var(--ledger-red)]"],
+                          [
+                            isCurrentRound ? "Still riding" : "Undecided",
+                            tally.riding,
+                            "text-[var(--ledger-ink)]",
+                          ],
+                        ] as const
+                      ).map(([term, count, colour]) => (
+                        <div key={term} className="flex min-w-0 flex-col-reverse gap-0.5 pr-2">
+                          <dt className={`${label} truncate`}>{term}</dt>
+                          <dd className={`text-[40px] font-bold leading-[0.9] ${colour}`}>{count}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+
+                  <Standings
+                    key={selectedRound.id}
+                    rows={standingsRows}
+                    eventType={selectedRound.event_type}
+                    pools={standingsPools}
+                    pool={tablePool}
+                    onPoolChange={setChosenPool}
+                    targetPoints={selectedRound.target_points}
+                    highlightKey={isCurrentRound ? (state.current_run?.entrant_key ?? null) : null}
+                    caption={`${selectedRound.name} standings`}
+                    emptyText={
+                      isCurrentRound
+                        ? "No results yet. Standings fill in as riders finish."
+                        : "No results recorded for this round."
+                    }
+                  />
+
+                  {/* One line: what the numbers mean. */}
+                  <p className={`${label} mt-3`}>{SCORE_KEY.join(" · ")}</p>
+                </>
               )}
             </>
           ) : (
-            <p className="text-brown/75">Standings appear once the first round is drawn.</p>
+            <p className="text-[var(--ledger-muted)]">Standings appear once the first round is drawn.</p>
           )}
         </div>
       ) : (
-        <div className="mt-5 space-y-5">
+        <div className="mt-4 flex flex-col gap-5">
           <label className="block">
-            <span className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-brown">
-              Find your pool
-            </span>
+            <span className={label}>Find your pool</span>
             <input
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Type a rider or team name"
               autoComplete="off"
-              className="mt-2 min-h-12 w-full rounded-lg border border-bronze/40 bg-cream px-4 text-ink outline-none focus:border-bronze"
+              className="mt-1.5 min-h-12 w-full border-2 border-[var(--ledger-ink)] bg-[var(--ledger-panel)] px-3 text-[17px] text-[var(--ledger-ink)] placeholder:text-[var(--ledger-faint)]"
             />
           </label>
 
           {rosterLabels.length === 0 ? (
-            <p className="text-brown/75">
+            <p className="text-[var(--ledger-muted)]">
               {round
                 ? "The start list for this round has not been drawn yet."
                 : "Pools appear when the next round is drawn."}
@@ -240,15 +249,17 @@ export default function LiveBoard() {
                 <section
                   key={labelKey || "all"}
                   aria-label={labelKey ? `Pool ${labelKey}` : "Start list"}
-                  className={`rounded-2xl border bg-cream p-4 ${
-                    isRiding ? "border-bronze" : "border-bronze/20"
-                  }`}
+                  className={isRiding ? "bg-[var(--ledger-hl)]" : ""}
                 >
-                  <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-                    <h3 className="font-display text-xl font-bold uppercase tracking-wide text-brown">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2 border-b-[3px] border-[var(--ledger-rule)] px-1 pb-1">
+                    <h3 className="text-[20px] font-bold uppercase leading-tight">
                       {labelKey ? `Pool ${labelKey}` : "Start list"}
                     </h3>
-                    <p className="font-display text-xs font-semibold uppercase tracking-[0.15em] text-brown/70">
+                    <p
+                      className={`mono text-[11px] font-semibold uppercase ${
+                        isRiding ? "text-[var(--ledger-bronze)]" : "text-[var(--ledger-muted)]"
+                      }`}
+                    >
                       {[
                         plural(entries.length, round?.event_type === "section" ? "team" : "rider"),
                         isRiding ? "Riding now" : isCalled ? "Called" : null,
@@ -257,7 +268,7 @@ export default function LiveBoard() {
                         .join(" · ")}
                     </p>
                   </div>
-                  <PoolRoster entries={entries} highlight={search} />
+                  <Roster entries={entries} highlight={search} />
                 </section>
               );
             })
@@ -273,7 +284,7 @@ export default function LiveBoard() {
       <button
         type="button"
         onClick={() => setStandingsOpen(true)}
-        className="min-h-12 w-full rounded-xl border border-brown/25 font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown hover:border-bronze"
+        className={`${ledgerButton()} w-full`}
       >
         Show standings and pools
       </button>
@@ -285,19 +296,21 @@ export default function LiveBoard() {
 
   if (!state) {
     content = error ? (
-      <p className="rounded-xl border border-red-800/30 bg-red-50 px-4 py-6 text-center text-red-900">
+      <p className="border-2 border-[var(--ledger-red)] bg-[var(--ledger-panel)] px-4 py-6 text-center text-[var(--ledger-red)]">
         Live scores could not be loaded. Retrying…
       </p>
     ) : (
-      <p className="py-12 text-center text-brown/75">Loading live scores…</p>
+      <p className="mono py-12 text-center text-[13px] uppercase text-[var(--ledger-muted)]">
+        Loading live scores…
+      </p>
     );
   } else if (!state.configured || (state.rounds.length === 0 && !round)) {
     content = <NotConfiguredNotice />;
   } else {
     content = (
-      <div className="space-y-6">
+      <div className="flex flex-col gap-5">
         {live?.message && (
-          <p className="rounded-xl border-l-4 border-bronze bg-cream px-4 py-3 font-display text-lg font-semibold uppercase tracking-wide text-bronze-deep">
+          <p className="border-[3px] border-[var(--ledger-rule)] bg-[var(--ledger-pick)] px-3 py-2 text-center text-[19px] font-bold uppercase leading-tight">
             {live.message}
           </p>
         )}
@@ -308,34 +321,30 @@ export default function LiveBoard() {
           poolCall ? (
             <section
               aria-labelledby="pool-call-title"
-              className="rounded-2xl border-2 border-bronze bg-cream p-5 shadow-sm"
+              className="border-[3px] border-[var(--ledger-bronze)] bg-[var(--ledger-panel)] p-3"
             >
-              <p className={sectionTitle}>Call-up</p>
+              <p className="mono text-[12px] uppercase text-[var(--ledger-bronze)]">Call-up</p>
               <h2
                 id="pool-call-title"
-                className="mt-1 font-display text-3xl font-bold uppercase tracking-wide text-ink sm:text-4xl"
+                className="mt-1 break-words text-[36px] font-bold uppercase leading-[0.95] sm:text-[48px]"
               >
-                Pool {poolCall} — get ready
+                Pool {poolCall}: get ready
               </h2>
-              {next && next !== poolCall && (
-                <p className="mt-1 font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/75">
-                  Next: Pool {next}
-                </p>
-              )}
-              <PoolRoster entries={callUpRoster(state, poolCall)} className="mt-4" />
+              {next && next !== poolCall && <p className={`${label} mt-1`}>Next: Pool {next}</p>}
+              <Roster entries={callUpRoster(state, poolCall)} className="mt-3" />
             </section>
           ) : (
-            <OnCourseCard run={state.current_run} round={round} />
+            <OnCourse run={state.current_run} round={round} />
           )
         ) : (
-          <p className="rounded-xl border border-bronze/20 bg-cream px-4 py-5 text-brown/85">
+          <p className="border border-[var(--ledger-hair)] bg-[var(--ledger-panel)] px-4 py-5 text-[var(--ledger-muted)]">
             No round is being ridden right now. Results from earlier rounds are below.
           </p>
         )}
 
-        {mode !== "rider" && <ResultFlash run={state.last_scored_run} ready persist />}
+        {mode !== "rider" && <LastResult run={state.last_scored_run} ready />}
 
-        {mode !== "rider" && round && <UpNextList runs={state.up_next} round={round} limit={5} />}
+        {mode !== "rider" && round && <NextRiders runs={state.up_next} round={round} limit={5} />}
 
         {standingsPlacement}
       </div>
@@ -343,22 +352,18 @@ export default function LiveBoard() {
   }
 
   return (
-    <div className="flex-1 bg-sand">
-      <div className="sticky top-[var(--nav-height)] z-40 border-b border-bronze/20 bg-parchment/95 backdrop-blur">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-2.5">
-          <p className="min-w-0 font-display text-sm font-semibold uppercase tracking-[0.12em] text-brown">
-            {nowNext ?? (round ? round.name : "Live scores")}
-          </p>
-          <ConnectionBadge connection={connection} lastUpdated={lastUpdated} />
-        </div>
+    <div className={`${LEDGER_ROOT} flex-1`}>
+      <div className="sticky top-[var(--nav-height)] z-40">
+        <LiveStatusBar
+          text={nowNext ?? (round ? round.name : "Live scores")}
+          connection={connection}
+        />
       </div>
 
-      <div className="mx-auto max-w-3xl px-4 pb-16 pt-6">
-        <header className="mb-6">
-          <h1 className="font-display text-4xl font-bold uppercase tracking-wide text-brown sm:text-5xl">
-            Live Scores
-          </h1>
-          <p className="mt-2 text-brown/80">
+      <div className="mx-auto max-w-3xl px-4 pb-16 pt-4">
+        <header className="mono mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b-[3px] border-[var(--ledger-rule)] pb-2 text-[12px] uppercase">
+          <h1 className="font-semibold">Live Scores</h1>
+          <p className="text-[var(--ledger-muted)]">
             {round
               ? [round.name, eventTypeName(round.event_type)].filter(Boolean).join(" · ")
               : `${site.title} · ${site.eventDate}`}
