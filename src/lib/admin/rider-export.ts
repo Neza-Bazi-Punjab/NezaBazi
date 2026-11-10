@@ -27,7 +27,6 @@ export const RIDER_EXPORT_API = "/api/admin/registrations/export";
 export const RIDER_EXPORT_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-export const RIDER_EXPORT_NOTE = "Every rider, with contact details. For organisers only.";
 
 /* ?list=solo or ?list=teams, nothing else. */
 export const parseRiderExportList = (value: string | null | undefined): RiderExportList | null =>
@@ -274,14 +273,11 @@ const riderDetailCells = (row: SoloExportSource): XlsxCell[] => [
   numberOf(row.years_experience),
 ];
 
-/* Sorted by rider name, then registration time. */
+/* The order of the Solo Riders list on screen: newest registration first.
+   The sort is stable, so riders with the same time keep the order read. */
 export const buildSoloExportRows = (rows: readonly SoloExportSource[]): XlsxCell[][] =>
   [...rows]
-    .sort(
-      (first, second) =>
-        compareText(first.full_name, second.full_name) ||
-        compareTime(first.created_at, second.created_at)
-    )
+    .sort((first, second) => compareTime(second.created_at, first.created_at))
     .map((row, index) => [
       index + 1,
       textOf(row.full_name),
@@ -299,17 +295,16 @@ const teamOf = (row: TeamMemberExportSource): TeamExportTeam => {
   return team ?? {};
 };
 
-/* Sorted by team name (then the team's registration time, so two teams with
-   the same name never interleave), the leader first, then rider name. */
+/* The order of the Teams list on screen: newest team first (the team name
+   keeps two teams made at the same moment apart), and within a team the
+   riders in the order they were entered. */
 export const buildTeamExportRows = (rows: readonly TeamMemberExportSource[]): XlsxCell[][] =>
   [...rows]
     .map((row) => ({ row, team: teamOf(row) }))
     .sort(
       (first, second) =>
+        compareTime(second.team.created_at, first.team.created_at) ||
         compareText(first.team.team_name, second.team.team_name) ||
-        compareTime(first.team.created_at, second.team.created_at) ||
-        Number(Boolean(second.row.is_leader)) - Number(Boolean(first.row.is_leader)) ||
-        compareText(first.row.full_name, second.row.full_name) ||
         compareTime(first.row.created_at, second.row.created_at)
     )
     .map(({ row, team }, index) => [

@@ -11,7 +11,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   RIDER_EXPORT_API,
   RIDER_EXPORT_CONTENT_TYPE,
-  RIDER_EXPORT_NOTE,
   filenameFromContentDisposition,
   riderExportFilename,
   todayInIndia,
@@ -139,7 +138,6 @@ export default function ExportRidersButton({
       >
         {busy ? "Preparing…" : "Export to Excel"}
       </button>
-      <p className="text-xs leading-5 text-brown/70">{RIDER_EXPORT_NOTE}</p>
       {error && (
         <p role="alert" className="max-w-xs text-sm leading-5 text-red-800">
           {error}
