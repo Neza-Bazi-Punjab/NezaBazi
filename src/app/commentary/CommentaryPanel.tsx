@@ -46,7 +46,7 @@ import {
 } from "@/lib/scoring/types";
 import { plural } from "@/lib/scoring/format";
 import { TRAINING_BANNER, TRAINING_LABEL, type TrainingScope } from "@/lib/scoring/training";
-import { useLiveState } from "@/lib/scoring/use-live-state";
+import { STAFF_RESYNC_MS, useLiveState } from "@/lib/scoring/use-live-state";
 
 const COMMENTARY_STATE_URL = "/api/commentary/state";
 
@@ -172,7 +172,9 @@ function Fact({ term, value }: { term: string; value: string }) {
 export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) {
   const training = sample !== undefined;
   const stateUrl = training ? `${COMMENTARY_STATE_URL}?sample=1` : COMMENTARY_STATE_URL;
-  const { data, error, connection, refetch } = useLiveState<CommentaryState>(stateUrl);
+  const { data, error, connection, refetch } = useLiveState<CommentaryState>(stateUrl, {
+    resyncMs: STAFF_RESYNC_MS,
+  });
   const state = useMemo(() => normalizeCommentaryState(data), [data]);
   /* Stacked layout only: the standings of every pool, not just the current one. */
   const [allPools, setAllPools] = useState(false);

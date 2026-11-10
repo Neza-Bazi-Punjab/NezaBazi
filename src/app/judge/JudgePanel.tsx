@@ -52,7 +52,7 @@ import {
   type ScoringRun,
 } from "@/lib/scoring/types";
 import { TRAINING_BANNER, TRAINING_LABEL, type TrainingScope } from "@/lib/scoring/training";
-import { useLiveState } from "@/lib/scoring/use-live-state";
+import { STAFF_RESYNC_MS, useLiveState } from "@/lib/scoring/use-live-state";
 import {
   describeAction,
   needsConfirmation,
@@ -129,7 +129,7 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
   const training = sample !== undefined;
   const stateUrl = training ? withTrainingFlag(JUDGE_STATE_URL) : JUDGE_STATE_URL;
   const { data, error, connection, refetch, setData } =
-    useLiveState<JudgeState>(stateUrl);
+    useLiveState<JudgeState>(stateUrl, { resyncMs: STAFF_RESYNC_MS });
   const state = useMemo(() => normalizeJudgeState(data), [data]);
 
   const [pending, setPending] = useState<JudgeAction | null>(null);

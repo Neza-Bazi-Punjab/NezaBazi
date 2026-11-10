@@ -223,9 +223,9 @@ test("public pages read only the public live state, never staff or registration 
   }
 
   const parts = read("../overlay/overlay-parts.tsx");
-  assert.match(parts, /useLiveState<PublicLiveState>\(LIVE_STATE_URL\)/);
+  assert.match(parts, /useLiveState<PublicLiveState>\(LIVE_STATE_URL, \{ resyncMs: STAFF_RESYNC_MS \}\)/);
   const board = read("./LiveBoard.tsx");
-  assert.match(board, /useLiveState<PublicLiveState>\(LIVE_STATE_URL\)/);
+  assert.match(board, /useLiveState<PublicLiveState>\(LIVE_STATE_URL\);/);
   const format = read("../../components/scoring/format.ts");
   assert.match(format, /export const LIVE_STATE_URL = "\/api\/live\/state";/);
 
@@ -271,6 +271,9 @@ test("the live-state hook follows the realtime and polling contract", () => {
   assert.match(hook, /REALTIME_DEBOUNCE_MS = 150;/);
   assert.match(hook, /POLL_WHILE_UNSUBSCRIBED_MS = 4_000;/);
   assert.match(hook, /POLL_WHILE_SUBSCRIBED_MS = 20_000;/);
+  // Staff screens and overlays resync every 5 s even while subscribed.
+  assert.match(hook, /STAFF_RESYNC_MS = 5_000;/);
+  assert.match(hook, /\? subscribedPollMs\s*: POLL_WHILE_UNSUBSCRIBED_MS/);
   assert.match(hook, /status === "SUBSCRIBED"/);
   assert.match(hook, /"postgres_changes"/);
   assert.match(hook, /addEventListener\("visibilitychange"/);
@@ -295,7 +298,7 @@ test("the judges' panel reconciles from each write and confirms before writing",
   const actions = read("../judge/judge-actions.ts");
 
   assert.match(panel, /const stateUrl = training \? withTrainingFlag\(JUDGE_STATE_URL\) : JUDGE_STATE_URL;/);
-  assert.match(panel, /useLiveState<JudgeState>\(stateUrl\)/);
+  assert.match(panel, /useLiveState<JudgeState>\(stateUrl, \{ resyncMs: STAFF_RESYNC_MS \}\)/);
   assert.match(panel, /setData\(next\)/);
   assert.match(panel, /disabled=\{resultsDisabled/);
   assert.match(panel, /role="alertdialog"/);
@@ -521,7 +524,7 @@ test("the training panels read and write a practice session and say whose it is"
 
   assert.match(judge, /const stateUrl = training \? withTrainingFlag\(JUDGE_STATE_URL\) : JUDGE_STATE_URL;/);
   assert.match(commentary, /const stateUrl = training \? `\$\{COMMENTARY_STATE_URL\}\?sample=1` : COMMENTARY_STATE_URL;/);
-  assert.match(commentary, /useLiveState<CommentaryState>\(stateUrl\)/);
+  assert.match(commentary, /useLiveState<CommentaryState>\(stateUrl, \{\s*resyncMs: STAFF_RESYNC_MS,\s*\}\)/);
 
   // Every write carries ?sample=1 in training; reset only ever goes to the
   // practice session, and its prompt says it restarts the demo for everyone.

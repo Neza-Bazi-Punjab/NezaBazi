@@ -17,7 +17,7 @@ import {
   type PublicLiveState,
   type RunResult,
 } from "@/lib/scoring/types";
-import { useLiveState } from "@/lib/scoring/use-live-state";
+import { STAFF_RESYNC_MS, useLiveState } from "@/lib/scoring/use-live-state";
 
 export const TRANSPARENT_CLASS = "nbp-overlay-transparent";
 
@@ -54,7 +54,7 @@ export function OverlayFrame({
 }
 
 export function useOverlayState() {
-  const { data } = useLiveState<PublicLiveState>(LIVE_STATE_URL);
+  const { data } = useLiveState<PublicLiveState>(LIVE_STATE_URL, { resyncMs: STAFF_RESYNC_MS });
   return useMemo(() => normalizePublicState(data), [data]);
 }
 

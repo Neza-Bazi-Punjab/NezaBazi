@@ -562,14 +562,17 @@ const UP_NEXT_RIDERS = 3;
 export const buildCommentaryState = async (
   client: ScoringDbClient = createServiceRoleClient()
 ): Promise<CommentaryState> => {
-  const snapshot = await loadLiveSnapshot(client);
+  // The standings do not depend on the snapshot, so both load at once: one
+  // database round trip fewer on every commentary refresh.
+  const [snapshot, { leaderboards, error }] = await Promise.all([
+    loadLiveSnapshot(client),
+    loadAllLeaderboards(client),
+  ]);
   const { state } = snapshot;
 
   if (!state.configured) {
     return { ...state, current_rider: null, up_next_riders: [], leaderboards_by_round: {}, runs: [] };
   }
-
-  const { leaderboards, error } = await loadAllLeaderboards(client);
 
   if (error) {
     throw new ScoringReadError("the standings", error);
