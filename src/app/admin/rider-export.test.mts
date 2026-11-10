@@ -5,7 +5,6 @@ import test from "node:test";
 import {
   RIDER_EXPORT_API,
   RIDER_EXPORT_CONTENT_TYPE,
-  RIDER_EXPORT_NOTE,
   SOLO_EXPORT_COLUMNS,
   TEAM_EXPORT_COLUMNS,
   UNDEFINED_COLUMN,
@@ -187,21 +186,19 @@ test("a paper entry's placeholder email is written blank", () => {
   assert.equal(rows[1][12], "");
 });
 
-test("solo rows are sorted by name, then registration time, and numbered", () => {
+test("solo rows keep the list's order: newest registration first, and numbered", () => {
   const rows = buildSoloExportRows([
     soloRow({ full_name: "Zorawar Singh", created_at: "2026-11-01T00:00:00Z" }),
-    soloRow({ full_name: "amandeep Kaur", created_at: "2026-11-05T00:00:00Z" }),
-    soloRow({ full_name: "Amandeep Kaur", created_at: "2026-11-02T00:00:00Z", phone: "first" }),
-    soloRow({ full_name: "Baljit Singh", created_at: null }),
+    soloRow({ full_name: "Amandeep Kaur", created_at: "2026-11-05T00:00:00Z" }),
+    soloRow({ full_name: "Baljit Singh", created_at: "2026-11-02T00:00:00Z" }),
   ]);
 
   assert.deepEqual(
-    rows.map((row) => [row[0], row[1], row[11]]),
+    rows.map((row) => [row[0], row[1]]),
     [
-      [1, "Amandeep Kaur", "first"],
-      [2, "amandeep Kaur", "09876543210"],
-      [3, "Baljit Singh", "09876543210"],
-      [4, "Zorawar Singh", "09876543210"],
+      [1, "Amandeep Kaur"],
+      [2, "Baljit Singh"],
+      [3, "Zorawar Singh"],
     ]
   );
 });
@@ -226,30 +223,27 @@ const member = (
     ...overrides,
   }) as TeamMemberExportSource;
 
-test("team rows: sorted by team, the leader first, then rider name", () => {
+test("team rows keep the list's order: newest team first, riders as entered", () => {
+  const older = { team_name: "Khalsa Riders", registration_source: "paper", created_at: "2026-11-08T10:00:00Z" };
   const rows = buildTeamExportRows([
-    member("Zorawar Singh", "Sher-e-Punjab", false),
-    member("Amar Singh", "Sher-e-Punjab", false),
-    member("Mandeep Singh", "Sher-e-Punjab", true),
-    member("Baljit Singh", "Khalsa Riders", false),
-    member("Kuldeep Singh", "Khalsa Riders", true, {
-      teams: [{ team_name: "Khalsa Riders", registration_source: "paper", created_at: "2026-11-09T10:00:00Z" }],
-    }),
+    member("Baljit Singh", "Khalsa Riders", false, { teams: [older], created_at: "2026-11-08T10:00:02Z" }),
+    member("Zorawar Singh", "Sher-e-Punjab", false, { created_at: "2026-11-09T10:00:01Z" }),
+    member("Kuldeep Singh", "Khalsa Riders", true, { teams: [older], created_at: "2026-11-08T10:00:01Z" }),
+    member("Amar Singh", "Sher-e-Punjab", true, { created_at: "2026-11-09T10:00:02Z" }),
   ]);
 
   assert.deepEqual(
     rows.map((row) => [row[0], row[1], row[2], row[3]]),
     [
-      [1, "Khalsa Riders", "Yes", "Kuldeep Singh"],
-      [2, "Khalsa Riders", "No", "Baljit Singh"],
-      [3, "Sher-e-Punjab", "Yes", "Mandeep Singh"],
-      [4, "Sher-e-Punjab", "No", "Amar Singh"],
-      [5, "Sher-e-Punjab", "No", "Zorawar Singh"],
+      [1, "Sher-e-Punjab", "No", "Zorawar Singh"],
+      [2, "Sher-e-Punjab", "Yes", "Amar Singh"],
+      [3, "Khalsa Riders", "Yes", "Kuldeep Singh"],
+      [4, "Khalsa Riders", "No", "Baljit Singh"],
     ]
   );
   // The array form of the embedded team is read too.
-  assert.equal(rows[0][18], "Paper");
-  assert.equal(rows[2][18], "Desk");
+  assert.equal(rows[2][18], "Paper");
+  assert.equal(rows[0][18], "Desk");
 });
 
 test("a team row, cell by cell", () => {
@@ -292,7 +286,7 @@ test("two teams with the same name never interleave", () => {
     member("D early leader", "x", true, { teams: early }),
   ]);
 
-  assert.deepEqual(rows.map((row) => row[3]), ["D early leader", "A early", "C late leader", "B late"]);
+  assert.deepEqual(rows.map((row) => row[3]), ["B late", "C late leader", "A early", "D early leader"]);
 });
 
 test("no confirmation code, id or staff field ever reaches a row", () => {
@@ -478,8 +472,8 @@ test("Export to Excel button: only an OK spreadsheet becomes a download", () => 
   assert.match(button, /role="alert"/);
   assert.match(button, /body\.error/);
   assert.match(button, /"Could not reach the server\. Check the connection and retry\."/);
-  assert.equal(RIDER_EXPORT_NOTE, "Every rider, with contact details. For organisers only.");
-  assert.match(button, /\{RIDER_EXPORT_NOTE\}/);
+  // No note under the button.
+  assert.doesNotMatch(buttonSource, /RIDER_EXPORT_NOTE|For organisers only/);
 
   // The writer (and node:zlib) never reaches the browser bundle.
   assert.doesNotMatch(buttonSource, /write-xlsx|node:zlib/);
