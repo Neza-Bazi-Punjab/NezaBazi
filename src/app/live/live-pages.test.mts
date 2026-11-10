@@ -217,7 +217,7 @@ test("public pages read only the public live state, never staff or registration 
     assert.doesNotMatch(source, /\/api\/admin/, `${name} must not call an admin API`);
     assert.doesNotMatch(
       source,
-      /solo_registrations|team_members|father_name|mother_name|headshot|years_experience|horse_breed|emergency_contact|\bphone\b|confirmation_code/,
+      /solo_registrations|team_members|father_name|mother_name|dal_panth|headshot|years_experience|horse_breed|emergency_contact|\bphone\b|confirmation_code/,
       `${name} must not touch registration fields`
     );
   }

@@ -25,3 +25,12 @@ test("the policy covers parents' names, paper registration and public results", 
   assert.match(page, /public\s+live scoreboard/);
   assert.match(page, /parents&apos; names and\s+emergency contacts are never shown publicly/);
 });
+
+test("the policy lists the Dal Panth an organiser may record, staff-only", async () => {
+  const { readFileSync } = await import("node:fs");
+  const page = readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
+
+  assert.match(page, /Dal Panth \(optional\)\./);
+  assert.match(page, /The Dal\s+Panth a rider rides with, where an organiser records it\./);
+  assert.match(page, /seen\s+only by event staff and is never shown publicly/);
+});

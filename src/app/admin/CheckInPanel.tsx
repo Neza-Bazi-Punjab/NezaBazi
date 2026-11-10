@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { searchRiders } from "@/lib/check-in-search";
 import { displayEmail } from "@/lib/paper-registration";
 import CheckInStatus, { switchClass } from "./CheckInStatus";
+import DalPanthCell from "./DalPanthCell";
 import FormTeamsPanel from "./FormTeamsPanel";
 import RiderHeadshotCell from "./SoloHeadshotCell";
 
@@ -85,6 +86,8 @@ type LookupResponse = {
   /* The looked-up rider's own photo, if they uploaded one. */
   headshotUrl?: string | null;
   photoTarget?: PhotoTarget | null;
+  /* Staff-only; null when blank or when it could not be read. */
+  dalPanth?: string | null;
   matches?: RiderMatch[];
   error?: string;
 };
@@ -177,6 +180,9 @@ export default function CheckInPanel() {
     useState<TeamEmergencyContact | null>(null);
   const [headshotUrl, setHeadshotUrl] = useState<string | null>(null);
   const [photoTarget, setPhotoTarget] = useState<PhotoTarget | null>(null);
+  /* The card's Dal Panth. It saves on its own (DalPanthCell); check-in
+     neither waits for it nor sends it. */
+  const [dalPanth, setDalPanth] = useState<string | null>(null);
   /* A photo that couldn't be saved, shown under the rider's name. */
   const [photoError, setPhotoError] = useState<string | null>(null);
   /* Which team action is saving: a rider's code, or "team" for all at once. */
@@ -291,6 +297,7 @@ export default function CheckInPanel() {
     setTeammates([]);
     setHeadshotUrl(null);
     setPhotoTarget(null);
+    setDalPanth(null);
     setPhotoError(null);
     setConfirmTeam(null);
   };
@@ -302,6 +309,7 @@ export default function CheckInPanel() {
     setTeamEmergency(result.teamEmergency ?? null);
     setHeadshotUrl(result.headshotUrl ?? null);
     setPhotoTarget(result.photoTarget ?? null);
+    setDalPanth(typeof result.dalPanth === "string" ? result.dalPanth : null);
   };
 
   /* A photo changed at the desk: show it on the card and on every team tile
@@ -424,6 +432,7 @@ export default function CheckInPanel() {
     setRider(null);
     setEntries([]);
     setTeammates([]);
+    setDalPanth(null);
     setNotice(null);
     setError(null);
 
@@ -493,6 +502,7 @@ export default function CheckInPanel() {
 
       setRider(null);
       setTeammates([]);
+      setDalPanth(null);
       setCode("");
       setQuery("");
       lastAutoCode.current = null;
@@ -909,6 +919,23 @@ export default function CheckInPanel() {
                 <Detail label="Horse Age" value={rider.horse_age} />
                 <Detail label="Horse Breed" value={rider.horse_breed} />
                 <Detail label="Horse Name" value={rider.horse_name} />
+                {/* Saves on its own; keyed on the code so an edit never
+                    carries over to the next rider looked up. */}
+                <div>
+                  <p className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
+                    Dal Panth
+                  </p>
+                  <div className="mt-1">
+                    <DalPanthCell
+                      key={rider.confirmation_code}
+                      variant="card"
+                      code={rider.confirmation_code}
+                      value={dalPanth}
+                      riderName={rider.full_name}
+                      onSaved={setDalPanth}
+                    />
+                  </div>
+                </div>
                 {soloEntry && (
                   <>
                     <Detail

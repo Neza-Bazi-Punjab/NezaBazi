@@ -16,6 +16,8 @@ import {
 import { PROFILE_ROLES, type ProfileRole } from "@/lib/scoring/types";
 import { site } from "@/lib/site";
 import CheckInPanel from "./CheckInPanel";
+import DalPanthCell from "./DalPanthCell";
+import ExportRidersButton from "./ExportRidersButton";
 import RiderHeadshotCell, { type RiderHeadshotState } from "./SoloHeadshotCell";
 
 /* The email box of the edit form. A paper placeholder is shown as an empty
@@ -67,6 +69,10 @@ export type SoloRegistration = {
   /* A no-account rider's photo, kept on the entry until an account claims it.
      Absent until the paper-photo migration has been run. */
   headshot_path?: string | null;
+  /* Saved by DalPanthCell on its own, never by the row's edit form. Absent
+     until the Dal Panth migration has been run. */
+  confirmation_code?: string | null;
+  dal_panth?: string | null;
 };
 
 export type Team = {
@@ -100,6 +106,9 @@ export type TeamMember = {
   created_at: string;
   /* The rider's own photo, set by an administrator (20261108120000). */
   headshot_path?: string | null;
+  /* As on SoloRegistration: saved by DalPanthCell on its own. */
+  confirmation_code?: string | null;
+  dal_panth?: string | null;
 };
 
 export type AuditLogEntry = {
@@ -375,6 +384,8 @@ const auditActionLabels: Record<string, string> = {
   set_live: "Update Live Display",
   close_demo: "Close Demo",
   open_demo: "Open Demo",
+  set_dal_panth: "Set Dal Panth",
+  export_riders: "Exported Riders",
 };
 
 const formatAuditAction = (action: string) =>
@@ -553,7 +564,7 @@ const stringifyAuditDetails = (details: unknown) => {
 const matchesPerson = (
   person: Pick<
     SoloRegistration | TeamMember,
-    "full_name" | "email" | "phone" | "father_name" | "mother_name"
+    "full_name" | "email" | "phone" | "father_name" | "mother_name" | "dal_panth"
   >,
   query: string
 ) =>
@@ -561,7 +572,8 @@ const matchesPerson = (
   person.email.toLowerCase().includes(query) ||
   person.phone.toLowerCase().includes(query) ||
   (person.father_name ?? "").toLowerCase().includes(query) ||
-  (person.mother_name ?? "").toLowerCase().includes(query);
+  (person.mother_name ?? "").toLowerCase().includes(query) ||
+  (person.dal_panth ?? "").toLowerCase().includes(query);
 
 const matchesSoloRegistration = (registration: SoloRegistration, query: string) =>
   matchesPerson(registration, query) ||
@@ -634,12 +646,16 @@ function ListSearchBar({
   label,
   count,
   noun,
+  action,
 }: {
   value: string;
   onChange: (value: string) => void;
   label: string;
   count: number;
   noun: [singular: string, plural: string];
+  /* One button beside the count (the Excel export); wraps under the search
+     box on a narrow screen. */
+  action?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -661,9 +677,12 @@ function ListSearchBar({
           className="w-full rounded-lg border border-bronze/20 bg-cream py-2 pl-9 pr-3 text-sm text-brown focus:border-bronze focus:outline-none"
         />
       </label>
-      <p className="text-sm text-brown/75">
-        Showing <strong className="text-ink">{count}</strong> {count === 1 ? noun[0] : noun[1]}
-      </p>
+      <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+        <p className="text-sm text-brown/75">
+          Showing <strong className="text-ink">{count}</strong> {count === 1 ? noun[0] : noun[1]}
+        </p>
+        {action}
+      </div>
     </div>
   );
 }
@@ -2216,6 +2235,7 @@ export default function AdminDashboard({
               label="Search solo registrations"
               count={filteredSoloRegistrations.length}
               noun={["result", "results"]}
+              action={<ExportRidersButton list="solo" />}
             />
           </div>
 
@@ -2227,12 +2247,13 @@ export default function AdminDashboard({
 
           {filteredSoloRegistrations.length > 0 ? (
             <div className="max-w-full overflow-x-auto overscroll-x-contain">
-              <table className="w-full min-w-[2444px] table-fixed border-collapse text-left text-sm text-brown">
+              <table className="w-full min-w-[2684px] table-fixed border-collapse text-left text-sm text-brown">
                 <colgroup>
                   <col className="w-[64px]" />
                   <col className="w-[190px]" />
                   <col className="w-[170px]" />
                   <col className="w-[170px]" />
+                  <col className="w-[240px]" />
                   <col className="w-[90px]" />
                   <col className="w-[220px]" />
                   <col className="w-[145px]" />
@@ -2252,6 +2273,7 @@ export default function AdminDashboard({
                     <th className="whitespace-nowrap px-3 py-2">Name</th>
                     <th className="whitespace-nowrap px-3 py-2">Father&apos;s Name</th>
                     <th className="whitespace-nowrap px-3 py-2">Mother&apos;s Name</th>
+                    <th className="whitespace-nowrap px-3 py-2">Dal Panth</th>
                     <th className="whitespace-nowrap px-3 py-2">Age</th>
                     <th className="whitespace-nowrap px-3 py-2">Location</th>
                     <th className="whitespace-nowrap px-3 py-2">Phone</th>
@@ -2330,6 +2352,16 @@ export default function AdminDashboard({
                           ) : (
                             <AdminTableText value={registration.mother_name ?? "—"} />
                           )}
+                        </td>
+                        {/* Saves on its own, in edit mode too: never part of
+                            the row's draft or its save. */}
+                        <td className="px-3 py-2">
+                          <DalPanthCell
+                            code={registration.confirmation_code}
+                            value={registration.dal_panth}
+                            riderName={registration.full_name}
+                            onSaved={() => router.refresh()}
+                          />
                         </td>
                         <td className="overflow-hidden whitespace-nowrap px-3 py-2">
                           {isEditing ? (
@@ -3102,6 +3134,7 @@ export default function AdminDashboard({
               label="Search teams"
               count={filteredTeams.length}
               noun={["team", "teams"]}
+              action={<ExportRidersButton list="teams" />}
             />
           </div>
 
@@ -3274,12 +3307,13 @@ export default function AdminDashboard({
 
                     {members.length > 0 ? (
                       <div className="mt-4 max-w-full overflow-x-auto overscroll-x-contain">
-                        <table className="w-full min-w-[1944px] table-fixed border-collapse text-left text-sm text-brown">
+                        <table className="w-full min-w-[2184px] table-fixed border-collapse text-left text-sm text-brown">
                           <colgroup>
                             <col className="w-[64px]" />
                             <col className="w-[230px]" />
                             <col className="w-[170px]" />
                             <col className="w-[170px]" />
+                            <col className="w-[240px]" />
                             <col className="w-[90px]" />
                             <col className="w-[280px]" />
                             <col className="w-[160px]" />
@@ -3295,6 +3329,7 @@ export default function AdminDashboard({
                               <th className="whitespace-nowrap px-3 py-2">Name</th>
                               <th className="whitespace-nowrap px-3 py-2">Father&apos;s Name</th>
                               <th className="whitespace-nowrap px-3 py-2">Mother&apos;s Name</th>
+                              <th className="whitespace-nowrap px-3 py-2">Dal Panth</th>
                               <th className="whitespace-nowrap px-3 py-2">Age</th>
                               <th className="whitespace-nowrap px-3 py-2">Location</th>
                               <th className="whitespace-nowrap px-3 py-2">Phone</th>
@@ -3386,6 +3421,16 @@ export default function AdminDashboard({
                                   ) : (
                                     <AdminTableText value={member.mother_name ?? "—"} />
                                   )}
+                                </td>
+                                {/* Saves on its own, in edit mode too: never
+                                    part of the team's drafts or its save. */}
+                                <td className="px-3 py-2">
+                                  <DalPanthCell
+                                    code={member.confirmation_code}
+                                    value={member.dal_panth}
+                                    riderName={member.full_name}
+                                    onSaved={() => router.refresh()}
+                                  />
                                 </td>
                                 <td className="overflow-hidden whitespace-nowrap px-3 py-2">
                                   {isEditingTeam ? (
