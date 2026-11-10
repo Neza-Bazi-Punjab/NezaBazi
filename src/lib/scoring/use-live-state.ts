@@ -14,6 +14,12 @@
 //   the fresh copy. Polls use the plain URL.
 // - Polls every 4 s until the channel is SUBSCRIBED and every 20 s after
 //   (belt and braces: realtime drops silently on venue Wi-Fi and phones).
+//   Staff screens (judges, commentary) and the stream overlays pass
+//   `resyncMs: STAFF_RESYNC_MS` to poll every 5 s even while subscribed: a
+//   channel can stay SUBSCRIBED yet stop delivering events, and each poll
+//   replaces the whole state, so a screen that missed events is never more
+//   than about 5 s behind. They are a handful of devices; the public board
+//   keeps 20 s.
 // - Refetches when the tab becomes visible again and when the device comes
 //   back online.
 // - Keeps the last good payload when a request fails, and never throws into
@@ -89,6 +95,7 @@ export const LIVE_SCORING_TABLES = [
 export const REALTIME_DEBOUNCE_MS = 150;
 export const POLL_WHILE_UNSUBSCRIBED_MS = 4_000;
 export const POLL_WHILE_SUBSCRIBED_MS = 20_000;
+export const STAFF_RESYNC_MS = 5_000;
 export const POLL_IN_TRAINING_MS = 2_000;
 
 let channelSequence = 0;
@@ -145,7 +152,14 @@ const withSampleFlag = (url: string) => {
   return `${url}${url.includes("?") ? "&" : "?"}sample=${flag}`;
 };
 
-export function useLiveState<T>(url: string): LiveStateHook<T> {
+export type LiveStateOptions = {
+  /* Poll interval while realtime is subscribed; POLL_WHILE_SUBSCRIBED_MS
+     when left out. */
+  resyncMs?: number;
+};
+
+export function useLiveState<T>(url: string, options: LiveStateOptions = {}): LiveStateHook<T> {
+  const subscribedPollMs = options.resyncMs ?? POLL_WHILE_SUBSCRIBED_MS;
   const [data, setDataState] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -179,7 +193,7 @@ export function useLiveState<T>(url: string): LiveStateHook<T> {
         training
           ? POLL_IN_TRAINING_MS
           : isSubscribed
-            ? POLL_WHILE_SUBSCRIBED_MS
+            ? subscribedPollMs
             : POLL_WHILE_UNSUBSCRIBED_MS
       );
     };
@@ -351,7 +365,7 @@ export function useLiveState<T>(url: string): LiveStateHook<T> {
         void supabase.removeChannel(channel).catch(() => {});
       }
     };
-  }, [url]);
+  }, [url, subscribedPollMs]);
 
   const refetch = useCallback(() => refetchRef.current(), []);
 
