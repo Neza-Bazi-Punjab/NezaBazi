@@ -945,7 +945,7 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
   );
 
   return (
-    <div className={`${LEDGER_ROOT} flex min-h-dvh flex-col lg:h-dvh`}>
+    <div className={`${LEDGER_ROOT} flex min-h-dvh flex-col uppercase lg:h-dvh [&_input]:normal-case [&_textarea]:normal-case`}>
       {sample && (
         <div
           role="note"
