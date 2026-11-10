@@ -74,8 +74,11 @@ export default function CheckInStatus({
   onSelect: (code: string) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [list, setList] = useState<"teams" | "solo">("teams");
-  const [soloFilter, setSoloFilter] = useState<SoloFilter>("all");
+  /* Opens on the solo riders, who are most of the field. */
+  const [list, setList] = useState<"teams" | "solo">("solo");
+  /* "Who's checked in" means just that: the solo list opens on the riders
+     who have arrived. Not checked in and All are a tap away. */
+  const [soloFilter, setSoloFilter] = useState<SoloFilter>("in");
   const [teamFilter, setTeamFilter] = useState<TeamFilter>("all");
 
   const riders = useMemo(
@@ -181,19 +184,19 @@ export default function CheckInStatus({
       <div className="flex flex-wrap gap-2" role="group" aria-label="Which list">
         <button
           type="button"
-          aria-pressed={list === "teams"}
-          onClick={() => setList("teams")}
-          className={switchClass(list === "teams")}
-        >
-          Teams · {totals.teamsReady} of {totals.teams} complete
-        </button>
-        <button
-          type="button"
           aria-pressed={list === "solo"}
           onClick={() => setList("solo")}
           className={switchClass(list === "solo")}
         >
           Solo riders · {totals.soloIn} of {totals.solo} in
+        </button>
+        <button
+          type="button"
+          aria-pressed={list === "teams"}
+          onClick={() => setList("teams")}
+          className={switchClass(list === "teams")}
+        >
+          Teams · {totals.teamsReady} of {totals.teams} complete
         </button>
       </div>
 
@@ -309,9 +312,9 @@ export default function CheckInStatus({
             <div className="flex gap-2" role="group" aria-label="Show solo riders">
               {(
                 [
-                  ["all", "All"],
                   ["in", "Checked in"],
                   ["out", "Not checked in"],
+                  ["all", "All"],
                 ] as const
               ).map(([value, label]) => (
                 <button
@@ -328,7 +331,11 @@ export default function CheckInStatus({
           </div>
 
           {soloRiders.length === 0 ? (
-            <p className="text-brown/70">No solo riders to show.</p>
+            <p className="text-brown/70">
+              {soloFilter === "in" && !query
+                ? "No solo riders have checked in yet."
+                : "No solo riders to show."}
+            </p>
           ) : (
             <ul className="divide-y divide-bronze/10 overflow-hidden rounded-lg border border-bronze/20 bg-sand">
               {soloRiders.map((rider) => (

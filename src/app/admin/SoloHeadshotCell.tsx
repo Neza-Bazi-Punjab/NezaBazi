@@ -418,6 +418,9 @@ export default function RiderHeadshotCell({
   riderName,
   initial,
   onError,
+  boxClassName = "h-10 w-10 rounded-full",
+  large = false,
+  onChange,
 }: {
   /* The row's id: solo_registrations.id, or team_members.id for a team rider. */
   registrationId: string;
@@ -426,6 +429,15 @@ export default function RiderHeadshotCell({
   initial: RiderHeadshotState | undefined;
   /* Shown above the table: a 40px cell has no room for a message. */
   onError: (message: string | null) => void;
+  /* Size and shape of the photo button. The lists use the 40px circle; the
+     check-in desk passes its own, larger box. */
+  boxClassName?: string;
+  /* Bigger initials and "+" badge, for a large box. */
+  large?: boolean;
+  /* Told the photo now shown after an add, replace or remove, so a page that
+     shows the same rider twice (the check-in card and its team grid) can
+     keep both in step. */
+  onChange?: (url: string | null) => void;
 }) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -510,7 +522,9 @@ export default function RiderHeadshotCell({
         return;
       }
 
-      setUrl(result.url ?? URL.createObjectURL(prepared.blob));
+      const nextUrl = result.url ?? URL.createObjectURL(prepared.blob);
+      setUrl(nextUrl);
+      onChange?.(nextUrl);
     } catch {
       setError("The photo couldn't be saved. Check the connection and try again.");
     } finally {
@@ -557,9 +571,10 @@ export default function RiderHeadshotCell({
 
     if (afterRemove.current) {
       setUrl(afterRemove.current.url);
+      onChange?.(afterRemove.current.url);
       afterRemove.current = null;
     }
-  }, []);
+  }, [onChange]);
   const closeWebcam = useCallback(() => setWebcam(false), []);
 
   const replaceFrom = (source: "files" | "camera") => {
@@ -581,7 +596,7 @@ export default function RiderHeadshotCell({
           onClick={() => setViewing(true)}
           disabled={busy}
           title={error ?? `View ${riderName}'s photo`}
-          className={`relative block h-10 w-10 overflow-hidden rounded-full border bg-parchment transition-transform hover:scale-110 focus-visible:scale-110 disabled:cursor-not-allowed disabled:hover:scale-100 ${
+          className={`relative block ${boxClassName} overflow-hidden border bg-parchment transition-transform ${large ? "hover:scale-[1.03] focus-visible:scale-[1.03]" : "hover:scale-110 focus-visible:scale-110"} disabled:cursor-not-allowed disabled:hover:scale-100 ${
             error ? "border-red-700" : "border-bronze/30"
           }`}
         >
@@ -603,7 +618,7 @@ export default function RiderHeadshotCell({
           aria-expanded={Boolean(menu)}
           aria-label={`Add a photo for ${riderName}`}
           title={error ?? "Add a photo"}
-          className={`relative flex h-10 w-10 items-center justify-center rounded-full border border-dashed text-xs font-semibold transition-colors ${
+          className={`relative flex ${boxClassName} items-center justify-center border border-dashed font-semibold ${large ? "text-2xl" : "text-xs"} transition-colors ${
             error
               ? "border-red-700 text-red-700"
               : "border-bronze/40 text-bronze-dark hover:border-bronze hover:bg-parchment"
@@ -614,7 +629,11 @@ export default function RiderHeadshotCell({
           ) : (
             <>
               <span className="text-brown/60">{initialsOf(riderName)}</span>
-              <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-bronze-deep text-[11px] leading-none text-cream">
+              <span
+                className={`absolute flex items-center justify-center rounded-full bg-bronze-deep leading-none text-cream ${
+                  large ? "bottom-1.5 right-1.5 h-7 w-7 text-lg" : "-bottom-0.5 -right-0.5 h-4 w-4 text-[11px]"
+                }`}
+              >
                 +
               </span>
             </>

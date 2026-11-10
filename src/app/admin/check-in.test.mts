@@ -369,9 +369,9 @@ test("the desk shows rider photos through the same signed-URL helper as commenta
 
   // The rider and every teammate come back with a photo URL (or null), and a
   // teammate's email is used for the lookup but never sent to the browser.
-  assert.match(checkInRoute, /headshotUrl \}\);/);
+  assert.match(checkInRoute, /headshotUrl,\s+photoTarget,\s+\}\);/);
   assert.match(checkInRoute, /map\(async \(\{ email, \.\.\.teammate \}\)/);
-  assert.match(checkInRoute, /return \{ \.\.\.teammate, headshot_url \};/);
+  assert.match(checkInRoute, /\.\.\.teammate,\s+headshot_url: soloUrl \?\? teamUrl,/);
 
   // A teammate without a solo entry is still found through their own Auth
   // account, but only one whose email address is confirmed, so nobody can
@@ -392,6 +392,26 @@ test("the desk shows rider photos through the same signed-URL helper as commenta
   assert.match(panel, /initials\(name\)/);
 });
 
+test("the desk adds, replaces and removes photos through the admin photo route", () => {
+  const panel = repoFile("src/app/admin/CheckInPanel.tsx");
+  const cell = repoFile("src/app/admin/SoloHeadshotCell.tsx");
+
+  // The same audited route and pop-up as the Solo and Teams lists, for the
+  // rider's card and each teammate's tile.
+  assert.match(panel, /import RiderHeadshotCell from "\.\/SoloHeadshotCell";/);
+  assert.match(panel, /registrationId=\{photoTarget\.id\}/);
+  assert.match(panel, /registrationId=\{teammate\.photo_target\.id\}/);
+  assert.match(cell, /fetch\("\/api\/admin\/headshots", \{ method: "POST", body \}\)/);
+
+  // Replace and Remove act on the photo on screen; a first photo goes on the
+  // solo entry when the rider has one, so it shows on both of their entries.
+  assert.match(checkInRoute, /if \(soloId && \(soloUrl \|\| !teamUrl\)\)/);
+  assert.match(checkInRoute, /\.in\("confirmation_code", teammateCodes\)/);
+
+  // A change shows at once on the card and every tile sharing that row.
+  assert.match(panel, /same\(teammate\.photo_target\) \? \{ \.\.\.teammate, headshot_url: url \}/);
+});
+
 test("a team checks in one rider at a time or all at once, each rider audited", () => {
   const panel = repoFile("src/app/admin/CheckInPanel.tsx");
 
@@ -405,17 +425,22 @@ test("a team checks in one rider at a time or all at once, each rider audited", 
   );
   assert.match(checkInRoute, /for \(const member of toChange\)[\s\S]*?rpc\("admin_set_check_in"/);
 
-  // The desk asks before checking in the whole team, and each card in the
-  // team grid has its own button.
-  assert.match(panel, /setConfirmTeam\(true\)/);
-  assert.match(panel, /JSON\.stringify\(\{ teamId, checkedIn: true \}\)/);
+  // The desk asks before checking in, or undoing, the whole team, and each
+  // card in the team grid has its own button.
+  assert.match(panel, /setConfirmTeam\("in"\)/);
+  assert.match(panel, /setConfirmTeam\("out"\)/);
+  assert.match(panel, /Undo whole team \(\{arrivedTeammates\.length\}\)/);
+  assert.match(panel, /JSON\.stringify\(\{ teamId, checkedIn \}\)/);
+  assert.match(panel, /setWholeTeam\(confirmTeam === "in"\)/);
   assert.match(panel, /setTeammateCheckedIn\(teammate, teammate\.checked_in_at === null\)/);
 });
 
 test("Who's checked in has a Teams list and a Solo riders list, teams counted out of four", () => {
   const status = repoFile("src/app/admin/CheckInStatus.tsx");
 
-  assert.match(status, /useState<"teams" \| "solo">\("teams"\)/);
+  // Opens on the solo riders (most of the field), showing who has arrived.
+  assert.match(status, /useState<"teams" \| "solo">\("solo"\)/);
+  assert.match(status, /useState<SoloFilter>\("in"\)/);
   assert.match(status, /\$\{team\.arrived\} of \$\{TEAM_SIZE\} checked in/);
   assert.match(status, /All \$\{TEAM_SIZE\} checked in/);
 });

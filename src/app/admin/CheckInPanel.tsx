@@ -2,13 +2,20 @@
 
 /* Check-in desk: look a rider up by the code they present, check their face
    against their photo, confirm they arrived, and see their team: all four
-   riders with photos, each checked in on their own or the whole team at once. Kept in its own
+   riders with photos, each checked in on their own or the whole team at once.
+   Any photo here can be added (from files or the camera), replaced or removed
+   on the spot: tap it. Kept in its own
    component because it is used standing at a table on event eve, on whatever
    device is to hand, not from the main registration tables. */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { searchRiders } from "@/lib/check-in-search";
 import { displayEmail } from "@/lib/paper-registration";
 import CheckInStatus, { switchClass } from "./CheckInStatus";
+import RiderHeadshotCell from "./SoloHeadshotCell";
+
+/* Which row a photo added at the desk goes on (see /api/admin/check-in):
+   always the one whose photo is on screen. */
+type PhotoTarget = { kind: "solo" | "team"; id: string };
 
 type Rider = {
   id: string;
@@ -43,6 +50,7 @@ type Teammate = {
   checked_in_at: string | null;
   /* Short-lived signed URL; null when the rider has no photo we can find. */
   headshot_url: string | null;
+  photo_target: PhotoTarget | null;
 };
 
 type TeamEmergencyContact = {
@@ -75,6 +83,7 @@ type LookupResponse = {
   teamEmergency?: TeamEmergencyContact | null;
   /* The looked-up rider's own photo, if they uploaded one. */
   headshotUrl?: string | null;
+  photoTarget?: PhotoTarget | null;
   matches?: RiderMatch[];
   error?: string;
 };
@@ -164,10 +173,13 @@ export default function CheckInPanel() {
   const [teamEmergency, setTeamEmergency] =
     useState<TeamEmergencyContact | null>(null);
   const [headshotUrl, setHeadshotUrl] = useState<string | null>(null);
+  const [photoTarget, setPhotoTarget] = useState<PhotoTarget | null>(null);
+  /* A photo that couldn't be saved, shown under the rider's name. */
+  const [photoError, setPhotoError] = useState<string | null>(null);
   /* Which team action is saving: a rider's code, or "team" for all at once. */
   const [teamSaving, setTeamSaving] = useState<string | null>(null);
   /* "Check in whole team" asks once before it acts. */
-  const [confirmTeam, setConfirmTeam] = useState(false);
+  const [confirmTeam, setConfirmTeam] = useState<"in" | "out" | null>(null);
   /* Every rider (name, email, phone, team, code, check-in status), filtered
      on this device as you type, so results are instant. Refreshed from the
      server every few seconds and straight after each check-in, so a rider
@@ -275,7 +287,9 @@ export default function CheckInPanel() {
     setEntries([]);
     setTeammates([]);
     setHeadshotUrl(null);
-    setConfirmTeam(false);
+    setPhotoTarget(null);
+    setPhotoError(null);
+    setConfirmTeam(null);
   };
 
   const applyCard = (result: LookupResponse & { rider: Rider }) => {
@@ -284,6 +298,25 @@ export default function CheckInPanel() {
     setTeammates(result.teammates ?? []);
     setTeamEmergency(result.teamEmergency ?? null);
     setHeadshotUrl(result.headshotUrl ?? null);
+    setPhotoTarget(result.photoTarget ?? null);
+  };
+
+  /* A photo changed at the desk: show it on the card and on every team tile
+     that shares the row, without reloading the card (another server may
+     still hold the old photo's address for a while). */
+  const photoChanged = (target: PhotoTarget, url: string | null) => {
+    const same = (other: PhotoTarget | null) =>
+      other !== null && other.kind === target.kind && other.id === target.id;
+
+    if (same(photoTarget)) {
+      setHeadshotUrl(url);
+    }
+
+    setTeammates((current) =>
+      current.map((teammate) =>
+        same(teammate.photo_target) ? { ...teammate, headshot_url: url } : teammate
+      )
+    );
   };
 
   const loadRiderByCode = async (lookupCode: string) => {
@@ -499,7 +532,7 @@ export default function CheckInPanel() {
     setTeamSaving(teammate.confirmation_code);
     setError(null);
     setNotice(null);
-    setConfirmTeam(false);
+    setConfirmTeam(null);
 
     try {
       const response = await fetch("/api/admin/check-in", {
@@ -528,8 +561,10 @@ export default function CheckInPanel() {
     }
   };
 
-  /* Everyone on the team who has not arrived yet, in one go. */
-  const checkInWholeTeam = async () => {
+  /* The whole team in one go: everyone not yet in checked in, or (to undo a
+     mistake) everyone in checked out. Each rider is still audited on their
+     own by the server. */
+  const setWholeTeam = async (checkedIn: boolean) => {
     const teamId = entries.find((entry) => entry.source === "team")?.team_id;
 
     if (!teamId) {
@@ -544,7 +579,7 @@ export default function CheckInPanel() {
       const response = await fetch("/api/admin/check-in", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ teamId, checkedIn: true }),
+        body: JSON.stringify({ teamId, checkedIn }),
       });
       const result = (await response.json()) as {
         error?: string;
@@ -552,21 +587,29 @@ export default function CheckInPanel() {
         failed?: string[];
       };
 
+      const verb = checkedIn ? "check in" : "undo";
+
       if (!response.ok) {
-        setError(result.error ?? "Could not check in this team.");
+        setError(result.error ?? `Could not ${verb} this team.`);
       } else if (result.failed && result.failed.length > 0) {
         setError(
-          `Checked in ${result.changed ?? 0}, but could not check in ${result.failed.join(", ")}. Try them one by one.`
+          `${checkedIn ? "Checked in" : "Undid"} ${result.changed ?? 0}, but could not ${verb} ${result.failed.join(", ")}. Try them one by one.`
         );
-      } else {
+      } else if (checkedIn) {
         setNotice(
           result.changed === 0
             ? "Everyone on this team was already checked in."
             : `${result.changed} ${result.changed === 1 ? "rider" : "riders"} checked in. The whole team is here.`
         );
+      } else {
+        setNotice(
+          result.changed === 0
+            ? "Nobody on this team was checked in."
+            : `Check-in undone for ${result.changed} ${result.changed === 1 ? "rider" : "riders"}. The team is no longer complete.`
+        );
       }
 
-      setConfirmTeam(false);
+      setConfirmTeam(null);
       await refreshCard();
       void loadRoster();
     } catch {
@@ -583,6 +626,9 @@ export default function CheckInPanel() {
   const hasTeamEntry = entries.some((entry) => entry.source === "team");
   const teamName = entries.find((entry) => entry.source === "team")?.team_name ?? "Team";
   const waitingTeammates = teammates.filter((teammate) => !teammate.checked_in_at);
+  const arrivedTeammates = teammates.filter((teammate) => teammate.checked_in_at);
+  /* Who the open confirmation is about. */
+  const confirmList = confirmTeam === "out" ? arrivedTeammates : waitingTeammates;
   const teamBusy = teamSaving !== null || saving;
 
   return (
@@ -765,11 +811,27 @@ export default function CheckInPanel() {
             <article className="space-y-6 rounded-lg border border-bronze/20 bg-sand p-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex items-start gap-4">
-                  <Headshot
-                    url={headshotUrl}
-                    name={rider.full_name}
-                    className="h-24 w-24 shrink-0 rounded-xl border-2 border-bronze/40 text-2xl sm:h-28 sm:w-28"
-                  />
+                  {photoTarget ? (
+                    <div className="shrink-0">
+                      <RiderHeadshotCell
+                        key={`${photoTarget.kind}:${photoTarget.id}:${headshotUrl ?? ""}`}
+                        registrationId={photoTarget.id}
+                        kind={photoTarget.kind}
+                        riderName={rider.full_name}
+                        initial={{ url: headshotUrl }}
+                        onError={setPhotoError}
+                        onChange={(url) => photoChanged(photoTarget, url)}
+                        boxClassName="h-24 w-24 rounded-xl border-2 sm:h-28 sm:w-28"
+                        large
+                      />
+                    </div>
+                  ) : (
+                    <Headshot
+                      url={headshotUrl}
+                      name={rider.full_name}
+                      className="h-24 w-24 shrink-0 rounded-xl border-2 border-bronze/40 text-2xl sm:h-28 sm:w-28"
+                    />
+                  )}
                   <div className="min-w-0">
                     <h3 className="font-display text-2xl font-bold uppercase tracking-wide text-bronze-dark">
                       {rider.full_name}
@@ -788,8 +850,17 @@ export default function CheckInPanel() {
                         </span>
                       ))}
                     </div>
-                    {!headshotUrl && (
-                      <p className="mt-2 text-xs text-brown/60">No photo on file.</p>
+                    <p className="mt-2 text-xs text-brown/60">
+                      {photoTarget
+                        ? headshotUrl
+                          ? "Tap the photo to replace or remove it."
+                          : "No photo on file. Tap the box to add one."
+                        : headshotUrl
+                          ? null
+                          : "No photo on file."}
+                    </p>
+                    {photoError && (
+                      <p className="mt-1 text-xs text-red-800">{photoError}</p>
                     )}
                   </div>
                 </div>
@@ -878,36 +949,59 @@ export default function CheckInPanel() {
                       </p>
                     </div>
 
-                    {waitingTeammates.length > 0 && !confirmTeam && (
-                      <button
-                        type="button"
-                        onClick={() => setConfirmTeam(true)}
-                        disabled={teamBusy}
-                        className="rounded-lg bg-bronze-deep px-5 py-2.5 font-display text-xs font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze disabled:opacity-50"
-                      >
-                        Check in whole team ({waitingTeammates.length})
-                      </button>
+                    {!confirmTeam && (waitingTeammates.length > 0 || arrivedTeammates.length > 0) && (
+                      <div className="flex flex-wrap gap-2">
+                        {waitingTeammates.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmTeam("in")}
+                            disabled={teamBusy}
+                            className="rounded-lg bg-bronze-deep px-5 py-2.5 font-display text-xs font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze disabled:opacity-50"
+                          >
+                            Check in whole team ({waitingTeammates.length})
+                          </button>
+                        )}
+                        {arrivedTeammates.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmTeam("out")}
+                            disabled={teamBusy}
+                            className="rounded-lg border border-bronze/40 px-5 py-2.5 font-display text-xs font-semibold uppercase tracking-[0.15em] text-brown transition-colors hover:bg-sand disabled:opacity-50"
+                          >
+                            Undo whole team ({arrivedTeammates.length})
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
 
-                  {confirmTeam && waitingTeammates.length > 0 && (
+                  {confirmTeam && confirmList.length > 0 && (
                     <div className="mt-3 rounded-lg border border-bronze/30 bg-sand p-3">
                       <p className="text-sm text-brown">
-                        Check in {waitingTeammates.map((teammate) => teammate.full_name).join(", ")}?
-                        Only do this when they are all here in person.
+                        {confirmTeam === "in"
+                          ? `Check in ${confirmList.map((teammate) => teammate.full_name).join(", ")}? Only do this when they are all here in person.`
+                          : `Undo check-in for ${confirmList.map((teammate) => teammate.full_name).join(", ")}? The team will no longer be complete.`}
                       </p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button
                           type="button"
-                          onClick={checkInWholeTeam}
+                          onClick={() => setWholeTeam(confirmTeam === "in")}
                           disabled={teamBusy}
-                          className="rounded-lg bg-bronze-deep px-5 py-2 font-display text-xs font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze disabled:opacity-50"
+                          className={`rounded-lg px-5 py-2 font-display text-xs font-semibold uppercase tracking-[0.15em] transition-colors disabled:opacity-50 ${
+                            confirmTeam === "in"
+                              ? "bg-bronze-deep text-cream hover:bg-bronze"
+                              : "bg-red-800 text-cream hover:bg-red-700"
+                          }`}
                         >
-                          {teamSaving === "team" ? "Working…" : `Yes, check in ${waitingTeammates.length}`}
+                          {teamSaving === "team"
+                            ? "Working…"
+                            : confirmTeam === "in"
+                              ? `Yes, check in ${confirmList.length}`
+                              : `Yes, undo ${confirmList.length}`}
                         </button>
                         <button
                           type="button"
-                          onClick={() => setConfirmTeam(false)}
+                          onClick={() => setConfirmTeam(null)}
                           disabled={teamSaving === "team"}
                           className="rounded-lg border border-bronze/40 px-5 py-2 font-display text-xs font-semibold uppercase tracking-[0.15em] text-brown transition-colors hover:bg-cream disabled:opacity-50"
                         >
@@ -928,11 +1022,29 @@ export default function CheckInPanel() {
                             isThisRider ? "border-bronze ring-2 ring-bronze/40" : "border-bronze/20"
                           }`}
                         >
-                          <Headshot
-                            url={teammate.headshot_url}
-                            name={teammate.full_name}
-                            className="aspect-square w-full rounded-md text-3xl"
-                          />
+                          {teammate.photo_target ? (
+                            <RiderHeadshotCell
+                              key={`${teammate.photo_target.kind}:${teammate.photo_target.id}:${teammate.headshot_url ?? ""}`}
+                              registrationId={teammate.photo_target.id}
+                              kind={teammate.photo_target.kind}
+                              riderName={teammate.full_name}
+                              initial={{ url: teammate.headshot_url }}
+                              onError={setPhotoError}
+                              onChange={(url) => {
+                                if (teammate.photo_target) {
+                                  photoChanged(teammate.photo_target, url);
+                                }
+                              }}
+                              boxClassName="aspect-square w-full rounded-md"
+                              large
+                            />
+                          ) : (
+                            <Headshot
+                              url={teammate.headshot_url}
+                              name={teammate.full_name}
+                              className="aspect-square w-full rounded-md text-3xl"
+                            />
+                          )}
                           <p className="mt-2 font-display text-sm font-bold uppercase leading-tight tracking-wide text-bronze-dark">
                             {teammate.full_name}
                           </p>
@@ -986,6 +1098,10 @@ export default function CheckInPanel() {
                 </section>
               )}
 
+              {/* A team rider is checked in from their own tile in the team
+                  grid above, so a second button here would look like it acts
+                  on the whole team. Only a solo-only rider gets it. */}
+              {!(hasTeamEntry && teammates.length > 0) && (
               <div className="flex flex-col gap-3 sm:flex-row">
                 {rider.checked_in_at ? (
                   <button
@@ -1006,19 +1122,8 @@ export default function CheckInPanel() {
                     {saving ? "Working…" : "Confirm Check-in"}
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    clearResults();
-                    setCode("");
-                    setQuery("");
-                    codeInput.current?.focus();
-                  }}
-                  className="rounded-lg border border-bronze/40 px-6 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown transition-colors hover:bg-cream"
-                >
-                  Next Rider
-                </button>
               </div>
+              )}
             </article>
           )}
         </>
