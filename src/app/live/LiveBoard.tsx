@@ -61,9 +61,15 @@ export default function LiveBoard() {
   const poolCall =
     live?.display_mode === "pool_call" && live.called_pool_label ? live.called_pool_label : null;
 
-  /* Standings: the live round plus every completed one. */
+  /* Standings: the live round, every round before it, and any round that has
+     been live or is complete. Only a round still to come is left out. (The
+     auto engine never marks a round complete, so "complete" alone would hide
+     the rounds already ridden.) */
   const roundOptions = (state?.rounds ?? []).filter(
-    (option) => option.id === round?.id || option.status === "complete"
+    (option) =>
+      option.id === round?.id ||
+      option.status !== "upcoming" ||
+      (round !== null && option.sort_order < round.sort_order)
   );
   const selectedRound =
     roundOptions.find((option) => option.id === chosenRoundId) ??

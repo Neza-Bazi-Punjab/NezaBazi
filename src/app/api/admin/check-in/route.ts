@@ -646,7 +646,16 @@ const readDeskPool = async (
   serviceSupabase: ServiceRoleClient,
   code: string,
   rider: unknown
-): Promise<{ started: boolean; pool: string | null; position: number | null } | null> => {
+): Promise<{
+  started: boolean;
+  pool: string | null;
+  position: number | null;
+  /* Checked in, Automatic mode, qualifying open, yet in no pool
+     (20261111000000). Absent before that migration. */
+  missing?: boolean;
+  /* Before qualifying starts: whether Singles are in Automatic mode. */
+  auto?: boolean;
+} | null> => {
   if (!isRecord(rider) || typeof rider.solo_entries !== "number" || rider.solo_entries < 1) {
     return null;
   }
@@ -662,6 +671,8 @@ const readDeskPool = async (
       started: data.started,
       pool: typeof data.pool === "string" ? data.pool : null,
       position: typeof data.position === "number" ? data.position : null,
+      ...(typeof data.missing === "boolean" ? { missing: data.missing } : {}),
+      ...(typeof data.auto === "boolean" ? { auto: data.auto } : {}),
     };
   } catch {
     return null;
