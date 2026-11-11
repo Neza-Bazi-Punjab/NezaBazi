@@ -351,3 +351,14 @@ test("the standings list has no fixed width, so it never scrolls sideways", () =
   assert.match(section, /className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b/);
   assert.doesNotMatch(section, /shrink-0|grid-cols-/);
 });
+
+test("the Aarhi tab lists who is through, in riding order, and starts the next round", () => {
+  assert.match(admin, /\["single", "Aarhi", true\],/);
+  assert.match(admin, /const through = board\.filter\(\(row\) => row\.advanced === true\);/);
+  assert.match(admin, /const board = inRidingOrder\(data\.leaderboards_by_round\[source\.id\] \?\? \[\], sourceRuns\);/);
+  // The button is the engine's own Start, offered only when its plan is ready.
+  assert.match(admin, /const ready = Boolean\(step\?\.engine\.auto_on && plan\?\.state === "ready"\);/);
+  assert.match(admin, /onClick=\{\(\) => startNextRound\(plan\)\}/);
+  // A rider can be taken off the list from the tab.
+  assert.match(admin, /onClick=\{\(\) => setOverride\(source, row, false\)\}/);
+});
