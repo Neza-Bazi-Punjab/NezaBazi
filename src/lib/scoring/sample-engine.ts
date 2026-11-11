@@ -258,12 +258,27 @@ export type SampleOverride = {
 /* The note scoring_take_out writes, and the only override Bring back undoes. */
 export const TAKE_OUT_NOTE = "Taken out on the judges' panel";
 
+/* What the commentators' panel says about a rider beyond the run's own
+   snapshot. Staff only: it never leaves through a public address. */
+export type SampleRiderFacts = {
+  father_name: string | null;
+  mother_name: string | null;
+  age: number | null;
+  years_experience: number | null;
+  horse_breed: string | null;
+  horse_age: number | null;
+};
+
 export type SampleSeed = {
   rounds: ScoringRound[];
   runs: ScoringRun[];
   live: LiveState;
   overrides?: SampleOverride[];
   progression?: SampleProgression;
+  /* A demo rebuilt from the registered riders (training-riders.ts): each
+     rider's facts by solo registration id. Carried through every save
+     untouched; absent for the invented sample riders. */
+  riders?: Record<string, SampleRiderFacts>;
 };
 
 /* One round's overrides as computeSampleLeaderboard takes them. */
@@ -1110,6 +1125,8 @@ export const createSampleEngine = (
       runs: clone(runs),
       live: clone(live),
       overrides: clone(overrides),
+      // Never changed by the engine, so the seed's own object is handed on.
+      ...(seed.riders ? { riders: seed.riders } : {}),
     }),
   };
 };

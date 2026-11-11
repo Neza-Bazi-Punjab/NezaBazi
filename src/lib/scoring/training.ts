@@ -24,7 +24,7 @@ export const TRAINING_BANNER: Record<TrainingScope, string> = {
 /* The confirm prompt for "Reset training data". */
 export const TRAINING_RESET_QUESTION: Record<TrainingScope, string> = {
   shared:
-    "Reset the practice data? Every result recorded in practice is wiped and the sample riders start again. This restarts the demo for everyone, on every device.",
+    "Reset the practice data? Every result recorded in practice is wiped and the demo starts again with the riders registered right now, in a new random draw. This restarts the demo for everyone, on every device.",
   unshared:
     "Reset the practice data? Every result recorded in practice is wiped and the sample riders start again. This restarts the demo for everyone practising on this server (not yet shared between devices).",
 };

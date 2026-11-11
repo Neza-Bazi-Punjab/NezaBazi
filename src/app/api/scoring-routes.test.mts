@@ -443,7 +443,7 @@ test("reset-sample resets only the caller's practice session, and is a 404 for e
   );
   assert.match(source, /await reset\(training\.session\);/);
   assert.match(source, /sampleJudgeState\(training\.session\)/);
-  assert.match(source, /never reads or writes the scoring or registration tables/);
+  assert.match(source, /never reads or writes the\s+\/\/ scoring tables, never writes a registration and never returns a real\s+\/\/ result/);
   assert.doesNotMatch(source, /createServiceRoleClient|verifyRoleRequest|\.rpc\(|\.from\(|supabase\//);
 });
 
@@ -499,6 +499,10 @@ test("the training session never imports or calls a database client", () => {
     "@/lib/scoring/blocks",
     "@/lib/scoring/next-to-ride",
     "@/lib/scoring/training-db",
+    // The demo on the registered riders: the one read of solo_registrations
+    // (training-riders.test.mts pins what it may select) and the pure draw.
+    "@/lib/scoring/training-registrations",
+    "@/lib/scoring/training-riders",
     "@/lib/scoring/training-store",
     "@/lib/scoring/types",
     "@/lib/scoring/vmix-sample",
