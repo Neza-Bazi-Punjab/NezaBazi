@@ -18,9 +18,12 @@ import {
   builderPoolLabel,
   builderRemove,
   builderShift,
+  builderStartOver,
   builderStartPool,
+  builderWithOpenLast,
   builderToSave,
-  emptyBuilder,
+  firstOpenAttempt,
+  startedPoolLabels,
   type BuilderPools,
 } from "@/lib/scoring/pool-builder";
 import { plural } from "@/lib/scoring/format";
@@ -59,9 +62,22 @@ export default function PoolBuilder({
   const isTeams = round.event_type === "section";
   const noun = isTeams ? "team" : "rider";
 
+  /* Pools that have started riding are kept exactly as they are on save, so
+     they are shown locked. Their letters must not move. */
+  const started = useMemo(() => startedPoolLabels(runs), [runs]);
+  const isLocked = (index: number) => pooled && started.has(builderPoolLabel(index));
+  /* A round with no pools that has started riding cannot be rebuilt. */
+  const unpooledStarted = !pooled && runs.some((run) => run.status !== "pending");
+  const firstAttempt = firstOpenAttempt(runs);
+
   /* Starts from the round's current start list, so a drawn list can be
-     adjusted rather than rebuilt. */
-  const [pools, setPools] = useState<BuilderPools>(() => builderFromRuns(runs));
+     adjusted rather than rebuilt; a new pool is ready after started ones. */
+  const [pools, setPoolsRaw] = useState<BuilderPools>(() =>
+    builderWithOpenLast(builderFromRuns(runs), (index) =>
+      pooled && startedPoolLabels(runs).has(builderPoolLabel(index))
+    )
+  );
+  const setPools = (next: BuilderPools) => setPoolsRaw(builderWithOpenLast(next, isLocked));
   const [query, setQuery] = useState("");
   /* The pool a tap adds to, by index; null means the last pool. */
   const [active, setActive] = useState<number | null>(null);
@@ -136,7 +152,9 @@ export default function PoolBuilder({
   ).length;
 
   const lastIndex = pools.length - 1;
-  const currentIndex = active !== null && active < pools.length ? active : lastIndex;
+  const currentIndex =
+    active !== null && active < pools.length && !isLocked(active) ? active : lastIndex;
+  const lockedLabels = pools.map((_, index) => index).filter(isLocked).map(builderPoolLabel);
   const currentLabel = pooled ? builderPoolLabel(currentIndex) : null;
   const currentSize = pools[currentIndex]?.length ?? 0;
   const lastKey = lastAdded !== null && builderHas(pools, lastAdded) ? lastAdded : null;
@@ -165,16 +183,30 @@ export default function PoolBuilder({
             {pooled ? " “New pool” starts the next letter." : " This round has no pools: one list."}{" "}
             Nothing changes until you save.
           </p>
+          {lockedLabels.length > 0 && (
+            <p className="mt-2 rounded-lg border border-bronze/30 bg-parchment px-3 py-2 text-sm leading-6 text-ink">
+              {lockedLabels.length === 1 ? `Pool ${lockedLabels[0]} has` : `Pools ${lockedLabels.join(", ")} have`}{" "}
+              started riding: kept exactly as is. Add or change the other pools.
+              {firstAttempt > 1
+                ? ` Round ${firstAttempt - 1} is over, so pools you add now ride from Round ${firstAttempt}.`
+                : ""}
+            </p>
+          )}
+          {unpooledStarted && (
+            <p className="mt-2 rounded-lg border border-red-700/30 bg-red-50 px-3 py-2 text-sm text-red-800">
+              Riding has started and this round has no pools: add riders with Add Late Entrant below.
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => {
-              setPools(emptyBuilder());
+              setPools(builderStartOver(pools, isLocked));
               setActive(null);
               setLastAdded(null);
             }}
-            disabled={busy || placedCount === 0}
+            disabled={busy || unpooledStarted || placedCount === 0}
             className={secondaryButton}
           >
             Start Over
@@ -194,13 +226,15 @@ export default function PoolBuilder({
                 <span className={labelClass}>Add to</span>
                 {pools.map((pool, index) => {
                   const selected = index === currentIndex;
+                  const locked = isLocked(index);
 
                   return (
                     <button
                       key={index}
                       type="button"
                       onClick={() => setActive(index === lastIndex ? null : index)}
-                      disabled={busy}
+                      disabled={busy || locked}
+                      title={locked ? "Started riding: kept as it is." : undefined}
                       aria-pressed={selected}
                       className={`min-w-[3rem] rounded-lg border px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.08em] transition-colors disabled:opacity-60 ${
                         selected
@@ -211,6 +245,7 @@ export default function PoolBuilder({
                       {builderPoolLabel(index)}
                       <span className={`ml-1 font-sans font-normal ${selected ? "text-cream/80" : "text-brown/60"}`}>
                         {pool.length}
+                        {locked ? " · riding" : ""}
                       </span>
                     </button>
                   );
@@ -291,7 +326,7 @@ export default function PoolBuilder({
                       setPools(builderAdd(pools, entrant.key, currentIndex));
                       setLastAdded(entrant.key);
                     }}
-                    disabled={busy}
+                    disabled={busy || unpooledStarted}
                     className="flex w-full items-center justify-between gap-2 rounded-md px-3 py-3 text-left text-brown transition-colors hover:bg-parchment disabled:opacity-60"
                   >
                     <span className="min-w-0">
@@ -323,6 +358,7 @@ export default function PoolBuilder({
           {pools.map((pool, poolIndex) => {
             const label = pooled ? builderPoolLabel(poolIndex) : null;
             const isCurrent = poolIndex === currentIndex;
+            const locked = isLocked(poolIndex);
 
             return (
               <div
@@ -333,8 +369,9 @@ export default function PoolBuilder({
                   <p className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
                     {label ? `Pool ${label}` : "Start list"} · {pool.length}
                     {isCurrent && pooled ? " · adding here" : ""}
+                    {locked ? " · started riding, kept as is" : ""}
                   </p>
-                  {pooled && !isCurrent && (
+                  {pooled && !isCurrent && !locked && (
                     <button
                       type="button"
                       onClick={() => setActive(poolIndex === lastIndex ? null : poolIndex)}
@@ -368,6 +405,7 @@ export default function PoolBuilder({
                               <span className="ml-2 font-normal text-red-800">not checked in</span>
                             )}
                           </span>
+                          {!locked && !unpooledStarted && (
                           <span className="flex items-center gap-1">
                             <button
                               type="button"
@@ -387,7 +425,7 @@ export default function PoolBuilder({
                             >
                               ↓
                             </button>
-                            {pooled && pools.length > 1 && (
+                            {pooled && pools.some((_, index) => index !== poolIndex && !isLocked(index)) && (
                               <select
                                 aria-label={`Move ${name} to another pool`}
                                 value=""
@@ -403,7 +441,7 @@ export default function PoolBuilder({
                               >
                                 <option value="">Pool…</option>
                                 {pools.map((_, index) =>
-                                  index === poolIndex ? null : (
+                                  index === poolIndex || isLocked(index) ? null : (
                                     <option key={index} value={index}>
                                       To {builderPoolLabel(index)}
                                     </option>
@@ -421,6 +459,7 @@ export default function PoolBuilder({
                               ✕
                             </button>
                           </span>
+                          )}
                         </li>
                       );
                     })}
@@ -434,8 +473,8 @@ export default function PoolBuilder({
 
       <div className="flex flex-col gap-2 border-t border-bronze/20 pt-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-brown/80">
-          {scoredCount > 0
-            ? "This round already has results — clear them before saving a new start list."
+          {lockedLabels.length > 0
+            ? `Saving keeps ${lockedLabels.length === 1 ? `Pool ${lockedLabels[0]}` : `Pools ${lockedLabels.join(", ")}`} with ${plural(scoredCount, "result")} and writes the rest.`
             : runs.length > 0
               ? "Saving replaces the current start list."
               : `${plural(round.attempts_per_rider, "attempt")} per ${isTeams ? "team rider" : "rider"}.`}
@@ -443,7 +482,7 @@ export default function PoolBuilder({
         <button
           type="button"
           onClick={() => onSave(toSave, pooled ? labels : [])}
-          disabled={busy || scoredCount > 0 || placedCount === 0}
+          disabled={busy || unpooledStarted || placedCount === 0}
           className={`${primaryButton} py-3`}
         >
           Save Start List…

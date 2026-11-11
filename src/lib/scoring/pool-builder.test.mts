@@ -14,8 +14,12 @@ import {
   builderShift,
   builderStartPool,
   builderToSave,
+  builderStartOver,
+  builderWithOpenLast,
   emptyBuilder,
+  firstOpenAttempt,
   parseMovePosition,
+  startedPoolLabels,
   parseSaveStartListRequest,
 } from "./pool-builder.ts";
 
@@ -217,7 +221,7 @@ test("the builder lists checked-in entrants only and saves through the page's co
   assert.match(builder, /\.filter\(\(entrant\) => entrant\.checkedIn && !builderHas\(pools, entrant\.key\)\)/);
   assert.match(builder, /checkedIn: team\.member_count === 4 && team\.checked_in_count === 4/);
   assert.match(builder, /onClick=\{\(\) => onSave\(toSave, pooled \? labels : \[\]\)\}/);
-  assert.match(builder, /disabled=\{busy \|\| scoredCount > 0 \|\| placedCount === 0\}/);
+  assert.match(builder, /disabled=\{busy \|\| unpooledStarted \|\| placedCount === 0\}/);
   assert.match(admin, /onSave=\{\(pools, labels\) => saveBuiltStartList\(round, pools, labels\)\}/);
 });
 
@@ -236,4 +240,67 @@ test("builder: a tap can go into any pool, not only the last", () => {
   assert.deepEqual(builderAdd([[A], [B]], A, 1), [[A], [B]]);
   assert.match(builder, /role="group" aria-label="Add to pool"/);
   assert.match(builder, /builderAdd\(pools, entrant\.key, currentIndex\)/);
+});
+
+/* Adding pools to a round that is riding (20261111110000) ------------------- */
+
+const keepRidden = repoFile("supabase/migrations/20261111110000_scoring_pool_builder_keep_ridden.sql");
+const keepRiddenRevert = repoFile(
+  "supabase/migrations/revert/20261111110000_scoring_pool_builder_keep_ridden.revert.sql"
+);
+
+test("started pools: any run scored, skipped or on course; new pools ride from the latest pass", () => {
+  const runs = [
+    { pool_label: "A", status: "scored", attempt_number: 1 },
+    { pool_label: "A", status: "pending", attempt_number: 2 },
+    { pool_label: "B", status: "on_course", attempt_number: 1 },
+    { pool_label: "C", status: "pending", attempt_number: 1 },
+    { pool_label: null, status: "void", attempt_number: 1 },
+  ];
+  assert.deepEqual([...startedPoolLabels(runs)].sort(), ["A", "B"]);
+  assert.equal(firstOpenAttempt(runs), 1);
+  assert.equal(firstOpenAttempt([...runs, { status: "scored", attempt_number: 2 }]), 2);
+  assert.equal(firstOpenAttempt([{ status: "pending", attempt_number: 3 }]), 1);
+});
+
+test("builder keeps started pools put: an open pool after them, Start over clears only later pools", () => {
+  const lockedA = (index: number) => index === 0;
+  assert.deepEqual(builderWithOpenLast([[A, B]], lockedA), [[A, B], []]);
+  assert.deepEqual(builderWithOpenLast([[A], [C]], lockedA), [[A], [C]]);
+  assert.deepEqual(builderWithOpenLast([], lockedA), [[]]);
+  assert.deepEqual(builderStartOver([[A], [B, C], [D]], lockedA), [[A], []]);
+  assert.deepEqual(builderStartOver([[A], [B]], () => false), [[]]);
+  assert.deepEqual(builderStartOver([[A], [B], [C]], (index) => index === 1), [[A], [B], []]);
+});
+
+test("keep-ridden migration: started pools kept unchanged, the rest written, no Round 1 slot behind the riding", () => {
+  assert.match(
+    keepRidden,
+    /create or replace function public\.scoring_save_start_list\(\s+p_round_id uuid,\s+p_pools jsonb,/
+  );
+  assert.doesNotMatch(keepRidden, /This round already has results/);
+  assert.match(keepRidden, /and run\.status <> 'pending'/);
+  assert.match(keepRidden, /raise exception 'Pool % has started riding: it must stay as it is\./);
+  assert.match(keepRidden, /if v_sent is distinct from v_existing then/);
+  assert.match(
+    keepRidden,
+    /delete from public\.scoring_runs as run\s+where run\.round_id = p_round_id\s+and not coalesce\(run\.pool_label = any\(v_locked\), false\);/
+  );
+  assert.match(keepRidden, /continue when coalesce\(v_label = any\(v_locked\), false\);/);
+  assert.match(keepRidden, /for v_attempt in v_first_attempt \.\. v_round\.attempts_per_rider loop/);
+  assert.match(keepRidden, /Riding has started in this round and it has no pools/);
+  assert.match(keepRidden, /perform public\.scoring_renumber_round\(p_round_id\);/);
+  assert.match(
+    keepRidden,
+    /revoke execute on function public\.scoring_save_start_list\(uuid, jsonb, uuid, text, text\)\s+from public, anon, authenticated;/
+  );
+  assert.match(keepRidden, /'pools_kept', to_jsonb\(v_locked\)/);
+  assert.doesNotMatch(keepRidden, /\b(create table|alter table|drop function)\b/i);
+  assert.match(keepRiddenRevert, /Re-run supabase\/migrations\/20261111100000_scoring_pool_builder\.sql/);
+});
+
+test("the builder button stays usable once a round has results", () => {
+  assert.match(admin, /disabled=\{busy\}\s+aria-expanded=\{builderRoundId === round\.id\}/);
+  assert.match(builder, /started riding: kept exactly as is/);
+  assert.match(builder, /disabled=\{busy \|\| locked\}/);
 });
