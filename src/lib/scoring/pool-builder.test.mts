@@ -413,3 +413,8 @@ test("team rounds: the judges score a whole team from one card, one result per r
   assert.match(card, /const complete = picks\.length === runs\.length && runs\.length > 0;/);
   assert.match(card, /disabled=\{busy \|\| !complete\}/);
 });
+
+test("a podium place can go to an entrant of any round of the same event", () => {
+  assert.match(admin, /\.filter\(\(other\) => other\.event_type === target\.event_type\)/);
+  assert.match(admin, /\{podiumChoices\(round\)\.map\(\(row\) => \(/);
+});
