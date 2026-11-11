@@ -231,7 +231,7 @@ test("the builder shows and searches horse names", () => {
   assert.match(builder, /search: searchable\(team\.team_name, team\.horse_names\)/);
   assert.match(builder, /details: rider\.details,/);
   assert.match(admin, /matchRank\(\{ \.\.\.rider, team_name: null \}, query\)/);
-  assert.match(builder, /\{entrant\.horse && \(/);
+  assert.match(builder, /\{entrant\.horse && /);
   const state = repoFile("src/lib/scoring/admin-state.ts");
   assert.match(
     state,
@@ -320,4 +320,14 @@ test("the builder shows only the pool being added to until asked for all of them
   // The list on the right is the current pool alone by default.
   assert.match(builder, /if \(pooled && !showAll && !isCurrent\) \{\s*return null;\s*\}/);
   assert.match(builder, /showAll \? `Show Only Pool \$\{currentLabel\}` : `Show All \$\{pools\.length\} Pools`/);
+});
+
+test("builder search finds every rider, placed or not, and says where they are", () => {
+  // Searching covers every entrant, not only the unplaced checked-in ones.
+  assert.match(builder, /const everyone = \[\.\.\.entrants\.values\(\)\];/);
+  assert.match(builder, /if \(!searching\) \{\s+return \[\.\.\.entrants\.values\(\)\]\s+\.filter\(\(entrant\) => entrant\.checkedIn && !builderHas\(pools, entrant\.key\)\)/);
+  assert.match(builder, /`In Pool \$\{builderPoolLabel\(place\.index\)\} · \$\{place\.position\}`/);
+  assert.match(builder, /Not checked in/);
+  assert.match(builder, /update\(builderMoveToPool\(pools, entrant\.key, currentIndex\)\)/);
+  assert.match(builder, /pooled && place\.index !== currentIndex && !isLocked\(place\.index\)/);
 });
