@@ -392,3 +392,24 @@ test("standings: pools fold like the start list, the pool riding now open", () =
   assert.match(section, /onClick=\{\(\) => setOverride\(round, row, false\)\}/);
   assert.match(section, /onClick=\{\(\) => setOverride\(round, row, null\)\}/);
 });
+
+test("team rounds: the judges score a whole team from one card, one result per rider", () => {
+  const panel = repoFile("src/app/judge/JudgePanel.tsx");
+  const card = repoFile("src/app/judge/TeamCard.tsx");
+
+  // Only in a Section round, for the team that is next, and never while a
+  // result is being changed from the log.
+  assert.match(
+    panel,
+    /const teamLead = round\?\.event_type === "section" && !editing \? \(currentRun \?\? startRider\) : null;/
+  );
+  // Each rider keeps their own result: the card's picks go through the
+  // ordinary score action, one after the other.
+  assert.match(
+    panel,
+    /for \(const pick of picks\) \{\s*next = await sendAction\(\s*\{ kind: "score", run: pick\.run, result: pick\.result, override: false, fromMain: false \},/
+  );
+  // Nothing is saved until every rider has a score.
+  assert.match(card, /const complete = picks\.length === runs\.length && runs\.length > 0;/);
+  assert.match(card, /disabled=\{busy \|\| !complete\}/);
+});
