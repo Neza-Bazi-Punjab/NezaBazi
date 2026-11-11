@@ -208,8 +208,14 @@ export const toVmixCurrentRow = (
      graphic never drops to an empty name while the judge readies the next. */
   const run = state.current_run ?? justRodeRun(state);
   const last = state.last_scored_run;
-  const photo = runPhotoCells(photos, run, sample);
-  const lastPhoto = runPhotoCells(photos, last, sample);
+  /* A team round: the four riders go down the track together, so the feed
+     names the team where it names the rider in singles. The broadcast's
+     titles are bound to rider_name and last_rider_name, and show the team
+     with no change on their side; a team has no one horse or photo. */
+  const teamRun = Boolean(run?.team_name);
+  const teamLast = Boolean(last?.team_name);
+  const photo = teamRun ? NO_PHOTO : runPhotoCells(photos, run, sample);
+  const lastPhoto = teamLast ? NO_PHOTO : runPhotoCells(photos, last, sample);
 
   return {
     round_name: text(round?.name),
@@ -217,12 +223,12 @@ export const toVmixCurrentRow = (
     round_number: round?.round_number ?? 0,
     pool_label: text(state.live?.called_pool_label),
     next_pool_label: text(state.next_pool_label),
-    rider_name: text(run?.rider_name),
+    rider_name: text(run?.team_name ?? run?.rider_name),
     team_name: text(run?.team_name),
     /* Who is on the track: the team in a Section round (its riders go
        together), the rider otherwise. */
     entrant_name: text(run?.team_name ?? run?.rider_name),
-    horse_name: text(run?.horse_name),
+    horse_name: teamRun ? "" : text(run?.horse_name),
     location_short: text(shortLocation(run?.rider_location)),
     attempt_number: run?.attempt_number ?? 0,
     attempts_per_rider: round?.attempts_per_rider ?? 0,
@@ -230,7 +236,7 @@ export const toVmixCurrentRow = (
     runs_total: round ? runCount : 0,
     display_mode: text(state.live?.display_mode),
     message: text(state.live?.message),
-    last_rider_name: text(last?.rider_name),
+    last_rider_name: text(last?.team_name ?? last?.rider_name),
     last_team_name: text(last?.team_name),
     last_entrant_name: text(last?.team_name ?? last?.rider_name),
     last_result: last?.result ? RESULT_LABELS[last.result] : "",
