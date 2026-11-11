@@ -39,7 +39,11 @@ import {
   type EngineEvent,
   type NextStep,
 } from "@/lib/scoring/next-round";
-import { parseMovePosition } from "@/lib/scoring/pool-builder";
+import {
+  firstOpenAttempt,
+  parseMovePosition,
+  startedPoolLabels,
+} from "@/lib/scoring/pool-builder";
 import { startListMatcher } from "@/lib/scoring/start-list-search";
 import PoolBuilder from "./PoolBuilder";
 import PoolSheet from "./PoolSheet";
@@ -1575,6 +1579,8 @@ export default function ScoringAdmin({
 
   const saveBuiltStartList = (target: ScoringRound, pools: string[][], labels: string[]) => {
     const noun = target.event_type === "section" ? "team" : "rider";
+    const started = startedPoolLabels(runs);
+    const openAttempt = firstOpenAttempt(runs);
     const count = pools.reduce((total, pool) => total + pool.length, 0);
     const layout =
       labels.length > 0
@@ -1585,11 +1591,15 @@ export default function ScoringAdmin({
 
     ask({
       title: `Save ${plural(count, noun)} in ${layout}?`,
-      detail: `Riders ride in the order you tapped, ${plural(target.attempts_per_rider, "attempt")} each.${
-        runs.length > 0 ? ` This replaces the current start list of ${plural(runs.length, "run")}.` : ""
-      }`,
+      detail: started.size > 0
+        ? `Started riding, kept exactly as is with their results: Pool ${[...started].sort().join(", ")}. The other pools are written in the order you tapped${
+            openAttempt > 1 ? `, riding from Round ${openAttempt}` : ""
+          }.`
+        : `Riders ride in the order you tapped, ${plural(target.attempts_per_rider, "attempt")} each.${
+            runs.length > 0 ? ` This replaces the current start list of ${plural(runs.length, "run")}.` : ""
+          }`,
       confirmLabel: "Save Start List",
-      danger: runs.length > 0,
+      danger: runs.length > 0 && started.size === 0,
       run: async () => {
         const ok = await perform(
           `/api/admin/scoring/rounds/${target.id}/start-list`,
@@ -2111,7 +2121,7 @@ export default function ScoringAdmin({
                   <button
                     type="button"
                     onClick={() => setBuilderRoundId(builderRoundId === round.id ? null : round.id)}
-                    disabled={busy || (scoredCount > 0 && builderRoundId !== round.id)}
+                    disabled={busy}
                     aria-expanded={builderRoundId === round.id}
                     className={`${secondaryButton} shrink-0`}
                   >

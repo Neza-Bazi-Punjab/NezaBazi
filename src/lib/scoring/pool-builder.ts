@@ -150,6 +150,52 @@ export const builderMoveToPool = (
   return moved.filter((pool, index, all) => pool.length > 0 || index === all.length - 1);
 };
 
+/* Pools that have started riding: any run in them scored, skipped or on
+   course. Saving keeps these exactly as they are (scoring_save_start_list,
+   20261111110000), so the builder shows them locked. */
+export const startedPoolLabels = (
+  runs: ReadonlyArray<{ pool_label: string | null; status: string }>
+): Set<string> =>
+  new Set(
+    runs
+      .filter((run) => run.status !== "pending" && run.pool_label !== null)
+      .map((run) => run.pool_label as string)
+  );
+
+/* Once riding has started, a pool written now gets only the attempt passes
+   the riding has not moved beyond: the highest attempt anyone has ridden. */
+export const firstOpenAttempt = (
+  runs: ReadonlyArray<{ attempt_number: number; status: string }>
+) =>
+  runs
+    .filter((run) => run.status !== "pending")
+    .reduce((highest, run) => Math.max(highest, run.attempt_number), 1);
+
+/* Locked pools stay put; the last pool must be one taps can go into, so a
+   locked last pool gets an empty pool after it. */
+export const builderWithOpenLast = (
+  pools: BuilderPools,
+  isLocked: (index: number) => boolean
+): BuilderPools =>
+  pools.length === 0 ? emptyBuilder() : isLocked(pools.length - 1) ? [...pools, []] : pools;
+
+/* "Start over" keeps every pool up to the last one that has started riding
+   (their letters must not move) and clears the pools after it. */
+export const builderStartOver = (
+  pools: BuilderPools,
+  isLocked: (index: number) => boolean
+): BuilderPools => {
+  let lastLocked = -1;
+
+  pools.forEach((_, index) => {
+    if (isLocked(index)) {
+      lastLocked = index;
+    }
+  });
+
+  return builderWithOpenLast(pools.slice(0, lastLocked + 1), isLocked);
+};
+
 /* The layout to save: empty pools left out (an empty current pool at the
    end is simply not sent). */
 export const builderToSave = (pools: BuilderPools): string[][] =>
