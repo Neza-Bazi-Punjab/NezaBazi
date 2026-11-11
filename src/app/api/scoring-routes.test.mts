@@ -161,7 +161,7 @@ test("database errors never reach the client except the human P0002 / 22023 mess
 test("staff and admin responses are never cached; the public state is cached for a second", () => {
   const http = repoFile("src/lib/scoring/http.ts");
   assert.match(http, /PRIVATE_NO_STORE = "private, no-store"/);
-  assert.match(http, /PUBLIC_LIVE_CACHE = "public, s-maxage=1, stale-while-revalidate=4"/);
+  assert.match(http, /PUBLIC_LIVE_CACHE = "public, s-maxage=3, stale-while-revalidate=6"/);
 
   for (const path of [...commentaryRoutes, ...judgeRoleRoutes, ...adminRoutes]) {
     assert.match(repoFile(path), /jsonNoStore\(/, path);
