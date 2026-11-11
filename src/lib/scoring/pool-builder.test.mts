@@ -341,3 +341,11 @@ test("the standings table is laid out pool by pool, in riding order", () => {
   assert.match(admin, /\{standings\.map\(\(row, index\) => \{/);
   assert.match(admin, /Pool \{row\.pool_label\}/);
 });
+
+test("the standings list has no fixed width, so it never scrolls sideways", () => {
+  const from = admin.indexOf("{/* Standings and overrides */}");
+  const section = admin.slice(from, admin.indexOf("{/* Podium */}", from));
+
+  assert.doesNotMatch(section, /<table|overflow-x-auto|min-w-\[\d/);
+  assert.match(section, /lg:grid-cols-\[minmax\(0,5fr\)_minmax\(0,3fr\)_minmax\(0,6fr\)\]/);
+});

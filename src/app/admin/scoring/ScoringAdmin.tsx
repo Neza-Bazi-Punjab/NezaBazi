@@ -2613,109 +2613,92 @@ export default function ScoringAdmin({
                 {leaderboard.length === 0 ? (
                   <p className="text-sm text-brown/75">No standings until the start list is drawn.</p>
                 ) : (
-                  <div className="overflow-x-auto rounded-lg border border-bronze/20 bg-cream">
-                    <table className="w-full min-w-[860px] border-collapse text-left text-sm text-brown">
-                      <thead className="border-b border-bronze/20 bg-parchment">
-                        <tr className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
-                          <th className="px-3 py-2">Rank</th>
-                          <th className="px-3 py-2">Pool</th>
-                          <th className="px-3 py-2">{round.event_type === "section" ? "Team" : "Rider"}</th>
-                          <th className="px-3 py-2">Points</th>
-                          <th className="px-3 py-2">Best</th>
-                          <th className="px-3 py-2">Runs</th>
-                          <th className="px-3 py-2">Advanced</th>
-                          <th className="px-3 py-2">Override</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {standings.map((row, index) => {
-                          const override = overridesByKey.get(row.entrant_key);
-                          const newPool =
-                            row.pool_label !== null &&
-                            (index === 0 || standings[index - 1].pool_label !== row.pool_label);
+                  /* A list, not a table: it fits a phone and a wide screen with
+                     no sideways scroll. One rider per row; on a phone the row
+                     stacks (who, standing, override), on a wide screen the
+                     three sit side by side. */
+                  <div className="rounded-lg border border-bronze/20 bg-cream">
+                    {standings.map((row, index) => {
+                      const override = overridesByKey.get(row.entrant_key);
+                      const newPool =
+                        row.pool_label !== null &&
+                        (index === 0 || standings[index - 1].pool_label !== row.pool_label);
 
-                          return (
-                            <Fragment key={row.entrant_key}>
-                            {newPool && (
-                              <tr className="border-b border-bronze/20 bg-parchment">
-                                <th
-                                  colSpan={8}
-                                  scope="colgroup"
-                                  className="px-3 py-2 text-left font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink"
-                                >
-                                  Pool {row.pool_label}
-                                </th>
-                              </tr>
-                            )}
-                            <tr className="border-b border-bronze/10 last:border-0 align-top">
-                              <td className="px-3 py-2 tabular-nums">
-                                {row.rank}
-                                {row.pool_label ? <span className="text-brown/60"> ({row.pool_rank})</span> : null}
-                              </td>
-                              <td className="px-3 py-2">{row.pool_label ?? "—"}</td>
-                              <td className="px-3 py-2 font-semibold text-ink">{row.name}</td>
-                              <td className="px-3 py-2 tabular-nums">{row.points}</td>
-                              <td className="px-3 py-2">{row.best_result ? RESULT_LABELS[row.best_result] : "—"}</td>
-                              <td className="whitespace-nowrap px-3 py-2 tabular-nums">
-                                {row.runs_scored}/{row.runs_total}
-                              </td>
-                              <td className="px-3 py-2">
-                                <span
-                                  className={
-                                    row.advanced === true
-                                      ? "font-semibold text-green-800"
-                                      : row.advanced === false
-                                        ? "text-red-800"
-                                        : "text-brown/60"
-                                  }
-                                >
-                                  {advancedLabel(row)}
+                      return (
+                        <Fragment key={row.entrant_key}>
+                          {newPool && (
+                            <h4 className="border-b border-bronze/20 bg-parchment px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
+                              Pool {row.pool_label}
+                            </h4>
+                          )}
+                          <div className="grid gap-2 border-b border-bronze/10 px-3 py-3 text-sm text-brown last:border-0 lg:grid-cols-[minmax(0,5fr)_minmax(0,3fr)_minmax(0,6fr)] lg:items-center lg:gap-4">
+                            <div className="min-w-0">
+                              <p className="break-words font-semibold text-ink">{row.name}</p>
+                              <p className="text-xs text-brown/75">
+                                Rank {row.rank}
+                                {row.pool_label ? ` (${row.pool_rank} in pool)` : ""} ·{" "}
+                                <span className="font-semibold text-ink">
+                                  {row.points} {row.points === 1 ? "pt" : "pts"}
+                                </span>{" "}
+                                · {row.best_result ? RESULT_LABELS[row.best_result] : "No result"} ·{" "}
+                                <span className="whitespace-nowrap tabular-nums">
+                                  Runs {row.runs_scored}/{row.runs_total}
                                 </span>
+                              </p>
+                            </div>
+                            <div className="min-w-0">
+                              <span
+                                className={
+                                  row.advanced === true
+                                    ? "font-semibold text-green-800"
+                                    : row.advanced === false
+                                      ? "text-red-800"
+                                      : "text-brown/60"
+                                }
+                              >
+                                {advancedLabel(row)}
+                              </span>
+                              {row.advanced_overridden && (
+                                <span className="ml-1 rounded bg-bronze/15 px-1.5 py-0.5 font-display text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-bronze-deep">
+                                  Override
+                                </span>
+                              )}
+                              {override?.note && (
+                                <span className="mt-1 block break-words text-xs text-brown/75">{override.note}</span>
+                              )}
+                            </div>
+                            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+                              <input
+                                value={noteDrafts[row.entrant_key] ?? override?.note ?? ""}
+                                onChange={(event) =>
+                                  setNoteDrafts((current) => ({
+                                    ...current,
+                                    [row.entrant_key]: event.target.value,
+                                  }))
+                                }
+                                maxLength={300}
+                                placeholder="Reason (optional)"
+                                aria-label={`Override note for ${row.name}`}
+                                className="w-full min-w-0 rounded-lg border border-bronze/20 bg-cream px-2 py-2 text-sm text-brown focus:border-bronze focus:outline-none sm:flex-1"
+                              />
+                              <div className="flex shrink-0 flex-wrap gap-1">
+                                <button type="button" onClick={() => setOverride(round, row, true)} disabled={busy} className={secondaryButton}>
+                                  Through
+                                </button>
+                                <button type="button" onClick={() => setOverride(round, row, false)} disabled={busy} className={secondaryButton}>
+                                  Out
+                                </button>
                                 {row.advanced_overridden && (
-                                  <span className="ml-1 rounded bg-bronze/15 px-1.5 py-0.5 font-display text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-bronze-deep">
-                                    Override
-                                  </span>
+                                  <button type="button" onClick={() => setOverride(round, row, null)} disabled={busy} className={dangerButton}>
+                                    Clear
+                                  </button>
                                 )}
-                                {override?.note && (
-                                  <span className="mt-1 block max-w-[220px] text-xs text-brown/75">{override.note}</span>
-                                )}
-                              </td>
-                              <td className="px-3 py-2">
-                                <div className="flex min-w-[260px] flex-col gap-2">
-                                  <input
-                                    value={noteDrafts[row.entrant_key] ?? override?.note ?? ""}
-                                    onChange={(event) =>
-                                      setNoteDrafts((current) => ({
-                                        ...current,
-                                        [row.entrant_key]: event.target.value,
-                                      }))
-                                    }
-                                    maxLength={300}
-                                    placeholder="Reason (optional)"
-                                    aria-label={`Override note for ${row.name}`}
-                                    className="w-full rounded-lg border border-bronze/20 bg-cream px-2 py-1 text-sm text-brown focus:border-bronze focus:outline-none"
-                                  />
-                                  <div className="flex flex-wrap gap-1">
-                                    <button type="button" onClick={() => setOverride(round, row, true)} disabled={busy} className={secondaryButton}>
-                                      Through
-                                    </button>
-                                    <button type="button" onClick={() => setOverride(round, row, false)} disabled={busy} className={secondaryButton}>
-                                      Out
-                                    </button>
-                                    {row.advanced_overridden && (
-                                      <button type="button" onClick={() => setOverride(round, row, null)} disabled={busy} className={dangerButton}>
-                                        Clear
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
-                            </Fragment>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                              </div>
+                            </div>
+                          </div>
+                        </Fragment>
+                      );
+                    })}
                   </div>
                 )}
               </section>
