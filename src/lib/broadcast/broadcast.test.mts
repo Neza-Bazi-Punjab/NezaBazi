@@ -219,6 +219,7 @@ test("columns: the public lists (without their own photo columns), then the phot
     "photo_file",
     "photo_url",
     "photo_path",
+    "vmix_photo",
   ]);
 });
 

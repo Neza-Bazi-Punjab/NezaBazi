@@ -49,4 +49,5 @@ export const BROADCAST_PHOTOS_COLUMNS = [
   "photo_file",
   "photo_url",
   "photo_path",
+  "vmix_photo",
 ] as const;
