@@ -29,6 +29,12 @@ type SoloCandidateRow = {
   full_name: string;
   horse_name: string | null;
   checked_in_at: string | null;
+  father_name: string | null;
+  mother_name: string | null;
+  location: string | null;
+  email: string | null;
+  phone: string | null;
+  confirmation_code: string | null;
 };
 type TeamRow = { id: string; team_name: string };
 type MemberRow = { team_id: string; horse_name: string | null; checked_in_at: string | null };
@@ -38,7 +44,9 @@ const loadCandidates = async (client: ServiceRoleClient) => {
     fetchAllRows<SoloCandidateRow>((from, to) =>
       client
         .from("solo_registrations")
-        .select("id, full_name, horse_name, checked_in_at")
+        .select(
+          "id, full_name, horse_name, checked_in_at, father_name, mother_name, location, email, phone, confirmation_code"
+        )
         .order("full_name", { ascending: true })
         .order("id", { ascending: true })
         .range(from, to)
@@ -84,6 +92,14 @@ const loadCandidates = async (client: ServiceRoleClient) => {
     full_name: row.full_name,
     horse_name: row.horse_name?.trim() || null,
     checked_in: row.checked_in_at !== null,
+    father_name: row.father_name?.trim() || null,
+    location: row.location?.trim() || null,
+    email: row.email ?? "",
+    phone: row.phone ?? "",
+    confirmation_code: row.confirmation_code ?? "",
+    details: [row.father_name, row.mother_name, row.location, row.horse_name]
+      .map((value) => value?.trim() ?? "")
+      .filter((value) => value !== ""),
   }));
 
   const teams: TeamCandidate[] = teamsResult.rows.map((row) => ({

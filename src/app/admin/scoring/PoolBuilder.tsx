@@ -7,6 +7,7 @@
    Nothing is written until "Save start list", which the page confirms and
    sends as one request (scoring_save_start_list: one transaction). */
 import { useMemo, useState } from "react";
+import { searchRiders, type SearchableRider } from "@/lib/check-in-search";
 import type { AdminScoringState } from "@/lib/scoring/admin-types";
 import {
   builderAdd,
@@ -39,7 +40,26 @@ const inputClass =
   "mt-1 w-full rounded-lg border border-bronze/20 bg-cream px-3 py-2 text-brown focus:border-bronze focus:outline-none disabled:opacity-60";
 const labelClass = "font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink";
 
-type Entrant = { key: string; name: string; horse: string | null; checkedIn: boolean };
+type Entrant = {
+  key: string;
+  name: string;
+  horse: string | null;
+  checkedIn: boolean;
+  /* Father and town, shown under the name so riders who share a name can be
+     told apart, as on the check-in desk. */
+  about: string | null;
+  /* What "Find a rider" matches on: the check-in desk's search. */
+  search: SearchableRider;
+};
+
+const searchable = (name: string, details: readonly (string | null)[] = []): SearchableRider => ({
+  full_name: name,
+  email: "",
+  phone: "",
+  team_name: null,
+  confirmation_code: "",
+  details,
+});
 
 export default function PoolBuilder({
   round,
@@ -109,6 +129,8 @@ export default function PoolBuilder({
           name: team.team_name,
           horse: team.horse_names.length > 0 ? team.horse_names.join(" · ") : null,
           checkedIn: team.member_count === 4 && team.checked_in_count === 4,
+          about: null,
+          search: searchable(team.team_name, team.horse_names),
         });
       }
     } else {
@@ -118,6 +140,18 @@ export default function PoolBuilder({
           name: rider.full_name,
           horse: rider.horse_name,
           checkedIn: rider.checked_in,
+          about:
+            [rider.father_name ? `Father: ${rider.father_name}` : null, rider.location]
+              .filter(Boolean)
+              .join(" · ") || null,
+          search: {
+            full_name: rider.full_name,
+            email: rider.email,
+            phone: rider.phone,
+            team_name: null,
+            confirmation_code: rider.confirmation_code,
+            details: rider.details,
+          },
         });
       }
     }
@@ -131,6 +165,8 @@ export default function PoolBuilder({
           name: run.team_name ?? run.rider_name,
           horse: run.team_name ? null : run.horse_name,
           checkedIn: false,
+          about: null,
+          search: searchable(run.team_name ?? run.rider_name, [run.horse_name]),
         });
       }
     }
@@ -140,15 +176,23 @@ export default function PoolBuilder({
 
   const placedCount = builderCount(pools);
   const unplaced = useMemo(() => {
-    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-
-    return [...entrants.values()]
+    const waiting = [...entrants.values()]
       .filter((entrant) => entrant.checkedIn && !builderHas(pools, entrant.key))
-      .filter((entrant) => {
-        const text = `${entrant.name} ${entrant.horse ?? ""}`.toLowerCase();
-        return words.every((word) => text.includes(word));
-      })
       .sort((first, second) => first.name.localeCompare(second.name));
+
+    if (query.trim() === "") {
+      return waiting;
+    }
+
+    // The check-in desk's search: best match first, by name, phone, code,
+    // parents, horse or town.
+    const byKey = new Map(waiting.map((entrant) => [entrant.key, entrant]));
+    const found = searchRiders(
+      waiting.map((entrant) => ({ ...entrant.search, key: entrant.key })),
+      query
+    );
+
+    return found.flatMap((match) => byKey.get(match.key) ?? []);
   }, [entrants, pools, query]);
   const waitingCount = [...entrants.values()].filter(
     (entrant) => entrant.checkedIn && !builderHas(pools, entrant.key)
@@ -307,7 +351,7 @@ export default function PoolBuilder({
               autoComplete="off"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={isTeams ? "Team or horse name" : "Rider or horse name"}
+              placeholder={isTeams ? "Team or horse name" : "Name, phone, code, parents, horse, place…"}
               className={inputClass}
             />
           </label>
@@ -340,6 +384,9 @@ export default function PoolBuilder({
                       <span className="block font-semibold text-ink">{entrant.name}</span>
                       {entrant.horse && (
                         <span className="block text-sm text-brown/75">{entrant.horse}</span>
+                      )}
+                      {entrant.about && (
+                        <span className="block text-sm text-brown/75">{entrant.about}</span>
                       )}
                     </span>
                     <span className="shrink-0 font-display text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-bronze-dark">

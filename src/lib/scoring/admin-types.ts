@@ -14,6 +14,15 @@ export type SoloCandidate = {
   full_name: string;
   horse_name: string | null;
   checked_in: boolean;
+  /* For the scoring page's rider searches, which match as the check-in desk
+     does (check-in-search.ts): father and town also show on each match.
+     Staff only, as that desk is. */
+  father_name: string | null;
+  location: string | null;
+  email: string;
+  phone: string;
+  confirmation_code: string;
+  details: string[];
 };
 
 /* A team the administrator can add to a Section round. A team is fully
