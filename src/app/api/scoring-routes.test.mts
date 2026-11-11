@@ -30,7 +30,7 @@ const publicRoutes = routesUnder("src/app/api/live");
 const PUBLIC_PHOTO_ROUTE = "src/app/api/live/vmix/photo/[file]/route.ts";
 const publicFeedRoutes = publicRoutes.filter((path) => path !== PUBLIC_PHOTO_ROUTE);
 
-const HANDLER = /export async function (GET|POST|PATCH|DELETE)\b/g;
+const HANDLER = /export async function (GET|POST|PUT|PATCH|DELETE)\b/g;
 
 test("every expected route exists", () => {
   assert.deepEqual(judgeRoutes, [
@@ -124,11 +124,11 @@ test("request bodies are size-limited and parsed with type guards", () => {
   for (const path of [...judgeRoleRoutes, ...adminRoutes]) {
     const source = repoFile(path);
 
-    if (!/export async function (POST|PATCH)\b/.test(source)) {
+    if (!/export async function (POST|PUT|PATCH)\b/.test(source)) {
       continue;
     }
 
-    assert.match(source, /await readJsonBody\(request\)/, path);
+    assert.match(source, /await readJsonBody\(request(, \d+ \* 1024)?\)/, path);
     assert.match(source, /parse\w+Request|parseRound(Input|Patch)/, path);
     assert.doesNotMatch(source, /request\.json\(\)/, path);
     assert.doesNotMatch(source, /as (ScoreRequest|ClearScoreRequest|RoundInput|RoundPatch|LiveUpdateRequest)\b/, path);

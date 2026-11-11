@@ -24,16 +24,21 @@ import {
 import { readRehearsalSwitch } from "@/lib/scoring/rehearsal";
 import type { LiveState, ScoringRound, ScoringRun } from "@/lib/scoring/types";
 
-type SoloCandidateRow = { id: string; full_name: string; checked_in_at: string | null };
+type SoloCandidateRow = {
+  id: string;
+  full_name: string;
+  horse_name: string | null;
+  checked_in_at: string | null;
+};
 type TeamRow = { id: string; team_name: string };
-type MemberRow = { team_id: string; checked_in_at: string | null };
+type MemberRow = { team_id: string; horse_name: string | null; checked_in_at: string | null };
 
 const loadCandidates = async (client: ServiceRoleClient) => {
   const [soloResult, teamsResult, membersResult] = await Promise.all([
     fetchAllRows<SoloCandidateRow>((from, to) =>
       client
         .from("solo_registrations")
-        .select("id, full_name, checked_in_at")
+        .select("id, full_name, horse_name, checked_in_at")
         .order("full_name", { ascending: true })
         .order("id", { ascending: true })
         .range(from, to)
@@ -49,7 +54,7 @@ const loadCandidates = async (client: ServiceRoleClient) => {
     fetchAllRows<MemberRow>((from, to) =>
       client
         .from("team_members")
-        .select("team_id, checked_in_at")
+        .select("team_id, horse_name, checked_in_at")
         .order("id", { ascending: true })
         .range(from, to)
     ),
@@ -61,18 +66,23 @@ const loadCandidates = async (client: ServiceRoleClient) => {
     throw new ScoringReadError("the registrations", error);
   }
 
-  const counts = new Map<string, { members: number; checkedIn: number }>();
+  const counts = new Map<string, { members: number; checkedIn: number; horses: string[] }>();
 
   for (const member of membersResult.rows) {
-    const entry = counts.get(member.team_id) ?? { members: 0, checkedIn: 0 };
+    const entry = counts.get(member.team_id) ?? { members: 0, checkedIn: 0, horses: [] };
     entry.members += 1;
     entry.checkedIn += member.checked_in_at ? 1 : 0;
+    const horse = member.horse_name?.trim();
+    if (horse) {
+      entry.horses.push(horse);
+    }
     counts.set(member.team_id, entry);
   }
 
   const solo: SoloCandidate[] = soloResult.rows.map((row) => ({
     id: row.id,
     full_name: row.full_name,
+    horse_name: row.horse_name?.trim() || null,
     checked_in: row.checked_in_at !== null,
   }));
 
@@ -81,6 +91,7 @@ const loadCandidates = async (client: ServiceRoleClient) => {
     team_name: row.team_name,
     checked_in_count: counts.get(row.id)?.checkedIn ?? 0,
     member_count: counts.get(row.id)?.members ?? 0,
+    horse_names: counts.get(row.id)?.horses ?? [],
   }));
 
   return { solo, teams };
