@@ -79,16 +79,21 @@ export const builderHas = (pools: BuilderPools, key: string) =>
 export const builderCount = (pools: BuilderPools) =>
   pools.reduce((total, pool) => total + pool.length, 0);
 
-/* A tap: the entrant rides next in the current (last) pool. Tapping one who
+/* A tap: the entrant rides next (last) in the chosen pool, by index; the
+   last pool when none is given or the index is out of range. Tapping one who
    is already placed changes nothing. */
-export const builderAdd = (pools: BuilderPools, key: string): BuilderPools => {
+export const builderAdd = (pools: BuilderPools, key: string, poolIndex?: number): BuilderPools => {
   if (builderHas(pools, key)) {
     return pools;
   }
 
   const base = pools.length > 0 ? pools : emptyBuilder();
+  const target =
+    poolIndex !== undefined && Number.isInteger(poolIndex) && poolIndex >= 0 && poolIndex < base.length
+      ? poolIndex
+      : base.length - 1;
 
-  return [...base.slice(0, -1), [...base[base.length - 1], key]];
+  return base.map((pool, index) => (index === target ? [...pool, key] : pool));
 };
 
 /* "New pool": only once the current pool has someone in it. */
