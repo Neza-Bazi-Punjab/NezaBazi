@@ -27,10 +27,10 @@ type Row = {
   members?: Member[];
 };
 
-type RunRef = { entrant_key: string } | null;
+type RunRef = { entrant_key: string; round_id?: string } | null;
 
 export type TeamState = {
-  current_round: { event_type: string; target_points: number | null } | null;
+  current_round: { id?: string; event_type: string; target_points: number | null } | null;
   current_run: RunRef;
   last_scored_run: RunRef;
   up_next: { entrant_key: string }[];
@@ -65,7 +65,16 @@ export const teamOnTrack = (state: TeamState | null, which: "now" | "last" = "no
   }
 
   const byKey = new Map(state.leaderboard.map((row) => [row.entrant_key, row]));
-  const lastKey = state.last_scored_run?.entrant_key ?? null;
+  /* The last result only counts when it was ridden in this round: the live
+     state's last result can be from the round before. */
+  const lastHere =
+    state.last_scored_run &&
+    (state.last_scored_run.round_id === undefined ||
+      state.current_round.id === undefined ||
+      state.last_scored_run.round_id === state.current_round.id)
+      ? state.last_scored_run
+      : null;
+  const lastKey = lastHere?.entrant_key ?? null;
   const lastRow = lastKey ? byKey.get(lastKey) : undefined;
   const unfinished = lastRow?.members?.some(isOpen) ? lastKey : null;
 
