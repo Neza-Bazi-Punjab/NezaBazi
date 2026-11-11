@@ -83,6 +83,9 @@ export default function PoolBuilder({
   const [active, setActive] = useState<number | null>(null);
   /* The entrant tapped most recently: what "Undo" takes out. */
   const [lastAdded, setLastAdded] = useState<string | null>(null);
+  /* With many pools the page is one long list: by default only the pool being
+     added to is shown, and the pools that have ridden are left off "Add to". */
+  const [showAll, setShowAll] = useState(false);
 
   /* A change that drops a pool shifts the letters: go back to the last pool
      rather than add to a different pool than the one shown. */
@@ -228,6 +231,10 @@ export default function PoolBuilder({
                   const selected = index === currentIndex;
                   const locked = isLocked(index);
 
+                  if (locked && !showAll) {
+                    return null;
+                  }
+
                   return (
                     <button
                       key={index}
@@ -350,15 +357,30 @@ export default function PoolBuilder({
           <p className="text-sm font-semibold text-ink">
             {plural(placedCount, noun)} placed
             {pooled ? ` in ${plural(toSave.length, "pool")}` : ""}
-            {pooled && toSave.length > 0
+            {pooled && showAll && toSave.length > 0
               ? ` (${toSave.map((pool, index) => `${labels[index]} ${pool.length}`).join(" · ")})`
               : ""}
           </p>
+
+          {pooled && pools.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setShowAll(!showAll)}
+              aria-pressed={showAll}
+              className={secondaryButton}
+            >
+              {showAll ? `Show Only Pool ${currentLabel}` : `Show All ${pools.length} Pools`}
+            </button>
+          )}
 
           {pools.map((pool, poolIndex) => {
             const label = pooled ? builderPoolLabel(poolIndex) : null;
             const isCurrent = poolIndex === currentIndex;
             const locked = isLocked(poolIndex);
+
+            if (pooled && !showAll && !isCurrent) {
+              return null;
+            }
 
             return (
               <div
