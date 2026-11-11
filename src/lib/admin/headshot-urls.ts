@@ -428,30 +428,26 @@ export const loadAuthUserIndex = async (
   }
 };
 
-/* Photos for the admin Solo riders list, keyed by registration id, from the
-   account index above and one batch signing call for the whole list, rather
-   than a lookup per rider. The registration's own photo first; the account's
-   only for the account holder's own registration. With no index (the listing
-   failed) the list gets no thumbnails at all, as before. A failure only means
-   no thumbnails, never a broken page. */
-export const matchSoloHeadshots = async (
+type SoloHeadshotRow = {
+  id: string;
+  profile_id: string | null;
+  email: string;
+  full_name: string;
+  headshot_path?: string | null;
+};
+
+/* Which stored photo is each solo registration's, keyed by registration id
+   (rows with no photo are left out). The registration's own photo first; the
+   account's only for the account holder's own registration. `registrations`
+   must be every solo registration: an account with one can only hold its
+   own. With no index, only the registrations' own photos. The one rule for
+   the admin Solo riders list (matchSoloHeadshots) and the broadcast photo
+   index (src/lib/broadcast/photo-index.ts). Pure: no reads, no signing. */
+export const chooseSoloHeadshotPaths = (
   index: AuthUserIndex | null,
-  registrations: Array<{
-    id: string;
-    profile_id: string | null;
-    email: string;
-    full_name: string;
-    headshot_path?: string | null;
-  }>,
-  client: ServiceRoleClient
-): Promise<Record<string, SoloHeadshot>> => {
-  const result: Record<string, SoloHeadshot> = {};
-
-  if (!index) {
-    return result;
-  }
-
-  const { accountById } = index;
+  registrations: SoloHeadshotRow[]
+): Map<string, string> => {
+  const accountById = index?.accountById ?? new Map<string, never>();
 
   // How many registrations each account entered: the list is every solo
   // registration, so an account with one can only hold its own.
@@ -466,28 +462,52 @@ export const matchSoloHeadshots = async (
     }
   }
 
+  const pathByRegistration = new Map<string, string>();
+
+  for (const registration of registrations) {
+    const account = registration.profile_id
+      ? accountById.get(registration.profile_id)
+      : undefined;
+    const path =
+      readPaperHeadshotPath(registration.id, registration.headshot_path) ??
+      (account &&
+      isOwnRegistration(registration, account, {
+        onlyRegistration: rowsByProfile.get(registration.profile_id ?? "") === 1,
+      })
+        ? account.path
+        : null);
+
+    if (path) {
+      pathByRegistration.set(registration.id, path);
+    }
+  }
+
+  return pathByRegistration;
+};
+
+/* Photos for the admin Solo riders list, keyed by registration id, from the
+   account index above and one batch signing call for the whole list, rather
+   than a lookup per rider. Which photo is whose: chooseSoloHeadshotPaths.
+   With no index (the listing failed) the list gets no thumbnails at all, as
+   before. A failure only means no thumbnails, never a broken page. */
+export const matchSoloHeadshots = async (
+  index: AuthUserIndex | null,
+  registrations: SoloHeadshotRow[],
+  client: ServiceRoleClient
+): Promise<Record<string, SoloHeadshot>> => {
+  const result: Record<string, SoloHeadshot> = {};
+
+  if (!index) {
+    return result;
+  }
+
   try {
-    const pathByRegistration = new Map<string, string>();
+    const pathByRegistration = chooseSoloHeadshotPaths(index, registrations);
 
     for (const registration of registrations) {
-      const account = registration.profile_id
-        ? accountById.get(registration.profile_id)
-        : undefined;
-      const path =
-        readPaperHeadshotPath(registration.id, registration.headshot_path) ??
-        (account &&
-        isOwnRegistration(registration, account, {
-          onlyRegistration: rowsByProfile.get(registration.profile_id ?? "") === 1,
-        })
-          ? account.path
-          : null);
-
       result[registration.id] = { url: null };
-
-      if (path) {
-        pathByRegistration.set(registration.id, path);
-      }
     }
+
     await signInto(client, pathByRegistration, result);
   } catch (error) {
     console.error("[headshots] solo list lookup failed", error);
@@ -529,22 +549,67 @@ const signInto = async (
   }
 };
 
-/* Photos for the admin Teams list, keyed by team_members id. The rider's own
-   photo on the row first; then, as getTeamRiderHeadshotUrl does for the
-   desk, the leader's account (leader's row only), an account behind a solo
-   entry under the rider's email, or a confirmed account with that email,
-   and only an account whose email and full name are the rider's. With no
-   account index, only the riders' own photos. Never throws. */
+type TeamHeadshotRow = {
+  id: string;
+  team_id: string;
+  email: string;
+  full_name: string;
+  is_leader: boolean;
+  headshot_path?: string | null;
+};
+
+/* Which stored photo is each team rider's, keyed by team_members id (riders
+   with no photo are left out). The rider's own photo on the row first; then,
+   as getTeamRiderHeadshotUrl does for the desk, the leader's account
+   (leader's row only), an account behind a solo entry under the rider's
+   email, or a confirmed account with that email, and only an account whose
+   email and full name are the rider's. With no account index, only the
+   riders' own photos. The one rule for the admin Teams list
+   (matchTeamHeadshots) and the broadcast photo index
+   (src/lib/broadcast/photo-index.ts). Pure: no reads, no signing. */
+export const chooseTeamHeadshotPaths = (
+  index: AuthUserIndex | null,
+  members: TeamHeadshotRow[],
+  leaderProfileByTeam: Map<string, string | null>,
+  soloProfileByEmail: Map<string, string>
+): Map<string, string> => {
+  const pathByMember = new Map<string, string>();
+
+  for (const member of members) {
+    let path = readPaperHeadshotPath(member.id, member.headshot_path);
+
+    if (!path && index) {
+      const address = member.email?.trim().toLowerCase() ?? "";
+      const candidates = [
+        member.is_leader ? leaderProfileByTeam.get(member.team_id) ?? null : null,
+        address ? soloProfileByEmail.get(address) ?? null : null,
+        address ? index.confirmedIdByEmail.get(address) ?? null : null,
+      ];
+
+      for (const profileId of new Set(candidates)) {
+        const account = profileId ? index.accountById.get(profileId) : undefined;
+
+        if (account?.path && isOwnRegistration(member, account)) {
+          path = account.path;
+          break;
+        }
+      }
+    }
+
+    if (path) {
+      pathByMember.set(member.id, path);
+    }
+  }
+
+  return pathByMember;
+};
+
+/* Photos for the admin Teams list, keyed by team_members id, with one batch
+   signing call. Which photo is whose: chooseTeamHeadshotPaths. Never
+   throws. */
 export const matchTeamHeadshots = async (
   index: AuthUserIndex | null,
-  members: Array<{
-    id: string;
-    team_id: string;
-    email: string;
-    full_name: string;
-    is_leader: boolean;
-    headshot_path?: string | null;
-  }>,
+  members: TeamHeadshotRow[],
   leaderProfileByTeam: Map<string, string | null>,
   soloProfileByEmail: Map<string, string>,
   client: ServiceRoleClient
@@ -552,35 +617,16 @@ export const matchTeamHeadshots = async (
   const result: Record<string, SoloHeadshot> = {};
 
   try {
-    const pathByMember = new Map<string, string>();
-
     for (const member of members) {
       result[member.id] = { url: null };
-
-      let path = readPaperHeadshotPath(member.id, member.headshot_path);
-
-      if (!path && index) {
-        const address = member.email?.trim().toLowerCase() ?? "";
-        const candidates = [
-          member.is_leader ? leaderProfileByTeam.get(member.team_id) ?? null : null,
-          address ? soloProfileByEmail.get(address) ?? null : null,
-          address ? index.confirmedIdByEmail.get(address) ?? null : null,
-        ];
-
-        for (const profileId of new Set(candidates)) {
-          const account = profileId ? index.accountById.get(profileId) : undefined;
-
-          if (account?.path && isOwnRegistration(member, account)) {
-            path = account.path;
-            break;
-          }
-        }
-      }
-
-      if (path) {
-        pathByMember.set(member.id, path);
-      }
     }
+
+    const pathByMember = chooseTeamHeadshotPaths(
+      index,
+      members,
+      leaderProfileByTeam,
+      soloProfileByEmail
+    );
 
     await signInto(client, pathByMember, result);
   } catch (error) {

@@ -66,6 +66,8 @@ Everything else is allowed: several riders may share one email and one phone, an
 
 > **The graphics rehearsal feed can stay running.** The **Graphics Rehearsal Feed** card on `/admin/scoring` (section 4) starts and stops the moving vMix sample, `?sample=solo`. It changes nothing but those sample addresses, so it is safe on event day. Stopping it then is an extra safeguard in case the graphics team forgets to take `?sample=solo` off an address. Details: [live-stream.md](live-stream.md), under "Moving rehearsal".
 
+> **Photo key for the graphics team.** Before the event, set `BROADCAST_API_KEY` (at least 24 characters) in the hosting environment's settings and redeploy; until it is set, the photo feeds answer "The broadcast feed is not set up yet." Give the key to the graphics team privately, never in a group chat or on screen. Changing the key cuts off every photo link and photo feed at once; the graphics team then needs the new key. Their steps: "Photos" in [vmix-data-feed.md](vmix-data-feed.md).
+
 Check-in works as it always has: **Check-in** in the admin menu (`/admin/check-in`), type the rider's code (or search by name, email or phone), check the record, confirm. Paper riders check in the same way with the code from the office box. Only checked-in riders are drawn into the first rounds, and a team needs all four riders checked in.
 
 ## 4. Event day: running the rounds at `/admin/scoring`
