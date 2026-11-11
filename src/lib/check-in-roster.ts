@@ -24,7 +24,16 @@ export type RiderMatch = {
   is_leader: boolean | null;
   confirmation_code: string;
   checked_in_at: string | null;
+  /* Everything else the desk can search by, as the admin riders lists do:
+     parents' names, location, horse, Dal Panth, and a solo entry's emergency
+     contact. Search text only; never shown. */
+  details?: string[];
+  /* The same, labelled, for the match card: father, horse and town on
+     every card, and whichever other detail a search matched. */
+  facts?: RiderFact[];
 };
+
+export type RiderFact = { label: string; value: string };
 
 /* Solo rows first, so a merged row keeps the solo entry's id and source;
    the team label (team name, team id, leader) is filled from the team row. */
@@ -44,6 +53,16 @@ export const mergeRidersByCode = (rows: readonly RiderMatch[]): RiderMatch[] => 
     }
 
     existing.entries = [...new Set([...existing.entries, ...row.entries])];
+    existing.details = [...new Set([...(existing.details ?? []), ...(row.details ?? [])])];
+    existing.facts = [
+      ...(existing.facts ?? []),
+      ...(row.facts ?? []).filter(
+        (fact) =>
+          !(existing.facts ?? []).some(
+            (known) => known.label === fact.label && known.value === fact.value
+          )
+      ),
+    ];
     existing.team_name = existing.team_name ?? row.team_name;
     existing.team_id = existing.team_id ?? row.team_id;
     existing.is_leader = existing.is_leader ?? row.is_leader;

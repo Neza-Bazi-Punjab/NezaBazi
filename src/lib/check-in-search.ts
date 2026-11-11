@@ -10,6 +10,11 @@
 //      (3+ characters) begins with it
 //   3  a word of the team name begins with it "doaba"   -> riders of Doaba Riders
 //   4  the phone contains the typed digits    "4521"    -> ...98 7654 4521
+//   5  anything else contains it (2+          "toofan"  -> rider on horse Toofan
+//      characters), as the admin riders      "kaur"    -> mother Gurpreet Kaur
+//      lists search: name, email, phone,     "ludh"    -> from Ludhiana
+//      team, code, parents' names, location,
+//      horse, Dal Panth, emergency contact
 // Phone is "contains" on purpose: people give the last few digits, and the
 // country code makes "begins with" awkward. Ties sort by name.
 //
@@ -22,6 +27,8 @@ export type SearchableRider = {
   phone: string;
   team_name: string | null;
   confirmation_code: string;
+  /* Other searchable text (see check-in-roster.ts). */
+  details?: readonly (string | null | undefined)[];
 };
 
 const normalize = (value: string) => value.toLowerCase().replace(/\s+/g, " ").trim();
@@ -76,6 +83,27 @@ export const matchRank = (rider: SearchableRider, query: string): number | null 
   // long enough not to match half the list.
   if (typedDigits.length >= 3 && /^[\d\s+()-]+$/.test(typed) && digits(rider.phone).includes(typedDigits)) {
     return 4;
+  }
+
+  // Last, anywhere in anything, as the riders lists search. From two
+  // characters, so one letter still gives the short "begins with" list; a
+  // number from three digits, as for the phone, or "45" would match half the
+  // field.
+  const isNumber = /^[\d\s+()-]+$/.test(typed);
+
+  if (typed.length >= 2 && (!isNumber || typedDigits.length >= 3)) {
+    const everything = [
+      rider.full_name,
+      rider.email,
+      rider.phone,
+      rider.team_name,
+      rider.confirmation_code,
+      ...(rider.details ?? []),
+    ];
+
+    if (everything.some((value) => value && normalize(value).includes(typed))) {
+      return 5;
+    }
   }
 
   return null;

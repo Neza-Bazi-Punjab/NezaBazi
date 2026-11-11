@@ -330,7 +330,7 @@ test("the desk keeps two riders on one email and phone as two rows", () => {
     ["NBP-AAAAAA", "NBP-BBBBBB"]
   );
   assert.deepEqual(merged[0].entries, ["solo"]);
-  assert.match(checkInRoute, /import \{ mergeRidersByCode, type RiderMatch \} from "@\/lib\/check-in-roster";/);
+  assert.match(checkInRoute, /import \{ mergeRidersByCode, type RiderFact, type RiderMatch \} from "@\/lib\/check-in-roster";/);
 });
 
 // ---------------------------------------------------------------------------

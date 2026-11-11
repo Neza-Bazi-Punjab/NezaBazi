@@ -315,10 +315,11 @@ test("the desk's instant search loads a short rider list, admins only, never cac
     checkInRoute.indexOf("type CheckInRequest")
   );
 
-  // The same few columns as the search results: nothing from the full record
-  // (age, address, parents, emergency contacts) until a rider is selected.
-  assert.match(listBody, /\.select\("id, full_name, email, phone, confirmation_code, checked_in_at"\)/);
-  assert.doesNotMatch(listBody, /location|emergency|father_name|\bage\b/);
+  // The search columns plus what the desk can search by (parents, place,
+  // horse, Dal Panth, a solo entry's emergency contact), as the admin riders
+  // lists do; never the rest of the full record (age, experience).
+  assert.match(listBody, /const soloColumns: string = `id, full_name, email, phone, confirmation_code, checked_in_at, \$\{SOLO_DETAIL_COLUMNS\}/);
+  assert.doesNotMatch(listBody, /\bage\b|years_experience/);
   // One row per code, like the search.
   assert.match(listBody, /mergeRidersByCode\(rows\)/);
 
@@ -453,4 +454,27 @@ test("a broken profile update body is refused, not crashed on", () => {
   assert.match(profileRoute, /try \{\s*rawBody = await request\.json\(\);\s*\} catch \{/);
   assert.match(profileRoute, /typeof value === "string" \? value\.trim\(\) : ""/);
   assert.doesNotMatch(profileRoute, /\(await request\.json\(\)\) as/);
+});
+
+test("the desk's rider list carries everything the riders lists search by", () => {
+  const route = readFileSync(new URL("../api/admin/check-in/route.ts", import.meta.url), "utf8");
+  assert.match(route, /const SHARED_DETAIL_COLUMNS = "father_name, mother_name, location, horse_name";/);
+  assert.match(route, /emergency_contact_name, emergency_contact_phone`;/);
+  // Dal Panth is read when it exists and dropped, not failed, when it doesn't.
+  assert.match(route, /if \(solo\.error \|\| team\.error\) \{\s*\[solo, team\] = await read\(false\);/);
+  assert.equal((route.match(/\.\.\.withFacts\(factsOf\(/g) ?? []).length, 2);
+  assert.match(route, /details: facts\.map\(\(fact\) => fact\.value\)/);
+});
+
+test("each match card shows father, horse and town, and the detail a search matched", () => {
+  const route = readFileSync(new URL("../api/admin/check-in/route.ts", import.meta.url), "utf8");
+  const panel = readFileSync(new URL("./CheckInPanel.tsx", import.meta.url), "utf8");
+  assert.match(route, /father_name: "Father",/);
+  assert.match(route, /horse_name: "Horse",/);
+  assert.match(route, /location: "Town",/);
+  assert.equal((route.match(/\.\.\.withFacts\(factsOf\(/g) ?? []).length, 2);
+  assert.match(panel, /const KEY_FACTS = \["Father", "Horse", "Town"\];/);
+  assert.match(panel, /<MatchFacts facts=\{match\.facts\} query=\{query\} \/>/);
+  // A hidden detail (mother, Dal Panth, emergency contact) is named when it matched.
+  assert.match(panel, /!shown\.includes\(fact\) &&\s*fact\.value\.toLowerCase\(\)/);
 });
