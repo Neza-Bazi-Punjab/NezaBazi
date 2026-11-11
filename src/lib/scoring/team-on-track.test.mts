@@ -78,3 +78,16 @@ test("nothing outside a Section round", () => {
   assert.equal(teamOnTrack(state({ current_round: { event_type: "single", target_points: null } })), null);
   assert.equal(teamOnTrack(null), null);
 });
+
+test("a result from an earlier round does not pick the side", () => {
+  const fresh = state({
+    current_round: { id: "round-2", event_type: "section", target_points: null },
+    last_scored_run: { entrant_key: "team:two", round_id: "round-1" },
+    up_next: [{ entrant_key: "team:one" }],
+  });
+  fresh.leaderboard[0] = row("one", "First Side", 0, null, [member("A", "pending"), member("B", "pending")]);
+
+  assert.equal(teamOnTrack(fresh)?.name, "First Side");
+  assert.equal(teamOnTrack(fresh)?.stage, "next");
+  assert.equal(teamOnTrack(fresh, "last"), null);
+});
