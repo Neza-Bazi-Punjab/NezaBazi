@@ -23,6 +23,7 @@
    keeps to one line and the pools fold up. From `lg` up nothing changes. */
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import TeamCard, { type TeamPick } from "./TeamCard";
 import {
   carriedEntrantKeys,
   normalizeJudgeState,
@@ -264,6 +265,19 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
   const [pickedFor, setPickedFor] = useState<string | null>(null);
   const shownSelected = selected && pickedFor === targetRun?.id ? selected : null;
 
+  /* Team rounds: the team whose riders are next (the one on course, or the
+     one Start would name), and its rides still to be scored. */
+  const teamLead = round?.event_type === "section" && !editing ? (currentRun ?? startRider) : null;
+  const teamRuns = teamLead
+    ? runs
+        .filter(
+          (run) =>
+            run.entrant_key === teamLead.entrant_key &&
+            (run.status === "pending" || run.status === "on_course")
+        )
+        .sort((first, second) => first.run_order - second.run_order)
+    : [];
+
   /* Who Take out applies to: the rider, or their team in a Section round. */
   const entrantName = (run: ScoringRun) =>
     run.entrant_key.startsWith("team:") ? (run.team_name ?? run.rider_name) : run.rider_name;
@@ -334,6 +348,52 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
       pushToast(
         "error",
         caught instanceof Error ? caught.message : "Something went wrong. Nothing was changed."
+      );
+      refetch();
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  };
+
+  /* Team rounds: the whole team's results from the team card, sent one after
+     the other. If one is refused the rest are not sent, and the panel is
+     refreshed so the card shows what is still to score. */
+  const saveTeam = async (teamName: string, picks: TeamPick[]) => {
+    if (busyRef.current || picks.length === 0) {
+      return;
+    }
+
+    busyRef.current = true;
+    setBusy(true);
+
+    try {
+      let next: JudgeState | null = null;
+
+      for (const pick of picks) {
+        next = await sendAction(
+          { kind: "score", run: pick.run, result: pick.result, override: false, fromMain: false },
+          training
+        );
+      }
+
+      if (next) {
+        setData(next);
+      } else {
+        refetch();
+      }
+
+      setPending(null);
+      setSelected(null);
+      setEditRunId(null);
+      pushToast(
+        "success",
+        `${teamName} saved · ${picks.reduce((sum, pick) => sum + RESULT_POINTS[pick.result], 0)}`
+      );
+    } catch (caught) {
+      pushToast(
+        "error",
+        caught instanceof Error ? caught.message : "Something went wrong. Check the team's scores."
       );
       refetch();
     } finally {
@@ -548,6 +608,18 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
           <p className="border-2 border-[var(--ledger-red)] bg-[var(--ledger-panel)] px-4 py-2 text-[var(--ledger-red)]">
             {error}
           </p>
+        )}
+
+        {/* Team rounds: score the whole team at once ------------------ */}
+        {teamLead && teamRuns.length > 0 && (
+          <TeamCard
+            key={teamLead.entrant_key}
+            teamName={teamLead.team_name ?? teamLead.rider_name}
+            runs={teamRuns}
+            target={round?.target_points ?? null}
+            busy={busy}
+            onSave={(picks) => void saveTeam(teamLead.team_name ?? teamLead.rider_name, picks)}
+          />
         )}
 
         {/* Rider on course ------------------------------------------- */}
