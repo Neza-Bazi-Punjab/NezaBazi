@@ -46,6 +46,10 @@ export type TeamOnTrack = {
   target: number | null;
   /* Null until every rider of the side has a result (or is out). */
   through: boolean | null;
+  /* "on_track" once Start has been tapped or a rider has a result while
+     others are still to score; "next" before that; "finished" when every
+     rider has a result. */
+  stage: "next" | "on_track" | "finished";
   members: Member[];
 };
 
@@ -75,7 +79,14 @@ export const teamOnTrack = (state: TeamState | null, which: "now" | "last" = "no
     return null;
   }
 
+  const members = row.members ?? [];
+  const open = members.filter(isOpen).length;
+  const started =
+    state.current_run?.entrant_key === row.entrant_key ||
+    members.some((member) => member.status === "scored" || member.status === "on_course");
+
   return {
+    stage: members.length > 0 && open === 0 ? "finished" : started ? "on_track" : "next",
     entrant_key: row.entrant_key,
     name: row.name,
     pool_label: row.pool_label,
@@ -83,6 +94,6 @@ export const teamOnTrack = (state: TeamState | null, which: "now" | "last" = "no
     points: row.points,
     target: state.current_round.target_points,
     through: row.advanced,
-    members: row.members ?? [],
+    members,
   };
 };

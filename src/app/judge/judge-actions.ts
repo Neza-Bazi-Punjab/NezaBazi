@@ -10,6 +10,11 @@ import {
 } from "@/lib/scoring/types";
 import { TRAINING_RESET_QUESTION, type TrainingScope } from "@/lib/scoring/training";
 
+/* Who Start names: the rider, or the whole team in a Section round, where
+   the four riders go down the track together. */
+export const startName = (run: ScoringRun) =>
+  run.entrant_key.startsWith("team:") ? (run.team_name ?? run.rider_name) : run.rider_name;
+
 export type JudgeAction =
   | {
       kind: "score";
@@ -98,7 +103,7 @@ export const describeAction = (
       };
     case "start":
       return {
-        question: `Start ${action.run.rider_name}?`,
+        question: `Start ${startName(action.run)}?`,
         confirm: "Start",
       };
     case "round":
@@ -143,7 +148,7 @@ export const successMessage = (action: JudgeAction) => {
       return `${callName(action)} called.`;
     case "current":
     case "start":
-      return `${action.run.rider_name} is on course.`;
+      return `${startName(action.run)} is on course.`;
     case "round":
       return `"${action.round.name}" is now the live round.`;
     case "ride_now":

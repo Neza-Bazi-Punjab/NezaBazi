@@ -24,6 +24,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import TeamCard, { type TeamPick } from "./TeamCard";
+import { startName } from "./judge-actions";
 import {
   carriedEntrantKeys,
   normalizeJudgeState,
@@ -765,10 +766,13 @@ export default function JudgePanel({ sample }: { sample?: TrainingScope }) {
                   onClick={() => tap({ kind: "start", run: startRider })}
                   className="min-h-[88px] w-full max-w-md bg-[var(--ledger-ink)] px-4 py-3 text-[26px] font-bold uppercase leading-tight text-[var(--ledger-paper)] active:opacity-90 disabled:opacity-40 sm:text-[30px]"
                 >
-                  {busy ? "Starting…" : `Start ${startRider.rider_name}`}
+                  {busy ? "Starting…" : `Start ${startName(startRider)}`}
                 </button>
                 <p className="mono text-[12px] uppercase text-[var(--ledger-muted)]">
-                  {[startRider.horse_name, phonePlace(startRider), roundText(startRider.attempt_number)]
+                  {(startRider.entrant_key.startsWith("team:")
+                    ? ["The whole team rides together", startRider.pool_label ? `Pool ${startRider.pool_label}` : null]
+                    : [startRider.horse_name, phonePlace(startRider), roundText(startRider.attempt_number)]
+                  )
                     .filter(Boolean)
                     .join(" · ")}
                 </p>

@@ -118,7 +118,7 @@ test("the confirmation sheet keeps its safe-area padding and full-width halves, 
 
 test("between riders: the last result stays in view and one big Start <name> button, sent without a question", () => {
   assert.match(panel, /Last: \{lastScored\.rider_name\} — \{RESULT_LABELS\[lastScored\.result\]\}/);
-  const start = buttonFor(panel, /\{busy \? "Starting…" : `Start \$\{startRider\.rider_name\}`\}/);
+  const start = buttonFor(panel, /\{busy \? "Starting…" : `Start \$\{startName\(startRider\)\}`\}/);
   assert.match(start, /onClick=\{\(\) => tap\(\{ kind: "start", run: startRider \}\)\}/);
   assert.match(start, /min-h-\[88px\] w-full/);
   // Only Start skips the confirm bar; Ride now and Take out still ask.
