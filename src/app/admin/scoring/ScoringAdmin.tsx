@@ -11,7 +11,7 @@
    write returns the fresh payload, so the panel never guesses. Every action
    that removes or replaces something asks first and says what will happen. */
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { DISPLAY_MODE_CHOICES } from "@/components/scoring/format";
 import type {
   AdminScoringState,
@@ -1010,6 +1010,33 @@ export default function ScoringAdmin({
     [data, round]
   );
   const groups = useMemo(() => groupStartList(runs), [runs]);
+  /* The standings table, pool by pool in pool order and, inside a pool, in
+     riding order: the same layout as the start list and the paper sheet, so a
+     wrong score is found by pool. A round with no pools keeps the ranking. */
+  const standings = useMemo(() => {
+    if (!leaderboard.some((row) => row.pool_label)) {
+      return leaderboard;
+    }
+
+    const firstRide = new Map<string, number>();
+
+    for (const run of runs) {
+      const known = firstRide.get(run.entrant_key);
+
+      if (known === undefined || run.run_order < known) {
+        firstRide.set(run.entrant_key, run.run_order);
+      }
+    }
+
+    const poolOf = (label: string | null) => (label ? poolIndex(label) : -1);
+
+    return [...leaderboard].sort(
+      (first, second) =>
+        poolOf(first.pool_label) - poolOf(second.pool_label) ||
+        (firstRide.get(first.entrant_key) ?? 0) - (firstRide.get(second.entrant_key) ?? 0) ||
+        first.rank - second.rank
+    );
+  }, [leaderboard, runs]);
   const scoredCount = runs.filter((run) => run.status === "scored").length;
   const poolLabels = groups
     .map((group) => group.label)
@@ -2601,11 +2628,26 @@ export default function ScoringAdmin({
                         </tr>
                       </thead>
                       <tbody>
-                        {leaderboard.map((row) => {
+                        {standings.map((row, index) => {
                           const override = overridesByKey.get(row.entrant_key);
+                          const newPool =
+                            row.pool_label !== null &&
+                            (index === 0 || standings[index - 1].pool_label !== row.pool_label);
 
                           return (
-                            <tr key={row.entrant_key} className="border-b border-bronze/10 last:border-0 align-top">
+                            <Fragment key={row.entrant_key}>
+                            {newPool && (
+                              <tr className="border-b border-bronze/20 bg-parchment">
+                                <th
+                                  colSpan={8}
+                                  scope="colgroup"
+                                  className="px-3 py-2 text-left font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink"
+                                >
+                                  Pool {row.pool_label}
+                                </th>
+                              </tr>
+                            )}
+                            <tr className="border-b border-bronze/10 last:border-0 align-top">
                               <td className="px-3 py-2 tabular-nums">
                                 {row.rank}
                                 {row.pool_label ? <span className="text-brown/60"> ({row.pool_rank})</span> : null}
@@ -2669,6 +2711,7 @@ export default function ScoringAdmin({
                                 </div>
                               </td>
                             </tr>
+                            </Fragment>
                           );
                         })}
                       </tbody>
