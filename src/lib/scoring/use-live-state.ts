@@ -93,9 +93,9 @@ export const LIVE_SCORING_TABLES = [
   "scoring_rounds",
 ] as const;
 export const REALTIME_DEBOUNCE_MS = 150;
-export const POLL_WHILE_UNSUBSCRIBED_MS = 4_000;
+export const POLL_WHILE_UNSUBSCRIBED_MS = 8_000;
 export const POLL_WHILE_SUBSCRIBED_MS = 20_000;
-export const STAFF_RESYNC_MS = 5_000;
+export const STAFF_RESYNC_MS = 10_000;
 export const POLL_IN_TRAINING_MS = 2_000;
 
 let channelSequence = 0;

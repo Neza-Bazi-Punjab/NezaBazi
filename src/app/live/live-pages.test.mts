@@ -277,10 +277,10 @@ test("the live-state hook follows the realtime and polling contract", () => {
     assert.match(hook, new RegExp(`"${table}"`));
   }
   assert.match(hook, /REALTIME_DEBOUNCE_MS = 150;/);
-  assert.match(hook, /POLL_WHILE_UNSUBSCRIBED_MS = 4_000;/);
+  assert.match(hook, /POLL_WHILE_UNSUBSCRIBED_MS = 8_000;/);
   assert.match(hook, /POLL_WHILE_SUBSCRIBED_MS = 20_000;/);
   // Staff screens and overlays resync every 5 s even while subscribed.
-  assert.match(hook, /STAFF_RESYNC_MS = 5_000;/);
+  assert.match(hook, /STAFF_RESYNC_MS = 10_000;/);
   assert.match(hook, /\? subscribedPollMs\s*: POLL_WHILE_UNSUBSCRIBED_MS/);
   assert.match(hook, /status === "SUBSCRIBED"/);
   assert.match(hook, /"postgres_changes"/);

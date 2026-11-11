@@ -331,7 +331,7 @@ test("the desk's instant search loads a short rider list, admins only, never cac
   // The panel filters the list on the device and refreshes it from the server.
   const panel = repoFile("src/app/admin/CheckInPanel.tsx");
   assert.match(panel, /searchRiders\(roster, query\)/);
-  assert.match(panel, /const ROSTER_REFRESH_MS = 5_000;/);
+  assert.match(panel, /const ROSTER_REFRESH_MS = 15_000;/);
   assert.match(panel, /void loadRoster\(\);/);
 });
 

@@ -193,7 +193,7 @@ const deskPoolText = (pool: DeskPool | null | undefined) => {
    waits this long after the last keystroke. */
 const SEARCH_DELAY_MS = 100;
 /* How often the rider list is refreshed while the page is on screen. */
-const ROSTER_REFRESH_MS = 5_000;
+const ROSTER_REFRESH_MS = 15_000;
 /* At most this many results are shown; typing more narrows them. */
 const MATCH_LIMIT = 25;
 /* A complete code as typed at the desk: NBP-XXXXXX, with or without the
