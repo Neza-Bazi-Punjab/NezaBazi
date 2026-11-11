@@ -183,6 +183,10 @@ test("the overlay index leads with the vMix data feed; ready-made overlays are o
     "last_points",
     "last_scored_at",
     "updated_at",
+    "photo",
+    "photo_url",
+    "last_photo",
+    "last_photo_url",
     "sample",
   ]);
   assert.deepEqual(columns("VMIX_LEADERBOARD_COLUMNS"), [
@@ -198,6 +202,8 @@ test("the overlay index leads with the vMix data feed; ready-made overlays are o
     "runs_scored",
     "runs_total",
     "advanced",
+    "photo",
+    "photo_url",
     "sample",
   ]);
 });

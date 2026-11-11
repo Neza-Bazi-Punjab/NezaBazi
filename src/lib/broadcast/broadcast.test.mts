@@ -24,6 +24,10 @@ import {
 } from "./columns.ts";
 import {
   SAMPLE_PHOTO_FILE,
+  assignVmixPhotoFiles,
+  cleanVmixPhotoName,
+  linkSoloAndTeamPaths,
+  vmixPhotoLookupKey,
   createPhotoContext,
   joinPhotoPath,
   photoFileName,
@@ -37,7 +41,14 @@ import {
 } from "./rows.ts";
 import { MISSING_LIST_NAME, createStoredZipWriter, mapInOrder, zipStream } from "./zip.ts";
 import { crc32 } from "../xlsx/write-xlsx.ts";
-import { VMIX_CURRENT_COLUMNS, VMIX_ENTRANTS_COLUMNS } from "../scoring/vmix-columns.ts";
+import {
+  VMIX_CURRENT_COLUMNS,
+  VMIX_ENTRANTS_COLUMNS,
+  VMIX_LEADERBOARD_COLUMNS,
+  VMIX_PHOTO_PATH_PREFIX,
+  VMIX_PUBLIC_PHOTO_COLUMNS,
+  VMIX_ROUNDS_COLUMNS,
+} from "../scoring/vmix-columns.ts";
 import type { PublicLiveState, ScoringRound, ScoringRun } from "../scoring/types.ts";
 import type { VmixCurrentRow, VmixEntrantRow } from "../scoring/vmix.ts";
 
@@ -174,9 +185,13 @@ test("photo link: a different key gives a different signature, and old links sto
 
 /* Columns ---------------------------------------------------------------------- */
 
-test("columns: the public lists, then the photo columns, then sample", () => {
+const publicPhotoColumns: readonly string[] = VMIX_PUBLIC_PHOTO_COLUMNS;
+const keyedBase = (columns: readonly string[]) =>
+  columns.filter((column) => column !== "sample" && !publicPhotoColumns.includes(column));
+
+test("columns: the public lists (without their own photo columns), then the photo columns, then sample", () => {
   assert.deepEqual(BROADCAST_CURRENT_COLUMNS, [
-    ...VMIX_CURRENT_COLUMNS.filter((column) => column !== "sample"),
+    ...keyedBase(VMIX_CURRENT_COLUMNS),
     "photo_url",
     "photo_file",
     "photo_path",
@@ -186,7 +201,7 @@ test("columns: the public lists, then the photo columns, then sample", () => {
     "sample",
   ]);
   assert.deepEqual(BROADCAST_ENTRANTS_COLUMNS, [
-    ...VMIX_ENTRANTS_COLUMNS.filter((column) => column !== "sample"),
+    ...keyedBase(VMIX_ENTRANTS_COLUMNS),
     "photo_url",
     "photo_file",
     "photo_path",
@@ -684,19 +699,226 @@ test("routes: the photo index uses the admin lists' rule and never signs URLs", 
   assert.match(headshots, /chooseTeamHeadshotPaths\(\s*index,\s*members,/);
 });
 
-/* The four public vMix routes, byte for byte (line endings aside), as they
-   were when the broadcast feeds were added beside them. */
+/* The four public vMix routes, byte for byte (line endings aside): rounds as
+   it was when the broadcast feeds were added beside them; current,
+   leaderboard and entrants since they gained the public photo columns. */
 const PUBLIC_VMIX_ROUTE_HASHES: Record<string, string> = {
-  current: "c6f80c8324fe4f345e1d2eab19a623b3f9bcf486b1f107624c482a45887b6a34",
-  entrants: "1bfab214b1748c9a626c7c7b6821e1692d41b10f4d647e1f85346c72b0671f86",
-  leaderboard: "2e71d85caee211132de1f6e5cb1fdec5a77dd03f2bea82ecac21fa9eb99292f8",
+  current: "59b4b90cfbdbdee329c2cd2acb3f4cf47be4714653fe3bee80ebf72663f044fa",
+  entrants: "6331d645f0ae27f683f3accd94576dfe0c5daa307606646af69ec06fddf41554",
+  leaderboard: "23e8930ea22d4d3d8ead55660b06bdd2e67ab2b0eaec2a191f432e25b81af1d5",
   rounds: "cec01f7e12d79c90c87556c8567116855fd2fd1783809f6de4ada2d5dcfc3933",
 };
 
-test("routes: the four public vMix routes are unchanged", () => {
+test("routes: the four public vMix routes are as pinned, and never use the key", () => {
   for (const [name, hash] of Object.entries(PUBLIC_VMIX_ROUTE_HASHES)) {
     const source = repoFile(`src/app/api/live/vmix/${name}/route.ts`).replace(/\r\n/g, "\n");
     assert.equal(createHash("sha256").update(source).digest("hex"), hash, name);
-    assert.doesNotMatch(source, /broadcast|photo/i, name);
+    assert.doesNotMatch(source, /verifyBroadcastKey|BROADCAST_API_KEY|buildPhotoLink|createServiceRoleClient/, name);
   }
+
+  assert.doesNotMatch(repoFile("src/app/api/live/vmix/rounds/route.ts"), /photo/i);
+
+  // Photos: at most a second's wait, never a failed feed, sample answered first.
+  for (const name of ["current", "entrants", "leaderboard"]) {
+    const source = repoFile(`src/app/api/live/vmix/${name}/route.ts`);
+    assert.match(source, /const photosPending = loadVmixPhotos\(url\);/, name);
+    assert.match(source, /sampleVmixPhotos\(url\)/, name);
+    assert.ok(source.indexOf("if (wantsSample(url))") < source.indexOf("loadVmixPhotos(url)"), name);
+  }
+
+  const helper = repoFile("src/lib/broadcast/public-photos.ts");
+  assert.match(helper, /import "server-only";/);
+  assert.match(helper, /export const PUBLIC_PHOTO_WAIT_MS = 1_000;/);
+  assert.match(helper, /getPhotoIndex\(\)\.catch\(\(\) => null\)/);
+  assert.match(helper, /encodeURIComponent\(file\)/);
+});
+
+const PUBLIC_PHOTO_ROUTE = "src/app/api/live/vmix/photo/[file]/route.ts";
+
+test("routes: the public photo route serves the stored JPEG by name, 404 otherwise", () => {
+  const source = repoFile(PUBLIC_PHOTO_ROUTE);
+  assert.match(source, /export const dynamic = "force-dynamic";/);
+  assert.equal((source.match(/export async function (GET|POST|PUT|PATCH|DELETE)\b/g) ?? []).length, 1);
+  assert.match(source, /index\.byVmixFile\.get\(vmixPhotoLookupKey\(name\)\)/);
+  assert.match(source, /"Content-Type": "image\/jpeg"/);
+  assert.match(source, /"Cache-Control": "public, max-age=300, s-maxage=300, stale-while-revalidate=3600"/);
+  assert.match(source, /"X-Content-Type-Options": "nosniff"/);
+  assert.match(source, /"X-Robots-Tag": "noindex"/);
+  assert.match(source, /status: 404,[\s\S]*?"Cache-Control": "private, no-store"/);
+  assert.equal(VMIX_PHOTO_PATH_PREFIX, "/api/live/vmix/photo/");
+});
+
+/* Public photo names ----------------------------------------------------------- */
+
+test("vmix photo names: unsafe characters removed, whitespace collapsed", () => {
+  assert.equal(cleanVmixPhotoName("  Harpreet   Singh "), "Harpreet Singh");
+  assert.equal(cleanVmixPhotoName('A\\B/C:D*E?F"G<H>I|J%K#L'), "ABCDEFGHIJKL");
+  assert.equal(cleanVmixPhotoName("Tab\tand\nnew\u0001line"), "Tab and newline");
+  assert.equal(cleanVmixPhotoName("ਹਰਪ੍ਰੀਤ ਸਿੰਘ"), "ਹਰਪ੍ਰੀਤ ਸਿੰਘ");
+  assert.equal(cleanVmixPhotoName("Gill (Jr.) & Sons"), "Gill (Jr.) & Sons");
+  assert.equal(cleanVmixPhotoName(null), "");
+  assert.equal(cleanVmixPhotoName(" /:* "), "");
+  assert.equal(vmixPhotoLookupKey("Harpreet Singh.PNG"), "harpreet singh.png");
+});
+
+test("vmix photo names: shared names all get the id suffix, unique names do not", () => {
+  const files = assignVmixPhotoFiles([
+    { key: "solo:abcd1111-0000", id: "abcd1111-0000", name: "Harpreet Singh" },
+    { key: "solo:ef002222-0000", id: "ef002222-0000", name: "harpreet  singh" },
+    { key: "member:9a9b3333-0000", id: "9a9b3333-0000", name: "HARPREET SINGH" },
+    { key: "solo:12345678-0000", id: "12345678-0000", name: "Arman Gill" },
+    { key: "member:77776666-0000", id: "77776666-0000", name: "Jasveer Kaur?" },
+  ]);
+  assert.equal(files.get("solo:abcd1111-0000"), "Harpreet Singh abcd.png");
+  assert.equal(files.get("solo:ef002222-0000"), "harpreet singh ef00.png");
+  assert.equal(files.get("member:9a9b3333-0000"), "HARPREET SINGH 9a9b.png");
+  assert.equal(files.get("solo:12345678-0000"), "Arman Gill.png");
+  assert.equal(files.get("member:77776666-0000"), "Jasveer Kaur.png");
+
+  const lowered = [...files.values()].map(vmixPhotoLookupKey);
+  assert.equal(new Set(lowered).size, lowered.length, "no two riders share a file name");
+});
+
+test("vmix photo names: a solo entry and its team place are one rider, one name", () => {
+  const files = assignVmixPhotoFiles([
+    { key: "solo:aaaa0000", id: "aaaa0000", name: "Arman Gill", twinKey: "member:bbbb0000" },
+    { key: "member:bbbb0000", id: "bbbb0000", name: "Arman  Gill", twinKey: "solo:aaaa0000" },
+    { key: "solo:cccc0000", id: "cccc0000", name: "Navdeep Sandhu", twinKey: "member:dddd0000" },
+    { key: "member:dddd0000", id: "dddd0000", name: "Navdeep Sandhu", twinKey: "solo:cccc0000" },
+    { key: "solo:eeee0000", id: "eeee0000", name: "Navdeep Sandhu" },
+  ]);
+  assert.equal(files.get("solo:aaaa0000"), "Arman Gill.png");
+  assert.equal(files.get("member:bbbb0000"), "Arman Gill.png");
+  // Two different riders called Navdeep Sandhu: the twin pair shares one name.
+  assert.equal(files.get("solo:cccc0000"), "Navdeep Sandhu cccc.png");
+  assert.equal(files.get("member:dddd0000"), "Navdeep Sandhu cccc.png");
+  assert.equal(files.get("solo:eeee0000"), "Navdeep Sandhu eeee.png");
+});
+
+test("vmix photo names: a clash left after the suffix never shares a name", () => {
+  const files = assignVmixPhotoFiles([
+    { key: "solo:abcd1", id: "abcd1", name: "Kaur" },
+    { key: "solo:abcd2", id: "abcd2", name: "kaur" },
+    { key: "solo:zzzz9", id: "zzzz9", name: "Kaur abcd" },
+    { key: "solo:0000a", id: "0000a", name: "" },
+  ]);
+  const lowered = [...files.values()].map(vmixPhotoLookupKey);
+  assert.equal(new Set(lowered).size, lowered.length);
+  assert.equal(files.get("solo:abcd1"), "Kaur abcd.png");
+  assert.equal(files.get("solo:abcd2"), "kaur abcd2.png");
+  assert.equal(files.get("solo:0000a"), "Rider 0000.png");
+});
+
+/* Solo entry and team place ---------------------------------------------------- */
+
+test("linking: a team member takes the solo entry's photo, a solo entry without one its team place's", () => {
+  const solos = [
+    { id: "s1", confirmation_code: "NBP-AAAAAA" },
+    { id: "s2", confirmation_code: "nbp-bbbbbb " },
+    { id: "s3", confirmation_code: "" },
+    { id: "s4", confirmation_code: null },
+    { id: "s5", confirmation_code: "NBP-LONELY" },
+  ];
+  const members = [
+    { id: "m1", confirmation_code: "NBP-AAAAAA" },
+    { id: "m2", confirmation_code: "NBP-BBBBBB" },
+    { id: "m3", confirmation_code: "" },
+    { id: "m4", confirmation_code: null },
+    { id: "m5", confirmation_code: "NBP-NOBODY" },
+  ];
+  const linked = linkSoloAndTeamPaths(
+    solos,
+    members,
+    new Map([["s1", "solo-1.jpg"], ["s3", "solo-3.jpg"], ["s5", "solo-5.jpg"]]),
+    new Map([["m1", "member-1.jpg"], ["m2", "member-2.jpg"], ["m4", "member-4.jpg"], ["m5", "member-5.jpg"]])
+  );
+
+  assert.equal(linked.memberPaths.get("m1"), "solo-1.jpg", "solo photo first");
+  assert.equal(linked.soloPaths.get("s2"), "member-2.jpg", "a solo entry without one takes the team place's");
+  assert.equal(linked.memberPaths.get("m2"), "member-2.jpg");
+  // Empty or null codes never link.
+  assert.equal(linked.memberPaths.get("m3"), undefined);
+  assert.equal(linked.soloPaths.get("s4"), undefined);
+  assert.equal(linked.memberPaths.get("m4"), "member-4.jpg");
+  assert.equal(linked.soloPaths.get("s3"), "solo-3.jpg");
+  // A code shared by nothing changes nothing.
+  assert.equal(linked.soloPaths.get("s5"), "solo-5.jpg");
+  assert.equal(linked.memberPaths.get("m5"), "member-5.jpg");
+  assert.deepEqual([...linked.twinOfMember], [["m1", "s1"], ["m2", "s2"]]);
+  assert.deepEqual([...linked.twinOfSolo], [["s1", "m1"], ["s2", "m2"]]);
+});
+
+test("linking: a code on two solo entries links nothing", () => {
+  const linked = linkSoloAndTeamPaths(
+    [{ id: "s1", confirmation_code: "X" }, { id: "s2", confirmation_code: "X" }],
+    [{ id: "m1", confirmation_code: "X" }],
+    new Map([["s1", "a.jpg"]]),
+    new Map([["m1", "b.jpg"]])
+  );
+  assert.equal(linked.memberPaths.get("m1"), "b.jpg");
+  assert.equal(linked.soloPaths.get("s2"), undefined);
+  assert.equal(linked.twinOfMember.size, 0);
+});
+
+test("photo index: links solo and team, names photos, and falls back without the code", () => {
+  const index = repoFile("src/lib/broadcast/photo-index.ts");
+  assert.match(index, /linkSoloAndTeamPaths\(soloRows, memberRows, chosenSoloPaths, chosenMemberPaths\)/);
+  assert.match(index, /read\(`\$\{columns\}, confirmation_code`\)/);
+  assert.match(index, /return read\(columns\);/);
+  assert.match(index, /assignVmixPhotoFiles\(vmixRiders\)/);
+});
+
+/* Public vMix rows ------------------------------------------------------------- */
+
+test("public vMix rows: every column on every row type, photo columns just before sample", () => {
+  const lists: Record<string, readonly string[]> = {
+    VmixCurrentRow: VMIX_CURRENT_COLUMNS,
+    VmixLeaderboardRow: VMIX_LEADERBOARD_COLUMNS,
+    VmixEntrantRow: VMIX_ENTRANTS_COLUMNS,
+    VmixRoundRow: VMIX_ROUNDS_COLUMNS,
+  };
+
+  assert.deepEqual(VMIX_CURRENT_COLUMNS.slice(-5), ["photo", "photo_url", "last_photo", "last_photo_url", "sample"]);
+  assert.deepEqual(VMIX_LEADERBOARD_COLUMNS.slice(-3), ["photo", "photo_url", "sample"]);
+  assert.deepEqual(VMIX_ENTRANTS_COLUMNS.slice(-3), ["photo", "photo_url", "sample"]);
+  assert.ok(!(VMIX_ROUNDS_COLUMNS as readonly string[]).includes("photo"));
+
+  const vmix = repoFile("src/lib/scoring/vmix.ts").replace(/\r\n/g, "\n");
+
+  for (const [type, columns] of Object.entries(lists)) {
+    assert.equal(columns.at(-1), "sample", type);
+    assert.equal(new Set(columns).size, columns.length, type);
+    const start = vmix.indexOf(`export type ${type} = {`);
+    const body = vmix.slice(start, vmix.indexOf("\n};", start));
+    const fields = [...body.matchAll(/^  (\w+): /gm)].map(([, field]) => field);
+    assert.deepEqual(fields, [...columns], type);
+  }
+
+  // The empty rows have empty photo columns.
+  for (const empty of ["EMPTY_VMIX_LEADERBOARD_ROW", "EMPTY_VMIX_ENTRANT_ROW"]) {
+    const start = vmix.indexOf(`export const ${empty}`);
+    const body = vmix.slice(start, vmix.indexOf("\n};", start));
+    assert.match(body, /\n  photo: "",\n  photo_url: "",\n  sample: "No",$/, empty);
+  }
+
+  // No run (an empty current row) and any lookup problem: empty photo cells.
+  assert.match(vmix, /const NO_PHOTO: PhotoCells = \{ photo: "", photo_url: "" \};/);
+  assert.match(vmix, /run \? photoCellsFor\(photos, riderKeyForRun\(run\), run\.rider_name, sample\) : NO_PHOTO/);
+  assert.match(vmix, /\} catch \{\n    return NO_PHOTO;\n  \}/);
+  // Builders stay pure: no photos unless the caller passes them.
+  assert.equal((vmix.match(/photos: VmixPhotos = NO_VMIX_PHOTOS/g) ?? []).length, 3);
+});
+
+test("rows: the keyed feeds leave out the public photo columns", () => {
+  const withPublic = {
+    ...baseCurrent(),
+    photo: "Harpreet Singh.png",
+    photo_url: "https://example.test/api/live/vmix/photo/Harpreet%20Singh.png",
+    last_photo: "x.png",
+    last_photo_url: "https://example.test/x.png",
+  };
+  const row = toBroadcastCurrentRow(withPublic, state({}), contextFor());
+  assert.deepEqual(Object.keys(row), [...BROADCAST_CURRENT_COLUMNS]);
+  assert.equal(row.photo_url, "");
+  assert.ok(!("photo" in row) && !("last_photo" in row));
 });

@@ -25,6 +25,10 @@ const commentaryRoutes = routesUnder("src/app/api/commentary");
 const EXPORT_ROUTE = "src/app/api/admin/scoring/export/route.ts";
 const adminRoutes = routesUnder("src/app/api/admin/scoring").filter((path) => path !== EXPORT_ROUTE);
 const publicRoutes = routesUnder("src/app/api/live");
+/* The public feeds' rider photos, by name: checked on its own below (it reads
+   the photo index and storage with the service role, and is not a data feed). */
+const PUBLIC_PHOTO_ROUTE = "src/app/api/live/vmix/photo/[file]/route.ts";
+const publicFeedRoutes = publicRoutes.filter((path) => path !== PUBLIC_PHOTO_ROUTE);
 
 const HANDLER = /export async function (GET|POST|PATCH|DELETE)\b/g;
 
@@ -58,6 +62,7 @@ test("every expected route exists", () => {
     "src/app/api/live/vmix/current/route.ts",
     "src/app/api/live/vmix/entrants/route.ts",
     "src/app/api/live/vmix/leaderboard/route.ts",
+    PUBLIC_PHOTO_ROUTE,
     "src/app/api/live/vmix/rounds/route.ts",
   ]);
   assert.ok(routesUnder("src/app/api/admin/scoring").includes(EXPORT_ROUTE));
@@ -166,15 +171,20 @@ test("staff and admin responses are never cached; the public state is cached for
   assert.match(repoFile("src/lib/scoring/sample-mode.ts"), /return jsonNoStore\(await produce\(\)\);/);
   assert.match(repoFile(RESET_SAMPLE_ROUTE), /sampleResponse\(/);
 
-  for (const path of publicRoutes) {
+  for (const path of publicFeedRoutes) {
     assert.match(repoFile(path), /PUBLIC_LIVE_CACHE/, path);
   }
+
+  // A photo is cached for five minutes; anything else from that route is not.
+  const photo = repoFile(PUBLIC_PHOTO_ROUTE);
+  assert.match(photo, /"Cache-Control": "public, max-age=300, s-maxage=300, stale-while-revalidate=3600"/);
+  assert.match(photo, /status: 404,[\s\S]*?"Cache-Control": "private, no-store"/);
 });
 
-test("public routes and the public state never touch registration data", () => {
+test("public feeds carry name-level data plus the rider's photo, and no other registration data", () => {
   const registration = /solo_registrations|team_members|\bteams\b/;
   const publicSources = [
-    ...publicRoutes,
+    ...publicFeedRoutes,
     "src/lib/scoring/server.ts",
     "src/lib/scoring/vmix.ts",
     "src/lib/scoring/vmix-columns.ts",
@@ -188,7 +198,7 @@ test("public routes and the public state never touch registration data", () => {
     assert.doesNotMatch(source, registration, path);
   }
 
-  for (const path of publicRoutes) {
+  for (const path of publicFeedRoutes) {
     const source = repoFile(path);
     assert.doesNotMatch(source, /verifyRoleRequest|createServiceRoleClient|rider-detail|admin-state/, path);
     assert.match(
@@ -210,8 +220,32 @@ test("public routes and the public state never touch registration data", () => {
     assert.ok(tables.length > 0 && tables.every((table) => table.startsWith("scoring_")), builder);
   }
 
+  // The one registration read behind the public feeds: the photo index
+  // (src/lib/broadcast/photo-index.ts) reads the registrations with the
+  // service role to choose each rider's photo. Only a file name and a link
+  // to the picture reach a feed (public-photos.ts); the rounds feed and the
+  // public state have no photos at all.
+  for (const path of publicFeedRoutes) {
+    const source = repoFile(path);
+    if (path.endsWith("/rounds/route.ts") || path.endsWith("/live/state/route.ts")) {
+      assert.doesNotMatch(source, /photo/i, path);
+    } else {
+      assert.match(source, /import \{ loadVmixPhotos, sampleVmixPhotos \} from "@\/lib\/broadcast\/public-photos";/, path);
+    }
+  }
+  const publicPhotos = repoFile("src/lib/broadcast/public-photos.ts");
+  assert.match(publicPhotos, /fileFor: \(riderKey\) => photos\.get\(riderKey\)\?\.vmix_file \?\? ""/);
+  assert.doesNotMatch(publicPhotos, /\.path\b|email|phone|confirmation_code/);
+
+  // The photo route serves a picture by its public name only.
+  const photoRoute = repoFile(PUBLIC_PHOTO_ROUTE);
+  assert.match(photoRoute, /export const dynamic = "force-dynamic";/);
+  assert.match(photoRoute, /index\.byVmixFile\.get\(vmixPhotoLookupKey\(name\)\)/);
+  assert.match(photoRoute, /"Content-Type": "image\/jpeg"/);
+  assert.doesNotMatch(photoRoute, /error\.message|\.from\("/);
+
   // Sample mode answers before any database read.
-  for (const path of publicRoutes.filter((route) => route.includes("/vmix/"))) {
+  for (const path of publicFeedRoutes.filter((route) => route.includes("/vmix/"))) {
     const source = repoFile(path);
     const sample = source.indexOf("if (wantsSample(url))");
     const firstRead = source.search(/await buildPublic/);
@@ -239,17 +273,18 @@ test("vMix rows carry every field, always", () => {
     "rider_name", "team_name", "horse_name", "location_short", "attempt_number",
     "attempts_per_rider", "run_order", "runs_total", "display_mode", "message",
     "last_rider_name", "last_team_name", "last_result", "last_points",
-    "last_scored_at", "updated_at", "sample",
+    "last_scored_at", "updated_at", "photo", "photo_url", "last_photo",
+    "last_photo_url", "sample",
   ];
   const leaderboard = [
     "rank", "pool_rank", "pool_label", "name", "team_name", "horse_name",
     "location_short", "points", "best_result", "runs_scored", "runs_total", "advanced",
-    "sample",
+    "photo", "photo_url", "sample",
   ];
   const entrants = [
     "entrant_key", "pool_label", "start_position", "name", "team_name", "horse_name",
     "location_short", "members", "runs_total", "runs_scored", "points", "best_result",
-    "advanced", "rank", "pool_rank", "sample",
+    "advanced", "rank", "pool_rank", "photo", "photo_url", "sample",
   ];
   const rounds = [
     "round_id", "name", "event_type", "round_number", "status", "is_live",
@@ -552,8 +587,8 @@ test("the moving sample (?sample=solo) is rehearsal data behind an admin switch"
   assert.match(migration, /insert into public\.admin_audit_log/);
   assert.match(migration, /revoke execute on function public\.scoring_set_rehearsal_sample\(text, boolean, uuid, text, text\)\s+from public, anon, authenticated;/);
 
-  // Every vMix route takes its sample rows from the one source.
-  for (const path of publicRoutes.filter((route) => route.includes("/vmix/"))) {
+  // Every vMix feed takes its sample rows from the one source.
+  for (const path of publicFeedRoutes.filter((route) => route.includes("/vmix/"))) {
     const source = repoFile(path);
     assert.match(source, /await vmixSampleSource\(url\)/, path);
     assert.doesNotMatch(source, /from "@\/lib\/scoring\/vmix-sample"/, path);

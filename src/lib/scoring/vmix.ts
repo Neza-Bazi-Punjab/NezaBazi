@@ -12,7 +12,10 @@
 // otherwise, so a title can show a SAMPLE badge.
 //
 // Everything here is derived from the scoring_* tables and the
-// scoring_leaderboard view (assembled in server.ts) — no registration data.
+// scoring_leaderboard view (assembled in server.ts), plus one thing from the
+// photo index: each rider's photo name and link (`photo` / `photo_url`), passed
+// in as a lookup (VmixPhotos) so these builders stay pure. No other
+// registration data reaches a row. Without a lookup there are no photos.
 import { NextResponse } from "next/server";
 import { toCsv, type CsvValue } from "@/lib/scoring/csv";
 import { POOL_LABEL_PATTERN, UUID_PATTERN } from "@/lib/scoring/validation";
@@ -26,6 +29,7 @@ import {
 } from "@/lib/scoring/types";
 import { justRodeRun } from "@/lib/scoring/types";
 import type { RoundRunSummary } from "@/lib/scoring/server";
+import { SAMPLE_PHOTO_FILE, riderKeyForRun } from "@/lib/broadcast/rows";
 
 export {
   VMIX_CURRENT_COLUMNS,
@@ -35,6 +39,68 @@ export {
 } from "@/lib/scoring/vmix-columns";
 
 type SampleFlag = "Yes" | "No";
+
+/* The rider photos a feed may name, from the photo index (public-photos.ts). */
+export type VmixPhotos = {
+  /* The rider's public file name ("<Rider Name>.png") by rider key
+     ("solo:<id>" / "member:<id>"), or "" for none. */
+  fileFor: (riderKey: string) => string;
+  /* The absolute link for a file name. */
+  urlFor: (file: string) => string;
+  /* The absolute link of the placeholder for ?sample= riders, or "". */
+  sampleUrl: string;
+};
+
+export const NO_VMIX_PHOTOS: VmixPhotos = { fileFor: () => "", urlFor: () => "", sampleUrl: "" };
+
+type PhotoCells = { photo: string; photo_url: string };
+
+const NO_PHOTO: PhotoCells = { photo: "", photo_url: "" };
+
+/* A rider's photo cells. Sample riders are invented: one placeholder. Any
+   problem with the lookup gives empty cells, never a failed feed. */
+const photoCellsFor = (
+  photos: VmixPhotos,
+  riderKey: string | null,
+  riderName: string | null | undefined,
+  sample: boolean
+): PhotoCells => {
+  try {
+    if (sample) {
+      return riderName && photos.sampleUrl
+        ? { photo: SAMPLE_PHOTO_FILE, photo_url: photos.sampleUrl }
+        : NO_PHOTO;
+    }
+
+    if (!riderKey) {
+      return NO_PHOTO;
+    }
+
+    const file = photos.fileFor(riderKey);
+
+    if (!file) {
+      return NO_PHOTO;
+    }
+
+    const url = photos.urlFor(file);
+    return typeof file === "string" && typeof url === "string" && url
+      ? { photo: file, photo_url: url }
+      : NO_PHOTO;
+  } catch {
+    return NO_PHOTO;
+  }
+};
+
+/* A run's rider, as the photo index keys them. */
+const runPhotoCells = (
+  photos: VmixPhotos,
+  run: ScoringRun | null | undefined,
+  sample: boolean
+): PhotoCells => (run ? photoCellsFor(photos, riderKeyForRun(run), run.rider_name, sample) : NO_PHOTO);
+
+/* A Single entrant ("solo:<id>") is its rider; a Section side has no one photo. */
+const entrantPhotoKey = (entrantKey: string | null | undefined) =>
+  entrantKey?.startsWith("solo:") ? entrantKey : null;
 
 export type VmixCurrentRow = {
   round_name: string;
@@ -58,6 +124,10 @@ export type VmixCurrentRow = {
   last_points: number;
   last_scored_at: string;
   updated_at: string;
+  photo: string;
+  photo_url: string;
+  last_photo: string;
+  last_photo_url: string;
   sample: SampleFlag;
 };
 
@@ -74,6 +144,8 @@ export type VmixLeaderboardRow = {
   runs_scored: number;
   runs_total: number;
   advanced: string;
+  photo: string;
+  photo_url: string;
   sample: SampleFlag;
 };
 
@@ -94,6 +166,8 @@ export type VmixEntrantRow = {
   advanced: string;
   rank: number;
   pool_rank: number;
+  photo: string;
+  photo_url: string;
   sample: SampleFlag;
 };
 
@@ -124,13 +198,16 @@ const yesNo = (value: boolean | null | undefined) =>
 export const toVmixCurrentRow = (
   state: PublicLiveState,
   runCount: number,
-  sample = false
+  sample = false,
+  photos: VmixPhotos = NO_VMIX_PHOTOS
 ): VmixCurrentRow => {
   const round = state.current_round;
   /* Between riders the feed keeps the rider who has just ridden, so the
      graphic never drops to an empty name while the judge readies the next. */
   const run = state.current_run ?? justRodeRun(state);
   const last = state.last_scored_run;
+  const photo = runPhotoCells(photos, run, sample);
+  const lastPhoto = runPhotoCells(photos, last, sample);
 
   return {
     round_name: text(round?.name),
@@ -154,6 +231,10 @@ export const toVmixCurrentRow = (
     last_points: last?.points ?? 0,
     last_scored_at: text(last?.scored_at),
     updated_at: text(state.live?.updated_at),
+    photo: photo.photo,
+    photo_url: photo.photo_url,
+    last_photo: lastPhoto.photo,
+    last_photo_url: lastPhoto.photo_url,
     sample: flag(sample),
   };
 };
@@ -171,24 +252,37 @@ export const EMPTY_VMIX_LEADERBOARD_ROW: VmixLeaderboardRow = {
   runs_scored: 0,
   runs_total: 0,
   advanced: "",
+  photo: "",
+  photo_url: "",
   sample: "No",
 };
 
-const toVmixLeaderboardRow = (row: LeaderboardRow, sample: boolean): VmixLeaderboardRow => ({
-  rank: row.rank,
-  pool_rank: row.pool_rank,
-  pool_label: text(row.pool_label),
-  name: text(row.name),
-  team_name: text(row.team_name),
-  horse_name: text(row.horse_name),
-  location_short: text(shortLocation(row.location)),
-  points: row.points ?? 0,
-  best_result: row.best_result ? RESULT_LABELS[row.best_result] : "",
-  runs_scored: row.runs_scored ?? 0,
-  runs_total: row.runs_total ?? 0,
-  advanced: yesNo(row.advanced),
-  sample: flag(sample),
-});
+const toVmixLeaderboardRow = (
+  row: LeaderboardRow,
+  sample: boolean,
+  photos: VmixPhotos
+): VmixLeaderboardRow => {
+  const photoKey = entrantPhotoKey(row.entrant_key);
+  const photo = photoKey ? photoCellsFor(photos, photoKey, row.name, sample) : NO_PHOTO;
+
+  return {
+    rank: row.rank,
+    pool_rank: row.pool_rank,
+    pool_label: text(row.pool_label),
+    name: text(row.name),
+    team_name: text(row.team_name),
+    horse_name: text(row.horse_name),
+    location_short: text(shortLocation(row.location)),
+    points: row.points ?? 0,
+    best_result: row.best_result ? RESULT_LABELS[row.best_result] : "",
+    runs_scored: row.runs_scored ?? 0,
+    runs_total: row.runs_total ?? 0,
+    advanced: yesNo(row.advanced),
+    photo: photo.photo,
+    photo_url: photo.photo_url,
+    sample: flag(sample),
+  };
+};
 
 export const VMIX_LEADERBOARD_DEFAULT_LIMIT = 50;
 export const VMIX_LEADERBOARD_MAX_LIMIT = 200;
@@ -222,7 +316,8 @@ export const readVmixLeaderboardQuery = (url: URL): VmixLeaderboardQuery => {
 export const toVmixLeaderboardRows = (
   state: PublicLiveState,
   query: VmixLeaderboardQuery,
-  sample = false
+  sample = false,
+  photos: VmixPhotos = NO_VMIX_PHOTOS
 ): VmixLeaderboardRow[] => {
   if (query.pool === "invalid") {
     return [EMPTY_VMIX_LEADERBOARD_ROW];
@@ -235,7 +330,7 @@ export const toVmixLeaderboardRows = (
           .filter((row) => row.pool_label === query.pool)
           .sort((first, second) => first.pool_rank - second.pool_rank);
 
-  const flat = rows.slice(0, query.limit).map((row) => toVmixLeaderboardRow(row, sample));
+  const flat = rows.slice(0, query.limit).map((row) => toVmixLeaderboardRow(row, sample, photos));
   return flat.length > 0 ? flat : [EMPTY_VMIX_LEADERBOARD_ROW];
 };
 
@@ -257,6 +352,8 @@ export const EMPTY_VMIX_ENTRANT_ROW: VmixEntrantRow = {
   advanced: "",
   rank: 0,
   pool_rank: 0,
+  photo: "",
+  photo_url: "",
   sample: "No",
 };
 
@@ -278,7 +375,8 @@ export const toVmixEntrantRows = (
   round: ScoringRound | null,
   runs: readonly ScoringRun[],
   leaderboard: readonly LeaderboardRow[],
-  sample = false
+  sample = false,
+  photos: VmixPhotos = NO_VMIX_PHOTOS
 ): VmixEntrantRow[] => {
   if (!round || runs.length === 0) {
     return [EMPTY_VMIX_ENTRANT_ROW];
@@ -297,6 +395,8 @@ export const toVmixEntrantRows = (
     const first = entrantRuns[0];
     const standing = standings.get(entrantKey);
     const riders = section ? [...new Set(entrantRuns.map((run) => run.rider_name))] : [];
+    /* A Single entrant's rider; a Section side has no one photo. */
+    const photo = section ? NO_PHOTO : runPhotoCells(photos, first, sample);
 
     return {
       entrant_key: entrantKey,
@@ -314,6 +414,8 @@ export const toVmixEntrantRows = (
       advanced: yesNo(standing?.advanced),
       rank: standing?.rank ?? 0,
       pool_rank: standing?.pool_rank ?? 0,
+      photo: photo.photo,
+      photo_url: photo.photo_url,
       sample: flag(sample),
     };
   });

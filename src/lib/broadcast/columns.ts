@@ -3,10 +3,18 @@
 // (vmix-columns.ts) with the photo columns added before `sample`, built from
 // those lists so the two can never drift. Only vmix-columns.ts is imported
 // (itself import-free), so the node test runner can load this file directly.
-import { VMIX_CURRENT_COLUMNS, VMIX_ENTRANTS_COLUMNS } from "../scoring/vmix-columns.ts";
+import {
+  VMIX_CURRENT_COLUMNS,
+  VMIX_ENTRANTS_COLUMNS,
+  VMIX_PUBLIC_PHOTO_COLUMNS,
+} from "../scoring/vmix-columns.ts";
 
+/* Without `sample`, and without the public feeds' own photo columns (photo,
+   photo_url, last_…): the keyed feeds keep the schema they always had. */
 const withoutSample = (columns: readonly string[]) =>
-  columns.filter((column) => column !== "sample");
+  columns.filter(
+    (column) => column !== "sample" && !(VMIX_PUBLIC_PHOTO_COLUMNS as readonly string[]).includes(column)
+  );
 
 export const PHOTO_COLUMNS = ["photo_url", "photo_file", "photo_path"] as const;
 

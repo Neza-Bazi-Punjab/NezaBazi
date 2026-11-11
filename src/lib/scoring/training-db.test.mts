@@ -173,7 +173,7 @@ test("?sample=demo: the vMix feeds follow the shared demo, always sample = Yes",
   for (const feed of ["current", "leaderboard", "entrants", "rounds"]) {
     const source = repoFile(`src/app/api/live/vmix/${feed}/route.ts`);
     assert.match(source, /await vmixSampleSource\(url\)/, feed);
-    assert.match(source, /, true\)/, feed);
+    assert.match(source, /,\s*true(\)|,\s*sampleVmixPhotos\(url\)\s*\))/, feed);
   }
   // The demo session: the shared one, except on a SCORING_SAMPLE_MODE=1 laptop.
   assert.match(

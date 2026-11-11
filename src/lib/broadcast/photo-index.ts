@@ -10,6 +10,13 @@
 // (chooseSoloHeadshotPaths / chooseTeamHeadshotPaths in headshot-urls.ts):
 // a wrong face on air is the worst failure here.
 //
+// A rider's solo entry and team place (a team made on "Form teams" copies the
+// solo entry, same confirmation_code) share one photo: linkSoloAndTeamPaths.
+//
+// Each photo also gets its public vMix name, "<Rider Name>.png"
+// (assignVmixPhotoFiles, rows.ts), and `byVmixFile` finds the photo again
+// from that name for /api/live/vmix/photo/<name>.
+//
 // A photo problem must never fail a feed. A failed rebuild keeps serving the
 // previous index; with none, an empty one (or, when only the Auth listing
 // failed, the registrations' own photos), retried soon after.
@@ -22,10 +29,14 @@ import {
   loadAuthUserIndex,
 } from "@/lib/admin/headshot-urls";
 import {
+  assignVmixPhotoFiles,
+  linkSoloAndTeamPaths,
   photoFileName,
   slugifyName,
+  vmixPhotoLookupKey,
   type IndexedRider,
   type RiderPhoto,
+  type VmixPhotoRider,
 } from "@/lib/broadcast/rows";
 import { fetchAllRows } from "@/lib/scoring/server";
 import { entrantKeyForSolo, entrantKeyForTeam } from "@/lib/scoring/types";
@@ -34,6 +45,9 @@ export type PhotoIndex = {
   /* "solo:<solo_registrations id>" / "member:<team_members id>". */
   photos: Map<string, RiderPhoto>;
   riders: IndexedRider[];
+  /* vmixPhotoLookupKey(vmix_file) → the storage path, for the public photo
+     route. One name, one rider. */
+  byVmixFile: Map<string, string>;
 };
 
 const INDEX_LIFETIME_MS = 30_000;
@@ -44,7 +58,7 @@ const RETRY_AFTER_MS = 5_000;
 const STALE_WAIT_MS = 3_000;
 const FIRST_BUILD_WAIT_MS = 8_000;
 
-const EMPTY_INDEX: PhotoIndex = { photos: new Map(), riders: [] };
+const EMPTY_INDEX: PhotoIndex = { photos: new Map(), riders: [], byVmixFile: new Map() };
 
 let current: { index: PhotoIndex; expiresAt: number } | null = null;
 let building: Promise<PhotoIndex> | null = null;
@@ -55,6 +69,7 @@ type SoloRow = {
   email: string | null;
   full_name: string | null;
   headshot_path: string | null;
+  confirmation_code?: string | null;
 };
 
 type MemberRow = {
@@ -64,6 +79,7 @@ type MemberRow = {
   full_name: string | null;
   is_leader: boolean | null;
   headshot_path: string | null;
+  confirmation_code?: string | null;
 };
 
 type TeamRow = { id: string; team_name: string | null; leader_profile_id: string | null };
@@ -74,23 +90,48 @@ class PartialIndexError extends Error {
   }
 }
 
+const SOLO_COLUMNS = "id, profile_id, email, full_name, headshot_path";
+const MEMBER_COLUMNS = "id, team_id, email, full_name, is_leader, headshot_path";
+
 const buildIndex = async (): Promise<PhotoIndex> => {
   const client = createServiceRoleClient();
-  const [soloResult, memberResult, teamResult, authIndex] = await Promise.all([
+  const readSolos = (columns: string) =>
     fetchAllRows<SoloRow>((from, to) =>
       client
         .from("solo_registrations")
-        .select("id, profile_id, email, full_name, headshot_path")
+        .select(columns)
         .order("id", { ascending: true })
         .range(from, to)
-    ),
+        .overrideTypes<SoloRow[], { merge: false }>()
+    );
+  const readMembers = (columns: string) =>
     fetchAllRows<MemberRow>((from, to) =>
       client
         .from("team_members")
-        .select("id, team_id, email, full_name, is_leader, headshot_path")
+        .select(columns)
         .order("id", { ascending: true })
         .range(from, to)
-    ),
+        .overrideTypes<MemberRow[], { merge: false }>()
+    );
+  /* With the confirmation code; should that read fail, without it (no
+     linking) rather than no index. */
+  const withCodeOrWithout = async (
+    read: typeof readSolos | typeof readMembers,
+    columns: string
+  ) => {
+    const result = await read(`${columns}, confirmation_code`);
+
+    if (!result.error) {
+      return result;
+    }
+
+    console.error("[broadcast] confirmation_code read failed; photos not linked", result.error.code ?? "unknown");
+    return read(columns);
+  };
+
+  const [soloResult, memberResult, teamResult, authIndex] = await Promise.all([
+    withCodeOrWithout(readSolos, SOLO_COLUMNS) as ReturnType<typeof readSolos>,
+    withCodeOrWithout(readMembers, MEMBER_COLUMNS) as ReturnType<typeof readMembers>,
     fetchAllRows<TeamRow>((from, to) =>
       client
         .from("teams")
@@ -134,13 +175,33 @@ const buildIndex = async (): Promise<PhotoIndex> => {
     }
   }
 
-  const soloPaths = chooseSoloHeadshotPaths(authIndex, soloRows);
-  const memberPaths = chooseTeamHeadshotPaths(
+  const chosenSoloPaths = chooseSoloHeadshotPaths(authIndex, soloRows);
+  const chosenMemberPaths = chooseTeamHeadshotPaths(
     authIndex,
     memberRows,
     leaderProfileByTeam,
     soloProfileByEmail
   );
+  const linked = linkSoloAndTeamPaths(soloRows, memberRows, chosenSoloPaths, chosenMemberPaths);
+  const soloPaths = linked.soloPaths;
+  const memberPaths = linked.memberPaths;
+
+  /* "<Rider Name>.png" for everyone registered (shared names counted over
+     all of them), a solo entry and its team place being one rider. */
+  const vmixRiders: VmixPhotoRider[] = [
+    ...soloRows.map((row) => {
+      const twin = linked.twinOfSolo.get(row.id);
+      return { key: `solo:${row.id}`, id: row.id, name: row.full_name, twinKey: twin ? `member:${twin}` : undefined };
+    }),
+    ...memberRows.map((row) => {
+      const twin = linked.twinOfMember.get(row.id);
+      return { key: `member:${row.id}`, id: row.id, name: row.full_name, twinKey: twin ? `solo:${twin}` : undefined };
+    }),
+  ];
+  const vmixFiles = assignVmixPhotoFiles(vmixRiders);
+  const byVmixFile = new Map<string, string>();
+  /* Names that would point at two different pictures: served for neither. */
+  const conflicted = new Set<string>();
 
   const photos = new Map<string, RiderPhoto>();
   const riders: IndexedRider[] = [];
@@ -160,7 +221,21 @@ const buildIndex = async (): Promise<PhotoIndex> => {
   };
 
   const add = (rider: Omit<IndexedRider, "photo">, path: string | undefined, id: string) => {
-    const photo = path ? { path, file: fileFor(rider.name, id) } : null;
+    const vmixFile = vmixFiles.get(rider.key);
+    const photo: RiderPhoto | null = path
+      ? { path, file: fileFor(rider.name, id), ...(vmixFile ? { vmix_file: vmixFile } : {}) }
+      : null;
+
+    if (photo && vmixFile) {
+      const lookup = vmixPhotoLookupKey(vmixFile);
+      const existing = byVmixFile.get(lookup);
+
+      if (existing !== undefined && existing !== path) {
+        conflicted.add(lookup);
+      } else {
+        byVmixFile.set(lookup, path!);
+      }
+    }
 
     if (photo) {
       photos.set(rider.key, photo);
@@ -197,7 +272,17 @@ const buildIndex = async (): Promise<PhotoIndex> => {
     );
   }
 
-  const index = { photos, riders };
+  for (const lookup of conflicted) {
+    byVmixFile.delete(lookup);
+  }
+
+  for (const photo of photos.values()) {
+    if (photo.vmix_file && conflicted.has(vmixPhotoLookupKey(photo.vmix_file))) {
+      delete photo.vmix_file;
+    }
+  }
+
+  const index = { photos, riders, byVmixFile };
 
   if (!authIndex) {
     throw new PartialIndexError(index);

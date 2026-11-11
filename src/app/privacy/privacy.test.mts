@@ -32,7 +32,8 @@ test("the policy says the optional headshot may be shown on the live broadcast o
 
   assert.match(page, /If you give a headshot, it may\s+also be shown next to your name on the event&apos;s live broadcast/);
   assert.match(page, /given to the broadcast graphics team\s+for that purpose only/);
-  assert.match(page, /never published on the website&apos;s\s+public pages/);
+  assert.match(page, /read it from a\s+public data feed/);
+  assert.match(page, /it is not shown on the website&apos;s pages/);
   assert.match(page, /private file storage,\s+including optional rider headshots/);
 });
 

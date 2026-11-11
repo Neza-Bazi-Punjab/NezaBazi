@@ -36,7 +36,7 @@ The championship website publishes live scoring as four data feeds that vMix can
 
 Each feed is a **JSON array of flat rows**, or **CSV** with a header row if you add `?format=csv`. **Every column is present on every response**, as text or a number, never missing and never null, so a binding cannot break. When there is nothing to show (before the event, between rounds, an unknown pool or round), a feed returns **one row of empty values**.
 
-> **The four live scoring feeds are public and need no login or key.** They carry only what is announced over the PA: rider and team names, horses, district and state, pools, results and standings. Nothing private. The photo feeds are separate and need a key (see Photos).
+> **The four live scoring feeds are public and need no login or key.** They carry what is announced over the PA (rider and team names, horses, district and state, pools, results and standings) and, in current, leaderboard and entrants, **each rider's photo**, given for the broadcast (see Photos). Nothing else about a rider: no contact details, no village.
 
 ## Addresses
 
@@ -180,6 +180,10 @@ Every row has all of its feed's columns, in the order below, and ends with `samp
 | `last_points` | 4, 2 or 0 |
 | `last_scored_at` | Time of that result (ISO 8601, UTC; Amritsar is UTC+5:30) |
 | `updated_at` | When the live position last changed (ISO 8601, UTC) |
+| `photo` | Photo of the rider on course, as a file name, e.g. `Harpreet Singh.png`; empty without a photo (see Photos) |
+| `photo_url` | Web address of that photo: bind the title's image to it |
+| `last_photo` | The same, for the rider of the most recent result |
+| `last_photo_url` | Web address of that photo |
 | `sample` | `Yes` for rehearsal data, `No` for live data |
 
 ## Leaderboard — one row per entrant, ranked
@@ -198,6 +202,8 @@ Every row has all of its feed's columns, in the order below, and ends with `samp
 | `runs_scored` | Runs with a result |
 | `runs_total` | Runs to ride, not counting skipped ones |
 | `advanced` | `Yes` (through), `No` (out), or empty while undecided |
+| `photo` | Single: the rider's photo as a file name; empty for Section and without a photo |
+| `photo_url` | Web address of that photo |
 | `sample` | `Yes` for rehearsal data, `No` for live data |
 
 ## Entrants — one row per entrant, in start order
@@ -219,6 +225,8 @@ Every row has all of its feed's columns, in the order below, and ends with `samp
 | `advanced` | `Yes`, `No`, or empty while undecided |
 | `rank` | Rank in the round |
 | `pool_rank` | Rank within the pool |
+| `photo` | Single: the rider's photo as a file name; empty for Section and without a photo |
+| `photo_url` | Web address of that photo |
 | `sample` | `Yes` for rehearsal data, `No` for live data |
 
 ## Rounds — one row per round, in running order
@@ -242,11 +250,18 @@ Every row has all of its feed's columns, in the order below, and ends with `samp
 
 # Photos — rider pictures for your titles
 
-The photo feeds give the picture of each rider, to show next to their name. Riders' photos are optional, and are given to you for the broadcast only.
+**The public feeds now carry each rider's photo. No key is needed.** Current, leaderboard and entrants have a `photo` column and a `photo_url` column (current also `last_photo` and `last_photo_url`, for the rider of the most recent result), just before `sample`. Riders' photos are optional, and are given to you for the broadcast only.
 
-> **These feeds need a key.** The organisers give it to the graphics team privately. In this guide every address says `key=YOUR_KEY`: put the real key in its place on the vMix computer. Never show the key on screen, in a title or in a screenshot, and never pass it on.
+> **Bind the title's image to `photo_url`.** For example, `https://www.nezabazipunjab.com/api/live/vmix/photo/Harpreet%20Singh.png`. The first time a picture is asked for it is fetched from the website; after that it comes from a cache and is quick.
 
-## Addresses
+- **File names are `<rider name>.png`**, the name as the feed shows it, without characters a file name cannot hold. When two riders share a name, **a short code is added** to each of them, e.g. `Harpreet Singh 1a2b.png`, so two riders never share a picture.
+- The pictures are **JPEG images inside**, although the name ends in `.png`. vMix shows them either way.
+- A rider with no photo has **empty photo columns**, so give each title a default picture for when the column is empty. Section rows (teams) have empty photo columns too.
+- Sample rows (`sample=…`) carry one placeholder picture for every invented rider, named `sample-rider.png`.
+
+## Optional: the keyed photo feeds and the ZIP
+
+For pictures stored on the vMix computer (they show at once and keep working if the venue internet drops), the organisers can give you a **key** privately. Never show it on screen, in a title or in a screenshot, and never pass it on.
 
 | Feed | Address |
 | --- | --- |
@@ -255,40 +270,9 @@ The photo feeds give the picture of each rider, to show next to their name. Ride
 | Every rider's photo | `https://www.nezabazipunjab.com/api/broadcast/photos?key=YOUR_KEY` |
 | All photos as a ZIP | `https://www.nezabazipunjab.com/api/broadcast/photos/zip?key=YOUR_KEY` |
 
-Current and entrants send **the same rows as the public feeds, plus photo columns**, so a title already bound to the public feed can be switched over by changing only its address. `format=csv`, `sample=…` and `round=` work as before.
+These send the public rows with their own photo columns instead of `photo` and `photo_url`: `photo_url`, `photo_file` (the file name in the ZIP, e.g. `harpreet-singh-1a2b3c4d.jpg`) and `photo_path`, the same three as `last_…` in current, and `member_1_photo_url` … `member_4_photo_url` for a Section row in entrants. The photos feed has one row per registered rider.
 
-## The added columns
-
-| Column | Feed | Meaning |
-| --- | --- | --- |
-| `photo_url` | current, entrants, photos | Web address of the rider's photo |
-| `photo_file` | current, entrants, photos | The photo's file name in the ZIP, e.g. `harpreet-singh-1a2b3c4d.jpg` |
-| `photo_path` | current, entrants, photos | The photo on the vMix computer; empty unless you add `photo_dir=` (see below) |
-| `last_photo_url`, `last_photo_file`, `last_photo_path` | current | The same, for the rider of the most recent result |
-| `member_1_photo_url` … `member_4_photo_url` | entrants | Section: the four riders' photos, in the order of `members`. Empty for Single |
-| `entrant_key` | photos | Stable id of the rider in this event |
-| `name` | photos | Rider |
-| `team_name` | photos | Their team, if they ride in one |
-| `has_photo` | photos | `Yes` or `No` |
-
-In entrants, `photo_url`, `photo_file` and `photo_path` are the rider's for a Single row and empty for a Section row. The photos feed has one row per registered rider, solo riders first, then team riders, by name.
-
-## Two ways to use them
-
-**A. From the web.** Bind the title's image to `photo_url`. The first time a picture is asked for it is fetched from the website; after that it comes from a cache and is quick.
-
-**B. From files on the vMix computer.** Download the ZIP once, unzip it into a folder on the vMix computer, and add that folder to the Data Source address with `&photo_dir=`, typed exactly as the folder is named on that computer. For example, with the photos in `D:\Photos`:
-
-> `https://www.nezabazipunjab.com/api/broadcast/current?key=YOUR_KEY&photo_dir=D:\Photos`
-
-`photo_path` then reads, for example, `D:\Photos\harpreet-singh-1a2b3c4d.jpg`. Bind the title's image to `photo_path`. The picture shows at once, and keeps working if the venue internet drops.
-
-> **On event day use B, with A as the fallback** for photos added after you downloaded the ZIP. **Download the ZIP again after check-in closes**, and unzip it over the same folder: file names do not change when a photo is replaced.
-
-- A rider with no photo has **empty photo columns**, so give each title a default picture for when the column is empty.
-- Sample rows (`sample=…`) carry one placeholder picture for every invented rider.
-
-- A photo that could not be downloaded is left out of the ZIP and named in `missing.txt` inside it.
+Download the ZIP, unzip it into a folder on the vMix computer, and add that folder to the keyed address with `&photo_dir=`, typed exactly as the folder is named, e.g. `&photo_dir=D:\Photos`. `photo_path` then reads `D:\Photos\harpreet-singh-1a2b3c4d.jpg`: bind the title's image to it. Download the ZIP again after check-in closes and unzip it over the same folder. A photo that could not be downloaded is named in `missing.txt` inside the ZIP.
 
 > **Not yet tested on a real vMix.** Binding a title's image to a Data Source column, by web address or by file path, **has not been tested with a real vMix**. This page describes vMix's image binding as we understand it. Please try it with `sample=1` well before event day and tell us anything that does not behave as described.
 
@@ -349,7 +333,7 @@ Go through this on the vMix computer before the first pool is called.
 2. `?sample=1`, `?sample=solo` and `?sample=demo` are gone from every Data Source address (close the demo on event day; a closed demo address shows frozen sample rows marked SAMPLE), and `--sample` and `--moving-sample` from the bridge script if you run it.
 3. Every title has its **SAMPLE** badge bound to the `sample` column, and no badge is showing.
 4. Your titles honour `display_mode` (see Screens), or you use the ready-made overlays, which follow it by themselves.
-5. The photo ZIP was downloaded again **after check-in closed** and unzipped over the same folder, and no address showing on screen carries the key (see Photos).
+5. Every title with a picture has its image bound to `photo_url` (or `last_photo_url`) and a default picture for riders without one. If you use the keyed feeds instead, the ZIP was downloaded again **after check-in closed**, and no address showing on screen carries the key (see Photos).
 6. The current feed, `https://www.nezabazipunjab.com/api/live/vmix/current`, opened in an ordinary browser, shows `"sample":"No"`. `"sample":"Yes"` means `?sample=1`, `?sample=solo` or `?sample=demo` is still on the address.
 7. You know whom to contact: on the day, the head organiser at the scoring laptop; before the day, {site.email}.
 

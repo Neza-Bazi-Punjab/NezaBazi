@@ -150,8 +150,9 @@ export default function PrivacyPolicyPage() {
                   screens so they can introduce you. If you give a headshot, it may
                   also be shown next to your name on the event&apos;s live broadcast
                   and its recordings, and it is given to the broadcast graphics team
-                  for that purpose only. It is never published on the website&apos;s
-                  public pages.
+                  for that purpose only. The broadcast graphics read it from a
+                  public data feed, so anyone who has the picture&apos;s web
+                  address can open it; it is not shown on the website&apos;s pages.
                 </li>
                 <li>
                   Communicate about accounts, registration, security, support, and

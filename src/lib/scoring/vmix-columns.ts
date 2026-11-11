@@ -5,6 +5,17 @@
 //
 // Every row type ends with `sample` ("Yes" / "No"): "Yes" only for the
 // rehearsal rows of ?sample=1, so a title can show a SAMPLE badge.
+//
+// `photo` / `photo_url` (and `last_photo` / `last_photo_url` on current): the
+// rider's picture, "<Rider Name>.png" served by /api/live/vmix/photo/<name>;
+// both empty for a rider with no photo, a Section row or an empty row.
+
+/* The public photo columns, which the keyed broadcast feeds leave out (they
+   have their own photo_url). */
+export const VMIX_PUBLIC_PHOTO_COLUMNS = ["photo", "photo_url", "last_photo", "last_photo_url"] as const;
+
+/* Where the public feeds' photos are served: <origin> + this + encoded name. */
+export const VMIX_PHOTO_PATH_PREFIX = "/api/live/vmix/photo/";
 
 export const VMIX_CURRENT_COLUMNS = [
   "round_name",
@@ -28,6 +39,10 @@ export const VMIX_CURRENT_COLUMNS = [
   "last_points",
   "last_scored_at",
   "updated_at",
+  "photo",
+  "photo_url",
+  "last_photo",
+  "last_photo_url",
   "sample",
 ] as const;
 
@@ -44,6 +59,8 @@ export const VMIX_LEADERBOARD_COLUMNS = [
   "runs_scored",
   "runs_total",
   "advanced",
+  "photo",
+  "photo_url",
   "sample",
 ] as const;
 
@@ -63,6 +80,8 @@ export const VMIX_ENTRANTS_COLUMNS = [
   "advanced",
   "rank",
   "pool_rank",
+  "photo",
+  "photo_url",
   "sample",
 ] as const;
 

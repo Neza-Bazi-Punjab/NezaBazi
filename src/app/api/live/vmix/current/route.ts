@@ -3,14 +3,18 @@
 // One flat row (a JSON array with one object, or `?format=csv` for a CSV with
 // a header row) for vMix title bindings: round, called and next pool, the
 // current rider, the attempt, the display mode and message, and the last
-// result. Every field is always present (empty string or 0), and when scoring
+// result, and the photos of the rider on course and of the last result
+// (photo / photo_url, last_photo / last_photo_url). Every field is always present (empty string or 0), and when scoring
 // is not set up the row is simply empty, so vMix keeps a stable schema.
 //
 // Public like /api/live/state, built from the same assembled state — the
-// scoring_* tables and view only, never a registration table. ?sample=1
+// scoring_* tables and view — plus each rider's photo name and link from the
+// photo index (public-photos.ts: at most a second's wait, and a photo problem
+// only empties the photo columns). ?sample=1
 // answers with rehearsal data instead (?sample=solo: moving rehearsal data while
 // switched on, vmix-sample-live.ts) and never reads the database.
 import { NextResponse } from "next/server";
+import { loadVmixPhotos, sampleVmixPhotos } from "@/lib/broadcast/public-photos";
 import { PRIVATE_NO_STORE, PUBLIC_LIVE_CACHE } from "@/lib/scoring/http";
 import { buildPublicLiveSnapshot } from "@/lib/scoring/server";
 import {
@@ -33,18 +37,27 @@ export async function GET(request: Request) {
 
     return vmixResponse(
       VMIX_CURRENT_COLUMNS,
-      [toVmixCurrentRow(sample.state(), sample.runsForRound(sample.liveRoundId).length, true)],
+      [
+        toVmixCurrentRow(
+          sample.state(),
+          sample.runsForRound(sample.liveRoundId).length,
+          true,
+          sampleVmixPhotos(url)
+        ),
+      ],
       csv,
       PUBLIC_LIVE_CACHE
     );
   }
 
   try {
+    const photosPending = loadVmixPhotos(url);
     const { state, runCount } = await buildPublicLiveSnapshot();
+    const photos = await photosPending;
 
     return vmixResponse(
       VMIX_CURRENT_COLUMNS,
-      [toVmixCurrentRow(state, runCount)],
+      [toVmixCurrentRow(state, runCount, false, photos)],
       csv,
       PUBLIC_LIVE_CACHE
     );

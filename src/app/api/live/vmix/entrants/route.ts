@@ -3,7 +3,8 @@
 // One flat row per entrant in start order (the position of their first run):
 // pool, name, team, horse, short location, the four riders of a Section side
 // in `members`, progress (runs_total / runs_scored), points, best result,
-// advanced, rank and pool rank.
+// advanced, rank and pool rank, and a Single rider's photo (photo /
+// photo_url; empty for a Section side).
 //   ?round=<round_id>  that round (ids from /api/live/vmix/rounds); default:
 //                      the live round
 //   ?format=csv        CSV with a header row instead of a JSON array
@@ -12,9 +13,12 @@
 // Every field is always present; with nothing to show the response is one row
 // of empty values, so vMix keeps a stable schema.
 //
-// Public: built from the scoring_* tables and view only, read as the
-// anonymous role — never a registration table.
+// Public: built from the scoring_* tables and view, read as the anonymous
+// role, plus each rider's photo name and link from the photo index
+// (public-photos.ts: at most a second's wait, and a photo problem only
+// empties the photo columns).
 import { NextResponse } from "next/server";
+import { loadVmixPhotos, sampleVmixPhotos } from "@/lib/broadcast/public-photos";
 import { PRIVATE_NO_STORE, PUBLIC_LIVE_CACHE } from "@/lib/scoring/http";
 import { buildPublicRoundFeed } from "@/lib/scoring/server";
 import {
@@ -46,18 +50,26 @@ export async function GET(request: Request) {
 
     return vmixResponse(
       VMIX_ENTRANTS_COLUMNS,
-      toVmixEntrantRows(round, sample.runsForRound(roundId), sample.leaderboardForRound(roundId), true),
+      toVmixEntrantRows(
+        round,
+        sample.runsForRound(roundId),
+        sample.leaderboardForRound(roundId),
+        true,
+        sampleVmixPhotos(url)
+      ),
       csv,
       PUBLIC_LIVE_CACHE
     );
   }
 
   try {
+    const photosPending = loadVmixPhotos(url);
     const feed = await buildPublicRoundFeed(roundParam);
+    const photos = await photosPending;
 
     return vmixResponse(
       VMIX_ENTRANTS_COLUMNS,
-      toVmixEntrantRows(feed.round, feed.runs, feed.leaderboard),
+      toVmixEntrantRows(feed.round, feed.runs, feed.leaderboard, false, photos),
       csv,
       PUBLIC_LIVE_CACHE
     );
