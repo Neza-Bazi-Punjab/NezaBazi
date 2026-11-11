@@ -331,3 +331,13 @@ test("builder search finds every rider, placed or not, and says where they are",
   assert.match(builder, /update\(builderMoveToPool\(pools, entrant\.key, currentIndex\)\)/);
   assert.match(builder, /pooled && place\.index !== currentIndex && !isLocked\(place\.index\)/);
 });
+
+test("the standings table is laid out pool by pool, in riding order", () => {
+  assert.match(admin, /const poolOf = \(label: string \| null\) => \(label \? poolIndex\(label\) : -1\);/);
+  assert.match(
+    admin,
+    /poolOf\(first\.pool_label\) - poolOf\(second\.pool_label\) \|\|\s*\(firstRide\.get\(first\.entrant_key\) \?\? 0\) - \(firstRide\.get\(second\.entrant_key\) \?\? 0\)/
+  );
+  assert.match(admin, /\{standings\.map\(\(row, index\) => \{/);
+  assert.match(admin, /Pool \{row\.pool_label\}/);
+});
