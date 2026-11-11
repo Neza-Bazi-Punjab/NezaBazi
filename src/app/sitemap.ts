@@ -9,7 +9,7 @@ const routes = [
   "/rules",
   "/register",
   "/register/paper",
-  "/live",
+  "/stats",
   "/login",
   "/players",
   "/rankings",

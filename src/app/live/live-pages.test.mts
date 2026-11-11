@@ -243,23 +243,30 @@ test("public pages read only the public live state, never staff or registration 
   assert.deepEqual(tables, ["scoring_leaderboard"]);
 });
 
-test("/live is public, titled and linked from the footer and as a navbar tab", () => {
+test("/live is taken down for now: it sends visitors to /stats, linked instead", () => {
   const page = read("./page.tsx");
-  assert.match(page, /title: "Live Scores"/);
-  assert.doesNotMatch(page, /robots/);
+  assert.match(page, /redirect\("\/stats"\)/);
 
-  assert.ok(footerQuickLinks.some((link) => link.href === "/live" && link.label === "Live Scores"));
-  assert.ok(navLinks.some((link) => link.href === "/live" && link.label === "Live Scores"));
-  assert.equal(navLinks.length, 4, "four-tab navbar: Home, Live Scores, Event, Rulebook");
+  const stats = read("../stats/page.tsx");
+  assert.match(stats, /title: "Stats"/);
+  assert.match(stats, /Coming Soon/);
+  assert.doesNotMatch(stats, /robots/);
+
+  assert.ok(footerQuickLinks.some((link) => link.href === "/stats" && link.label === "Stats"));
+  assert.ok(navLinks.some((link) => link.href === "/stats" && link.label === "Stats"));
+  assert.ok(!navLinks.some((link) => (link.href as string) === "/live"));
+  assert.ok(!footerQuickLinks.some((link) => (link.href as string) === "/live"));
+  assert.equal(navLinks.length, 4, "four-tab navbar: Home, Stats, Event, Rulebook");
 });
 
-test("the sitemap lists /live and leaves out the staff panels and overlays", () => {
+test("the sitemap lists /stats and leaves out the staff panels and overlays", () => {
   const sitemap = read("../sitemap.ts");
   const block = sitemap.match(/const routes = \[([\s\S]*?)\];/);
   assert.ok(block, "routes array found");
 
   const routes = [...block[1].matchAll(/"([^"]*)"/g)].map((match) => match[1]);
-  assert.ok(routes.includes("/live"));
+  assert.ok(routes.includes("/stats"));
+  assert.ok(!routes.includes("/live"));
 
   for (const hidden of ["/judge", "/commentary", "/overlay", "/admin"]) {
     assert.ok(

@@ -1,12 +1,8 @@
-import type { Metadata } from "next";
-import { site } from "@/lib/site";
-import LiveBoard from "./LiveBoard";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Live Scores",
-  description: `Live results, pools and standings from the ${site.title} — ${site.eventDate}, ${site.venue}.`,
-};
-
+// /live is taken down for now: visitors go to /stats, where updated
+// leaderboards and statistics are coming soon. The live board itself
+// (LiveBoard.tsx) is kept, so bringing it back is putting this page back.
 export default function LivePage() {
-  return <LiveBoard />;
+  redirect("/stats");
 }

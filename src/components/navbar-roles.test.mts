@@ -78,7 +78,12 @@ test("each role maps to the staff panels it may open", () => {
 
 test("the role loads without blocking the navbar and clears on sign-out", () => {
   // Only signed-in people see staff links.
-  assert.match(source, /const staffLinks = userLabel \? staffLinksByRole\[role\] : \[\];/);
+  assert.match(
+    source,
+    /const staffLinks = userLabel\s+\? staffLinksByRole\[role\]\.filter\(\(link\) => SHOWN_STAFF_LINKS\.has\(link\.href\)\)\s+: \[\];/
+  );
+  // Judge Panel and Commentary are off the navbar for now; Admin stays.
+  assert.match(source, /const SHOWN_STAFF_LINKS: ReadonlySet<string> = new Set\(\["\/admin"\]\);/);
 
   // The navbar finishes loading before the role is asked for, and nothing
   // waits on the answer.
@@ -112,14 +117,8 @@ test("desktop and mobile both list the staff links among the account items", () 
   assert.ok(accountClass);
   assert.equal(classAfter(desktop, "staffLinks.map("), accountClass);
 
-  // An administrator's row only fits beside Live Now from xl up, so the
-  // button gives way below xl for administrators alone. From xl their tabs
-  // stay close together and their button is slimmer, so the row still fits.
+  // An administrator's crowded row keeps their tabs close together.
   assert.match(source, /const crowded = staffLinks\.length > 1;/);
-  assert.match(
-    desktop,
-    /href=\{site\.liveStreamUrl\}\s+target="_blank"\s+rel="noopener noreferrer"\s+className=\{`\$\{crowded \? "hidden px-5 xl:inline-flex " : "inline-flex px-6 "\}items-center/
-  );
   assert.match(
     desktop,
     /<ul className=\{`hidden items-center gap-5 lg:flex \$\{crowded \? "" : "xl:gap-7"\}`\}>/
@@ -145,7 +144,7 @@ test("desktop and mobile both list the staff links among the account items", () 
 
   // The rows after the staff links keep the stagger in order.
   assert.match(source, /const accountRowIndex = navLinks\.length \+ staffLinks\.length;/);
-  assert.match(mobile, /style=\{mobileItemStyle\(accountRowIndex \+ 2\)\}/);
+  assert.match(mobile, /style=\{mobileItemStyle\(accountRowIndex \+ 1\)\}/);
 });
 
 test("the public tabs are untouched: staff links are never tabs", () => {
@@ -153,7 +152,7 @@ test("the public tabs are untouched: staff links are never tabs", () => {
     navLinks.map(({ href, label }) => ({ href, label })),
     [
       { href: "/", label: "Home" },
-      { href: "/live", label: "Live Scores" },
+      { href: "/stats", label: "Stats" },
       { href: "/event", label: "Event" },
       { href: "/rules", label: "Rulebook" },
     ]
@@ -171,29 +170,9 @@ test("the public tabs are untouched: staff links are never tabs", () => {
   assert.doesNotMatch(mobileTabs[1], /staffLinks|\/admin|\/judge|\/commentary/);
 });
 
-test("the Live Now button opens the YouTube broadcast, on desktop and in the mobile menu", () => {
-  assert.match(site.liveStreamUrl, /^https:\/\/(www\.)?youtube\.com\/live\/[\w-]+$/);
-  assert.match(source, /import \{ navLinks, site \} from "@\/lib\/site";/);
-
-  for (const [name, part] of [
-    ["desktop", desktop],
-    ["mobile", mobile],
-  ] as const) {
-    const button = part.match(
-      /<a\s+href=\{site\.liveStreamUrl\}\s+target="_blank"\s+rel="noopener noreferrer"[\s\S]*?<\/a>/
-    );
-    assert.ok(button, `${name} has a Live Now link to the broadcast, opening in a new tab`);
-    assert.match(button[0], /<LiveDot \/>\s*Live Now/);
-    assert.match(button[0], /<span className="sr-only"> \(opens in a new tab\)<\/span>/);
-    assert.equal(part.match(/href=\{site\.liveStreamUrl\}/g)?.length, 1);
-  }
-
-  // The mobile button closes the menu and stays out of the tab order while
-  // the menu is shut, like every other row.
-  assert.match(
-    mobile,
-    /href=\{site\.liveStreamUrl\}[\s\S]*?onClick=\{\(\) => setOpen\(false\)\}\s+tabIndex=\{open \? undefined : -1\}/
-  );
+test("the Live Now button is taken down, on desktop and in the mobile menu", () => {
+  assert.doesNotMatch(source, /liveStreamUrl|LiveDot|Live Now/);
+  assert.match(source, /import \{ navLinks \} from "@\/lib\/site";/);
 
   // Registration is no longer a navbar button; it stays in the footer.
   assert.doesNotMatch(source, /\/register|Register Now/);
