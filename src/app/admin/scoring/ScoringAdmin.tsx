@@ -29,6 +29,7 @@ import {
   type ScoringRun,
 } from "@/lib/scoring/types";
 import { plural } from "@/lib/scoring/format";
+import { matchRank } from "@/lib/check-in-search";
 import {
   qualifyingPreview,
   teamsPreview,
@@ -1126,15 +1127,29 @@ export default function ScoringAdmin({
     const query = lateQuery.trim().toLowerCase();
 
     if (round.event_type === "single") {
+      // Matched as the check-in desk does: name, phone, code, parents,
+      // horse or town, best match first.
       return data.candidates.solo
         .filter((rider) => !inRound.has(`solo:${rider.id}`))
         .filter((rider) => includeNotCheckedIn || rider.checked_in)
-        .filter((rider) => query === "" || rider.full_name.toLowerCase().includes(query))
+        .flatMap((rider) => {
+          const rank = query === "" ? 0 : matchRank({ ...rider, team_name: null }, query);
+          return rank === null ? [] : [{ rider, rank }];
+        })
+        .sort((first, second) => first.rank - second.rank)
         .slice(0, 25)
-        .map((rider) => ({
+        .map(({ rider }) => ({
           id: rider.id,
           kind: "solo" as const,
           name: rider.full_name,
+          about:
+            [
+              rider.horse_name,
+              rider.father_name ? `Father: ${rider.father_name}` : null,
+              rider.location,
+            ]
+              .filter(Boolean)
+              .join(" · ") || null,
           checkedIn: rider.checked_in,
           status: rider.checked_in ? "Checked in" : "Not checked in",
         }));
@@ -1153,6 +1168,7 @@ export default function ScoringAdmin({
         id: team.id,
         kind: "team" as const,
         name: team.team_name,
+        about: null as string | null,
         checkedIn: team.member_count === 4 && team.checked_in_count === team.member_count,
         status: `${team.checked_in_count} of ${team.member_count} checked in`,
       }));
@@ -2500,7 +2516,11 @@ export default function ScoringAdmin({
                       type="search"
                       value={lateQuery}
                       onChange={(event) => setLateQuery(event.target.value)}
-                      placeholder={round.event_type === "section" ? "Team name" : "Rider name"}
+                      placeholder={
+                        round.event_type === "section"
+                          ? "Team name"
+                          : "Name, phone, code, parents, horse, place…"
+                      }
                       className={inputClass}
                     />
                   </label>
@@ -2542,6 +2562,9 @@ export default function ScoringAdmin({
                           >
                             {candidate.status}
                           </span>
+                          {candidate.about && (
+                            <span className="block text-sm text-brown/75">{candidate.about}</span>
+                          )}
                         </span>
                         <button
                           type="button"

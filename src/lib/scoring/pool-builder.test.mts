@@ -226,10 +226,18 @@ test("the builder lists checked-in entrants only and saves through the page's co
 });
 
 test("the builder shows and searches horse names", () => {
-  assert.match(builder, /const text = `\$\{entrant\.name\} \$\{entrant\.horse \?\? ""\}`\.toLowerCase\(\);/);
+  // "Find a rider" is the check-in desk's search, with the horse as a detail.
+  assert.match(builder, /import \{ searchRiders, type SearchableRider \} from "@\/lib\/check-in-search";/);
+  assert.match(builder, /search: searchable\(team\.team_name, team\.horse_names\)/);
+  assert.match(builder, /details: rider\.details,/);
+  assert.match(admin, /matchRank\(\{ \.\.\.rider, team_name: null \}, query\)/);
   assert.match(builder, /\{entrant\.horse && \(/);
   const state = repoFile("src/lib/scoring/admin-state.ts");
-  assert.match(state, /\.select\("id, full_name, horse_name, checked_in_at"\)/);
+  assert.match(
+    state,
+    /"id, full_name, horse_name, checked_in_at, father_name, mother_name, location, email, phone, confirmation_code"/
+  );
+  assert.match(state, /details: \[row\.father_name, row\.mother_name, row\.location, row\.horse_name\]/);
   assert.match(state, /\.select\("team_id, horse_name, checked_in_at"\)/);
 });
 
