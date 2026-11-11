@@ -24,6 +24,8 @@ import {
   loadAuthUserIndex,
   matchSoloHeadshots,
   matchTeamHeadshots,
+  type SoloHeadshotRow,
+  type TeamTwin,
   type SoloHeadshot,
 } from "@/lib/admin/headshot-urls";
 
@@ -120,11 +122,24 @@ async function AdminSectionData({
      only means no thumbnails or no actor names. */
   const photoService = needs.solo || needs.teams ? createServiceRoleClient() : null;
   const authUserIndexLoad = photoService ? loadAuthUserIndex(photoService) : null;
-  /* Team riders' photos may come from an account behind a solo entry under
-     their email; the Teams page does not otherwise read solo entries. */
+  /* Team riders' photos may come from their own solo entry (same code; a
+     team formed on Form teams is a copy of it) or an account behind a solo
+     entry under their email; the Teams page does not otherwise read solo
+     entries. */
   const soloContactsLoad =
     needs.teams && photoService
-      ? photoService.from("solo_registrations").select("email, profile_id").not("profile_id", "is", null)
+      ? photoService
+          .from("solo_registrations")
+          .select("id, email, profile_id, full_name, headshot_path, confirmation_code")
+      : null;
+  /* And the other way: a photo taken on a rider's team place shows on their
+     solo entry when it has none. */
+  const teamPhotosLoad =
+    needs.solo && photoService
+      ? photoService
+          .from("team_members")
+          .select("id, confirmation_code, headshot_path")
+          .not("headshot_path", "is", null)
       : null;
 
   // The account list only puts names to the audit log's actors. A thrown
@@ -194,10 +209,20 @@ async function AdminSectionData({
   let teamHeadshots: Record<string, SoloHeadshot> = {};
 
   if (needs.solo && photoService && authUserIndexLoad) {
+    const teamPhotos = teamPhotosLoad ? await teamPhotosLoad : null;
+    const teamTwinByCode = new Map<string, TeamTwin>();
+
+    for (const row of (teamPhotos?.data ?? []) as Array<TeamTwin & { confirmation_code: string | null }>) {
+      if (row.confirmation_code && !teamTwinByCode.has(row.confirmation_code)) {
+        teamTwinByCode.set(row.confirmation_code, row);
+      }
+    }
+
     soloHeadshots = await matchSoloHeadshots(
       await authUserIndexLoad,
       (soloRegistrations ?? []) as SoloRegistration[],
-      photoService
+      photoService,
+      teamTwinByCode
     );
   }
 
@@ -205,10 +230,13 @@ async function AdminSectionData({
      then the account rule (matchTeamHeadshots). */
   if (needs.teams && photoService && authUserIndexLoad && soloContactsLoad) {
     const [index, soloContacts] = await Promise.all([authUserIndexLoad, soloContactsLoad]);
+    const soloRows = ((soloContacts.data ?? []) as Array<
+      Omit<SoloHeadshotRow, "email" | "full_name"> & { email: string | null; full_name: string | null }
+    >).map((row) => ({ ...row, email: row.email ?? "", full_name: row.full_name ?? "" }));
     const soloProfileByEmail = new Map<string, string>();
 
-    for (const row of (soloContacts.data ?? []) as Array<{ email: string | null; profile_id: string | null }>) {
-      const address = row.email?.trim().toLowerCase();
+    for (const row of soloRows) {
+      const address = row.email.trim().toLowerCase();
 
       if (address && row.profile_id && !soloProfileByEmail.has(address)) {
         soloProfileByEmail.set(address, row.profile_id);
@@ -220,7 +248,8 @@ async function AdminSectionData({
       (teamMembers ?? []) as TeamMember[],
       new Map(((teams ?? []) as Team[]).map((team) => [team.id, team.leader_profile_id ?? null])),
       soloProfileByEmail,
-      photoService
+      photoService,
+      soloRows
     );
   }
 

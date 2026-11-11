@@ -8,7 +8,7 @@
 import "server-only";
 
 import type { ServiceRoleClient } from "@/lib/admin/server";
-import { getSoloHeadshotUrl, getTeamRiderHeadshotUrl } from "@/lib/admin/headshot-urls";
+import { getLinkedSoloHeadshotUrl, getLinkedTeamRiderHeadshotUrl } from "@/lib/admin/headshot-urls";
 import type {
   RiderDetail,
   RunResult,
@@ -23,9 +23,9 @@ import type {
    panel simply shows no parents' names. */
 const PARENT_COLUMNS = "father_name, mother_name";
 const SOLO_COLUMNS =
-  "id, profile_id, email, full_name, age, location, years_experience, horse_name, horse_age, horse_breed";
+  "id, profile_id, email, full_name, confirmation_code, age, location, years_experience, horse_name, horse_age, horse_breed";
 const MEMBER_COLUMNS =
-  "id, team_id, email, is_leader, full_name, age, location, years_experience, horse_name, horse_age, horse_breed";
+  "id, team_id, email, is_leader, full_name, confirmation_code, age, location, years_experience, horse_name, horse_age, horse_breed";
 const UNDEFINED_COLUMN = "42703";
 
 type RiderRow = {
@@ -41,12 +41,17 @@ type RiderRow = {
   horse_breed: string | null;
 };
 
-type SoloRow = RiderRow & { profile_id: string | null; email: string | null };
+type SoloRow = RiderRow & {
+  profile_id: string | null;
+  email: string | null;
+  confirmation_code?: string | null;
+};
 
 type MemberRow = RiderRow & {
   team_id: string;
   email: string | null;
   is_leader: boolean | null;
+  confirmation_code?: string | null;
 };
 
 type TeamRow = { id: string; team_name: string; leader_profile_id: string | null };
@@ -222,15 +227,17 @@ export const loadRiderDetails = async (
       }
 
       const team = member ? teams.get(member.team_id) : undefined;
-      /* A solo rider: the registration's own photo, else the account's for
-         the account holder's own entry. A team rider: the row's own photo
-         first (member.id), then, having no profile id of their own, the
+      /* One rider, one photo, as at the check-in desk: a rider with a solo
+         entry and a team place (same code) shows the solo photo first, then
+         the team place's. A solo rider: the registration's own photo, else
+         the account's for the account holder's own entry. A team rider: the
+         row's own photo, then, having no profile id of their own, the
          leader's account (for the leader) or the accounts found by email,
          and only one whose email and name are the rider's. */
       const headshotUrl = solo
-        ? await getSoloHeadshotUrl(client, solo)
+        ? await getLinkedSoloHeadshotUrl(client, solo)
         : member
-          ? await getTeamRiderHeadshotUrl(
+          ? await getLinkedTeamRiderHeadshotUrl(
               client,
               member,
               member.is_leader ? team?.leader_profile_id ?? null : null
