@@ -46,6 +46,7 @@ import {
   startedPoolLabels,
 } from "@/lib/scoring/pool-builder";
 import { startListMatcher } from "@/lib/scoring/start-list-search";
+import FormTeamsPanel from "../FormTeamsPanel";
 import PoolBuilder from "./PoolBuilder";
 import PoolSheet from "./PoolSheet";
 import {
@@ -923,6 +924,8 @@ export default function ScoringAdmin({
   const [engineEvent, setEngineEvent] = useState<EngineEvent>("single");
   /* The Aarhi tab is open (a view of Singles). */
   const [aarhiOpen, setAarhiOpen] = useState(false);
+  /* Teams tab: the Form Teams tool (the same one as /admin/form-teams). */
+  const [formTeamsOpen, setFormTeamsOpen] = useState(false);
   const [nextSteps, setNextSteps] = useState<Record<EngineEvent, NextStep | null | undefined>>({
     single: undefined,
     section: undefined,
@@ -2171,6 +2174,39 @@ export default function ScoringAdmin({
         onAarhi={setAarhiOpen}
         aarhi={aarhiPanel}
       >
+        <>
+        {/* Teams tab: put solo riders onto a team without leaving the page */}
+        {engineEvent === "section" && (
+          <section aria-label="Form teams" className={`${cardClass} space-y-3 print:hidden`}>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <h3 className={subheadingClass}>Form Teams</h3>
+                <p className="mt-1 text-sm leading-6 text-brown/80">
+                  Put riders who registered solo onto a team, checked in or not. A new team can then be
+                  added to a team round with Build Pools By Hand or Add Late Entrant.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  // Closing it reloads the page's lists, so a team made here
+                  // can be added to a round straight away.
+                  if (formTeamsOpen) {
+                    void refresh();
+                  }
+
+                  setFormTeamsOpen(!formTeamsOpen);
+                }}
+                aria-expanded={formTeamsOpen}
+                className={formTeamsOpen ? secondaryButton : primaryButton}
+              >
+                {formTeamsOpen ? "Close Form Teams" : "Form Teams"}
+              </button>
+            </div>
+            {formTeamsOpen && <FormTeamsPanel />}
+          </section>
+        )}
+
         {/* Every round tool, in Manual and Automatic alike */}
       <div className="grid gap-8 lg:grid-cols-[320px_minmax(0,1fr)]">
         {/* Rounds list */}
@@ -3082,6 +3118,7 @@ export default function ScoringAdmin({
           )}
         </div>
       </div>
+        </>
       </NextStepCard>
 
 
