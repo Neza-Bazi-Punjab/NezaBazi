@@ -12,6 +12,7 @@ import type {
 export type SoloCandidate = {
   id: string;
   full_name: string;
+  horse_name: string | null;
   checked_in: boolean;
 };
 
@@ -22,6 +23,8 @@ export type TeamCandidate = {
   team_name: string;
   checked_in_count: number;
   member_count: number;
+  /* The riders' horses, for the pool builder's list and search. */
+  horse_names: string[];
 };
 
 /* Staff-only view of an override, including the administrator's note (the

@@ -3,6 +3,11 @@
 // POST   draw the start list (StartListRequest: "all_checked_in" or
 //        "advanced"), shuffled and split into balanced pools
 //        -> { runs_created, runs, admin }. Refused once results exist.
+// PUT    save a start list built by hand on the Scoring page (the pool
+//        builder): { pools: string[][] }, entrant keys in riding order, one
+//        array per pool -> { runs_created, runs, admin }. One transaction
+//        (scoring_save_start_list); replaces the current list; refused once
+//        results exist.
 // DELETE clear the start list -> { runs_deleted, admin }. Refused while
 //        results are recorded unless ?force=1.
 import { createServiceRoleClient } from "@/lib/admin/server";
@@ -17,6 +22,7 @@ import {
   jsonNoStore,
   readJsonBody,
 } from "@/lib/scoring/http";
+import { parseSaveStartListRequest } from "@/lib/scoring/pool-builder";
 import {
   parseStartListRequest,
   readForceFlag,
@@ -63,6 +69,52 @@ export async function POST(request: Request, context: RouteContext) {
 
   if (error) {
     return databaseErrorResponse(error, "draw start list");
+  }
+
+  return jsonNoStore({
+    runs_created: typeof data === "number" ? data : 0,
+    runs: await readRoundRuns(serviceSupabase, roundId),
+    admin: await buildAdminScoringStateAfterWrite(serviceSupabase),
+  });
+}
+
+export async function PUT(request: Request, context: RouteContext) {
+  const access = await verifyRoleRequest(["admin"]);
+
+  if (!access.ok) {
+    return access.response;
+  }
+
+  const roundId = readUuidSegment((await context.params).id);
+
+  if (!roundId) {
+    return jsonError("That round does not exist.", 404);
+  }
+
+  // About 45 bytes an entrant: room for every rider at the event.
+  const body = await readJsonBody(request, 64 * 1024);
+
+  if (!body.ok) {
+    return body.response;
+  }
+
+  const parsed = parseSaveStartListRequest(body.body);
+
+  if (!parsed.ok) {
+    return jsonError(parsed.error, 400);
+  }
+
+  const serviceSupabase = createServiceRoleClient();
+  const { data, error } = await serviceSupabase.rpc("scoring_save_start_list", {
+    p_round_id: roundId,
+    p_pools: parsed.value.pools,
+    p_actor_id: access.actor.id,
+    p_actor_name: access.actor.name,
+    p_actor_email: access.actor.email,
+  });
+
+  if (error) {
+    return databaseErrorResponse(error, "save start list");
   }
 
   return jsonNoStore({

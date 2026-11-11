@@ -39,7 +39,9 @@ import {
   type EngineEvent,
   type NextStep,
 } from "@/lib/scoring/next-round";
+import { parseMovePosition } from "@/lib/scoring/pool-builder";
 import { startListMatcher } from "@/lib/scoring/start-list-search";
+import PoolBuilder from "./PoolBuilder";
 import PoolSheet from "./PoolSheet";
 import {
   groupStartList,
@@ -106,7 +108,7 @@ type ApiResult =
 
 const callApi = async (
   url: string,
-  method: "GET" | "POST" | "PATCH" | "DELETE",
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   body?: unknown
 ): Promise<ApiResult> => {
   try {
@@ -469,6 +471,71 @@ function RoundForm({
 const drawOrderText = (mode: "all_checked_in" | "advanced", orderKept: boolean) =>
   mode === "advanced" && orderKept ? "in the previous round's start order" : "in a random order";
 
+/* "Move to position": type where the run should ride (within its pool and
+   attempt pass) and press Enter or Go. One request, however far it moves. */
+function MoveToPosition({
+  run,
+  first,
+  last,
+  disabled,
+  onMove,
+}: {
+  run: ScoringRun;
+  first: number;
+  last: number;
+  disabled: boolean;
+  onMove: (newOrder: number) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const submit = () => {
+    const parsed = parseMovePosition(draft, first, last, run.run_order);
+
+    if (!parsed.ok) {
+      setProblem(parsed.error);
+      return;
+    }
+
+    setProblem(null);
+    setDraft("");
+    onMove(parsed.value);
+  };
+
+  return (
+    <form
+      noValidate
+      className="flex flex-col gap-1"
+      onSubmit={(event) => {
+        event.preventDefault();
+        submit();
+      }}
+    >
+      <div className="flex gap-1">
+        <input
+          type="number"
+          inputMode="numeric"
+          min={first}
+          max={last}
+          value={draft}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            setProblem(null);
+          }}
+          disabled={disabled}
+          placeholder={`${first}–${last}`}
+          aria-label={`Move ${run.rider_name} to position (${first} to ${last})`}
+          className="w-20 rounded-lg border border-bronze/20 bg-cream px-2 py-1 text-sm tabular-nums text-brown focus:border-bronze focus:outline-none disabled:opacity-60"
+        />
+        <button type="submit" disabled={disabled || draft.trim() === ""} className={secondaryButton}>
+          Go
+        </button>
+      </div>
+      {problem && <span className="text-xs text-red-800">{problem}</span>}
+    </form>
+  );
+}
+
 function RunStatusChip({ run }: { run: ScoringRun }) {
   const tone =
     run.status === "on_course"
@@ -773,6 +840,8 @@ export default function ScoringAdmin({
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [roundForm, setRoundForm] = useState<"create" | "edit" | null>(null);
+  /* The round whose pool builder is open (one at a time). */
+  const [builderRoundId, setBuilderRoundId] = useState<string | null>(null);
   const [drawMode, setDrawMode] = useState<"all_checked_in" | "advanced">("all_checked_in");
   const [lateQuery, setLateQuery] = useState("");
   /* The start list's search box: rider, team, horse or pool. */
@@ -884,7 +953,7 @@ export default function ScoringAdmin({
   const perform = useCallback(
     async (
       url: string,
-      method: "POST" | "PATCH" | "DELETE",
+      method: "POST" | "PUT" | "PATCH" | "DELETE",
       body: unknown,
       success: (response: Record<string, unknown>) => string
     ) => {
@@ -1504,6 +1573,39 @@ export default function ScoringAdmin({
       },
     });
 
+  const saveBuiltStartList = (target: ScoringRound, pools: string[][], labels: string[]) => {
+    const noun = target.event_type === "section" ? "team" : "rider";
+    const count = pools.reduce((total, pool) => total + pool.length, 0);
+    const layout =
+      labels.length > 0
+        ? `${plural(pools.length, "pool")} (${pools
+            .map((pool, index) => `${labels[index]}: ${pool.length}`)
+            .join(", ")})`
+        : "one start list with no pools";
+
+    ask({
+      title: `Save ${plural(count, noun)} in ${layout}?`,
+      detail: `Riders ride in the order you tapped, ${plural(target.attempts_per_rider, "attempt")} each.${
+        runs.length > 0 ? ` This replaces the current start list of ${plural(runs.length, "run")}.` : ""
+      }`,
+      confirmLabel: "Save Start List",
+      danger: runs.length > 0,
+      run: async () => {
+        const ok = await perform(
+          `/api/admin/scoring/rounds/${target.id}/start-list`,
+          "PUT",
+          { pools },
+          (response) =>
+            `Start list saved: ${plural(typeof response.runs_created === "number" ? response.runs_created : 0, "run")}.`
+        );
+
+        if (ok) {
+          setBuilderRoundId(null);
+        }
+      },
+    });
+  };
+
   const removeEntrant = (target: ScoringRound, entrant: EntrantSummary) =>
     ask({
       title: `Remove ${entrant.name} from “${target.name}”?`,
@@ -2000,7 +2102,36 @@ export default function ScoringAdmin({
                     {scoredCount > 0 && " Results are recorded in this round — clear them before redrawing."}
                   </p>
                 )}
+
+                <div className="flex flex-col gap-2 border-t border-bronze/20 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm leading-6 text-brown/80">
+                    Or choose the order yourself: tap {round.event_type === "section" ? "teams" : "riders"} in
+                    riding order, any pool sizes, and save the whole list at once.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setBuilderRoundId(builderRoundId === round.id ? null : round.id)}
+                    disabled={busy || (scoredCount > 0 && builderRoundId !== round.id)}
+                    aria-expanded={builderRoundId === round.id}
+                    className={`${secondaryButton} shrink-0`}
+                  >
+                    {builderRoundId === round.id ? "Close Pool Builder" : "Build Pools By Hand"}
+                  </button>
+                </div>
               </section>
+
+              {builderRoundId === round.id && (
+                <PoolBuilder
+                  key={round.id}
+                  round={round}
+                  runs={runs}
+                  candidates={data.candidates}
+                  busy={busy}
+                  scoredCount={scoredCount}
+                  onSave={(pools, labels) => saveBuiltStartList(round, pools, labels)}
+                  onClose={() => setBuilderRoundId(null)}
+                />
+              )}
 
               {/* Start list grouped by pool */}
               <section className="space-y-4">
@@ -2249,6 +2380,7 @@ export default function ScoringAdmin({
                                   <th className="px-3 py-2">Status</th>
                                   <th className="px-3 py-2">On course</th>
                                   <th className="px-3 py-2">Move</th>
+                                  <th className="px-3 py-2">To position</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -2313,6 +2445,19 @@ export default function ScoringAdmin({
                                             ↓
                                           </button>
                                         </div>
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        {first < last ? (
+                                          <MoveToPosition
+                                            run={run}
+                                            first={first}
+                                            last={last}
+                                            disabled={busy || fixed}
+                                            onMove={(newOrder) => moveRun(run, newOrder)}
+                                          />
+                                        ) : (
+                                          <span className="text-brown/50">—</span>
+                                        )}
                                       </td>
                                     </tr>
                                   );
