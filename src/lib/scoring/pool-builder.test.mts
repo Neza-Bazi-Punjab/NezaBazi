@@ -362,3 +362,33 @@ test("the Aarhi tab lists who is through, in riding order, and starts the next r
   // A rider can be taken off the list from the tab.
   assert.match(admin, /onClick=\{\(\) => setOverride\(source, row, false\)\}/);
 });
+
+test("start list: only the pool riding now is open; a tap or a search opens the rest", () => {
+  assert.match(admin, /const \[openPools, setOpenPools\] = useState<Record<string, boolean>>\(\{\}\);/);
+  assert.match(admin, /const ridingPoolKey = useMemo\(/);
+  assert.match(
+    admin,
+    /searchingStartList \|\|\s+shownGroups\.length === 1 \|\|\s+\(openPools\[`\$\{round\.id\}:\$\{groupKey\}`\] \?\? ridingNow\)/
+  );
+  assert.match(admin, /aria-expanded=\{poolOpen\}/);
+  assert.match(admin, /\{poolOpen && \(\s+<div id=\{poolBodyId\} className="space-y-4">/);
+  // Call Pool stays on the header, usable while the pool is closed.
+  assert.match(admin, /<\/h4>\s+\{group\.label && \(\s+<button\s+type="button"\s+onClick=\{\(\) => callPool\(round, group\.label as string\)\}/);
+});
+
+test("standings: pools fold like the start list, the pool riding now open", () => {
+  const from = admin.indexOf("{/* Standings and overrides */}");
+  const section = admin.slice(from, admin.indexOf("{/* Podium */}", from));
+
+  assert.match(admin, /const \[openStandingPools, setOpenStandingPools\] = useState<Record<string, boolean>>\(\{\}\);/);
+  assert.match(
+    section,
+    /row\.pool_label === null \|\|\s+\(openStandingPools\[standingKey\] \?\? row\.pool_label === ridingPoolKey\)/
+  );
+  assert.match(section, /aria-expanded=\{standingOpen\}/);
+  assert.match(section, /\{standingOpen && \(\s+<div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b/);
+  // The Through / Out / Clear buttons are unchanged.
+  assert.match(section, /onClick=\{\(\) => setOverride\(round, row, true\)\}/);
+  assert.match(section, /onClick=\{\(\) => setOverride\(round, row, false\)\}/);
+  assert.match(section, /onClick=\{\(\) => setOverride\(round, row, null\)\}/);
+});

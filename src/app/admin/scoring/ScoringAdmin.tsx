@@ -903,6 +903,11 @@ export default function ScoringAdmin({
   const [startListQuery, setStartListQuery] = useState("");
   const [includeNotCheckedIn, setIncludeNotCheckedIn] = useState(false);
   const [openRunTables, setOpenRunTables] = useState<Record<string, boolean>>({});
+  /* Start-list pools the administrator opened or closed by hand ("round:pool").
+     A pool not in here is open only if it is the one riding now. */
+  const [openPools, setOpenPools] = useState<Record<string, boolean>>({});
+  /* The same for the Standings & Advance Overrides pools ("round:pool"). */
+  const [openStandingPools, setOpenStandingPools] = useState<Record<string, boolean>>({});
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [podiumDrafts, setPodiumDrafts] = useState<Record<string, [string, string, string]>>({});
   const [showSheet, setShowSheet] = useState(false);
@@ -1101,6 +1106,30 @@ export default function ScoringAdmin({
       .filter((group) => group.shownEntrants.length > 0 || group.shownRuns.length > 0);
   }, [groups, startListQuery]);
   const searchingStartList = startListQuery.trim() !== "";
+  /* The pool riding now, the one the start list keeps open: the pool of the
+     rider on course; else the called pool while it has rides left; else the
+     first pool with rides left. */
+  const ridingPoolKey = useMemo(() => {
+    const keyOf = (group: (typeof groups)[number]) => group.label ?? "all";
+    const hasRidesLeft = (group: (typeof groups)[number]) =>
+      group.runs.some((run) => run.status === "pending" || run.status === "on_course");
+    const onCourse =
+      liveRunId !== null ? groups.find((group) => group.runs.some((run) => run.id === liveRunId)) : undefined;
+
+    if (onCourse) {
+      return keyOf(onCourse);
+    }
+
+    const calledLabel = round && round.id === liveRoundId ? data?.live?.called_pool_label ?? null : null;
+    const called = calledLabel ? groups.find((group) => group.label === calledLabel) : undefined;
+
+    if (called && hasRidesLeft(called)) {
+      return keyOf(called);
+    }
+
+    const next = groups.find(hasRidesLeft);
+    return next ? keyOf(next) : null;
+  }, [groups, liveRunId, liveRoundId, round, data?.live?.called_pool_label]);
   const nextNewPool =
     round?.pool_size !== null && round?.pool_size !== undefined
       ? poolLabelForIndex(
@@ -2458,24 +2487,59 @@ export default function ScoringAdmin({
                     const called =
                       round.id === liveRoundId && group.label !== null && data.live?.called_pool_label === group.label;
                     const tableOpen = openRunTables[`${round.id}:${groupKey}`] ?? false;
+                    const ridingNow = groupKey === ridingPoolKey;
+                    /* Only the pool riding now starts open; any pool opens on a
+                       tap, and a search opens every pool it matches. */
+                    const poolOpen =
+                      searchingStartList ||
+                      shownGroups.length === 1 ||
+                      (openPools[`${round.id}:${groupKey}`] ?? ridingNow);
+                    const poolBodyId = `start-list-pool-${groupKey}`;
 
                     return (
-                      <article key={groupKey} className={`${cardClass} space-y-4`}>
+                      <article key={groupKey} className={`${cardClass} ${poolOpen ? "space-y-4" : ""}`}>
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                          <div>
-                            <h4 className={subheadingClass}>
-                              {group.label ? `Pool ${group.label}` : "All entrants"}
-                              {called && (
-                                <span className="ml-2 rounded-full bg-bronze px-2 py-0.5 align-middle font-display text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-cream">
-                                  Called
-                                </span>
-                              )}
-                            </h4>
-                            <p className="text-sm text-brown/80">
-                              {plural(group.entrants.length, round.event_type === "section" ? "team" : "rider")} ·{" "}
-                              {plural(group.runs.length, "run")} · {pendingInPool} still to ride
-                            </p>
-                          </div>
+                          <h4 className="min-w-0">
+                          <button
+                            type="button"
+                            aria-expanded={poolOpen}
+                            aria-controls={poolBodyId}
+                            disabled={searchingStartList || shownGroups.length === 1}
+                            onClick={() =>
+                              setOpenPools((current) => ({
+                                ...current,
+                                [`${round.id}:${groupKey}`]: !poolOpen,
+                              }))
+                            }
+                            className="flex min-w-0 items-start gap-2 text-left disabled:cursor-default"
+                          >
+                            {!searchingStartList && shownGroups.length > 1 && (
+                              <span aria-hidden="true" className="mt-0.5 w-4 shrink-0 text-bronze-dark">
+                                {poolOpen ? "▾" : "▸"}
+                              </span>
+                            )}
+                            <span className="min-w-0">
+                              <span className={`block ${subheadingClass}`}>
+                                {group.label ? `Pool ${group.label}` : "All entrants"}
+                                {ridingNow && round.id === liveRoundId && (
+                                  <span className="ml-2 rounded-full bg-red-700 px-2 py-0.5 align-middle font-display text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-cream">
+                                    Riding now
+                                  </span>
+                                )}
+                                {called && (
+                                  <span className="ml-2 rounded-full bg-bronze px-2 py-0.5 align-middle font-display text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-cream">
+                                    Called
+                                  </span>
+                                )}
+                              </span>
+                              <span className="block text-sm text-brown/80">
+                                {plural(group.entrants.length, round.event_type === "section" ? "team" : "rider")} ·{" "}
+                                {plural(group.runs.length, "run")} · {pendingInPool} still to ride
+                                {!poolOpen ? " · tap to open" : ""}
+                              </span>
+                            </span>
+                          </button>
+                          </h4>
                           {group.label && (
                             <button
                               type="button"
@@ -2488,6 +2552,8 @@ export default function ScoringAdmin({
                           )}
                         </div>
 
+                        {poolOpen && (
+                        <div id={poolBodyId} className="space-y-4">
                         <div className="overflow-x-auto rounded-lg border border-bronze/20 bg-cream">
                           <table className="w-full min-w-[640px] border-collapse text-left text-sm text-brown">
                             <thead className="border-b border-bronze/20 bg-parchment">
@@ -2708,6 +2774,8 @@ export default function ScoringAdmin({
                             </table>
                           </div>
                         )}
+                        </div>
+                        )}
                       </article>
                     );
                   })
@@ -2814,14 +2882,50 @@ export default function ScoringAdmin({
                       const newPool =
                         row.pool_label !== null &&
                         (index === 0 || standings[index - 1].pool_label !== row.pool_label);
+                      /* Pools fold like the start list: only the pool riding
+                         now starts open; a tap on its header opens any other. */
+                      const standingKey = `${round.id}:${row.pool_label ?? "all"}`;
+                      const standingOpen =
+                        row.pool_label === null ||
+                        (openStandingPools[standingKey] ?? row.pool_label === ridingPoolKey);
+                      const poolRows = newPool
+                        ? standings.filter((other) => other.pool_label === row.pool_label)
+                        : [];
 
                       return (
                         <Fragment key={row.entrant_key}>
                           {newPool && (
-                            <h4 className="border-b border-bronze/20 bg-parchment px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
-                              Pool {row.pool_label}
+                            <h4 className="border-b border-bronze/20 bg-parchment font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
+                              <button
+                                type="button"
+                                aria-expanded={standingOpen}
+                                onClick={() =>
+                                  setOpenStandingPools((current) => ({
+                                    ...current,
+                                    [standingKey]: !standingOpen,
+                                  }))
+                                }
+                                className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-left uppercase hover:bg-sand"
+                              >
+                                <span aria-hidden="true" className="w-4 text-bronze-dark">
+                                  {standingOpen ? "▾" : "▸"}
+                                </span>
+                                <span>Pool {row.pool_label}</span>
+                                {row.pool_label === ridingPoolKey && round.id === liveRoundId && (
+                                  <span className="rounded-full bg-red-700 px-2 py-0.5 text-[0.6rem] text-cream">
+                                    Riding now
+                                  </span>
+                                )}
+                                <span className="font-sans text-[0.7rem] font-normal normal-case tracking-normal text-brown/75">
+                                  {plural(poolRows.length, round.event_type === "section" ? "team" : "rider")} ·{" "}
+                                  {poolRows.filter((other) => other.advanced === true).length} through ·{" "}
+                                  {poolRows.filter((other) => other.advanced === null).length} undecided
+                                  {!standingOpen ? " · tap to open" : ""}
+                                </span>
+                              </button>
                             </h4>
                           )}
+                          {standingOpen && (
                           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-bronze/10 px-3 py-3 text-sm text-brown last:border-0">
                             <div className="min-w-0 grow basis-52">
                               <p className="break-words font-semibold text-ink">{row.name}</p>
@@ -2887,6 +2991,7 @@ export default function ScoringAdmin({
                               </div>
                             </div>
                           </div>
+                          )}
                         </Fragment>
                       );
                     })}
