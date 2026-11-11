@@ -275,9 +275,9 @@ test("vMix rows carry every field, always", () => {
   const columnsFile = repoFile("src/lib/scoring/vmix-columns.ts");
   const current = [
     "round_name", "event_type", "round_number", "pool_label", "next_pool_label",
-    "rider_name", "team_name", "horse_name", "location_short", "attempt_number",
+    "rider_name", "team_name", "entrant_name", "horse_name", "location_short", "attempt_number",
     "attempts_per_rider", "run_order", "runs_total", "display_mode", "message",
-    "last_rider_name", "last_team_name", "last_result", "last_points",
+    "last_rider_name", "last_team_name", "last_entrant_name", "last_result", "last_points",
     "last_scored_at", "updated_at", "photo", "photo_url", "last_photo",
     "last_photo_url", "sample",
   ];

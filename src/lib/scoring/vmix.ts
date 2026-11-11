@@ -110,6 +110,7 @@ export type VmixCurrentRow = {
   next_pool_label: string;
   rider_name: string;
   team_name: string;
+  entrant_name: string;
   horse_name: string;
   location_short: string;
   attempt_number: number;
@@ -120,6 +121,7 @@ export type VmixCurrentRow = {
   message: string;
   last_rider_name: string;
   last_team_name: string;
+  last_entrant_name: string;
   last_result: string;
   last_points: number;
   last_scored_at: string;
@@ -217,6 +219,9 @@ export const toVmixCurrentRow = (
     next_pool_label: text(state.next_pool_label),
     rider_name: text(run?.rider_name),
     team_name: text(run?.team_name),
+    /* Who is on the track: the team in a Section round (its riders go
+       together), the rider otherwise. */
+    entrant_name: text(run?.team_name ?? run?.rider_name),
     horse_name: text(run?.horse_name),
     location_short: text(shortLocation(run?.rider_location)),
     attempt_number: run?.attempt_number ?? 0,
@@ -227,6 +232,7 @@ export const toVmixCurrentRow = (
     message: text(state.live?.message),
     last_rider_name: text(last?.rider_name),
     last_team_name: text(last?.team_name),
+    last_entrant_name: text(last?.team_name ?? last?.rider_name),
     last_result: last?.result ? RESULT_LABELS[last.result] : "",
     last_points: last?.points ?? 0,
     last_scored_at: text(last?.scored_at),
