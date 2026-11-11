@@ -266,7 +266,13 @@ test("a team rider's own photo comes first everywhere, then the account rule", (
   );
   assert.match(headshotUrls, /\.from\(kind === "team" \? "team_members" : "solo_registrations"\)/);
 
-  const list = headshotUrls.slice(headshotUrls.indexOf("export const matchTeamHeadshots"));
+  // The rule lives in chooseTeamHeadshotPaths, shared with the broadcast
+  // photo index; matchTeamHeadshots signs what it chooses.
+  assert.match(
+    headshotUrls.slice(headshotUrls.indexOf("export const matchTeamHeadshots")),
+    /chooseTeamHeadshotPaths\(\s*index,\s*members,\s*leaderProfileByTeam,\s*soloProfileByEmail\s*\)/
+  );
+  const list = headshotUrls.slice(headshotUrls.indexOf("export const chooseTeamHeadshotPaths"));
   assert.match(list, /let path = readPaperHeadshotPath\(member\.id, member\.headshot_path\);\s*if \(!path && index\)/);
   assert.match(list, /isOwnRegistration\(member, account\)/);
   assert.match(list, /index\.confirmedIdByEmail/);

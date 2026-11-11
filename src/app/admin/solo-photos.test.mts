@@ -187,7 +187,13 @@ test("removing an account photo is allowed only for the holder's own registratio
 
 test("staff screens show the registration's photo first, the account's only for the holder", () => {
   // The Solo riders list.
-  const match = sectionOf(headshotUrls, "export const matchSoloHeadshots");
+  // The rule lives in chooseSoloHeadshotPaths, shared with the broadcast
+  // photo index; the list only signs what it chooses.
+  assert.match(
+    sectionOf(headshotUrls, "export const matchSoloHeadshots"),
+    /chooseSoloHeadshotPaths\(index, registrations\)/
+  );
+  const match = sectionOf(headshotUrls, "export const chooseSoloHeadshotPaths");
   assert.match(
     match,
     /readPaperHeadshotPath\(registration\.id, registration\.headshot_path\) \?\?\s*\(account &&\s*isOwnRegistration\(registration, account, \{\s*onlyRegistration: rowsByProfile\.get\(registration\.profile_id \?\? ""\) === 1,/
