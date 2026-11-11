@@ -304,3 +304,12 @@ test("the builder button stays usable once a round has results", () => {
   assert.match(builder, /started riding: kept exactly as is/);
   assert.match(builder, /disabled=\{busy \|\| locked\}/);
 });
+
+test("the builder shows only the pool being added to until asked for all of them", () => {
+  assert.match(builder, /const \[showAll, setShowAll\] = useState\(false\);/);
+  // Pools that have ridden are left off "Add to" unless every pool is shown.
+  assert.match(builder, /if \(locked && !showAll\) \{\s*return null;\s*\}/);
+  // The list on the right is the current pool alone by default.
+  assert.match(builder, /if \(pooled && !showAll && !isCurrent\) \{\s*return null;\s*\}/);
+  assert.match(builder, /showAll \? `Show Only Pool \$\{currentLabel\}` : `Show All \$\{pools\.length\} Pools`/);
+});
