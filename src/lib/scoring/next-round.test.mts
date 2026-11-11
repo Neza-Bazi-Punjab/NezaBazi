@@ -343,3 +343,25 @@ test("the engine fixes: plain ASCII, asserted anchors, and the corrections the r
   // A team round made by hand stays by hand.
   assert.match(fixes, /if v_round\.stage is null then\s+return jsonb_build_object\(/);
 });
+
+test("late check-ins: a longer wait, no reopening of a ridden qualifier, and the desk is told", () => {
+  const late = readFileSync(
+    new URL("../../../supabase/migrations/20261111000000_scoring_late_check_in.sql", import.meta.url),
+    "utf8"
+  );
+
+  assert.doesNotMatch(late, /[^\x00-\x7F]/);
+  assert.match(late, /v_anchor constant text := replace\(p_anchor, E'\\r\\n', E'\\n'\);/);
+  assert.match(late, /alter function public\.scoring_auto_place_rider\(uuid, boolean, uuid\) set lock_timeout = '4000ms';/);
+  assert.match(late, /alter function public\.scoring_auto_place_team\(uuid, uuid\) set lock_timeout = '4000ms';/);
+  assert.match(late, /return 'qualifying_ridden';/);
+  assert.match(late, /'missing', \(/);
+  assert.match(late, /'auto', coalesce\(\(/);
+
+  const panel = readFileSync(new URL("../../app/admin/CheckInPanel.tsx", import.meta.url), "utf8");
+  assert.match(panel, /if \(pool\.missing\) \{\s+return " Not in a pool yet: send them to the scoring desk\.";/);
+  assert.match(panel, /return pool\.auto === false \? "" : " Pool given when qualifying starts\.";/);
+
+  const route = readFileSync(new URL("../../app/api/admin/check-in/route.ts", import.meta.url), "utf8");
+  assert.match(route, /typeof data\.missing === "boolean" \? \{ missing: data\.missing \} : \{\}/);
+});

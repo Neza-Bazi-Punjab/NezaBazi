@@ -95,20 +95,34 @@ const formatTime = (value: string) => new Date(value).toLocaleString();
 
 /* The rider's qualifying pool after check-in (Automatic mode), as PATCH
    /api/admin/check-in returns it. Null for a team-only rider. */
-type DeskPool = { started: boolean; pool: string | null; position: number | null };
+type DeskPool = {
+  started: boolean;
+  pool: string | null;
+  position: number | null;
+  /* Checked in, Automatic mode, qualifying open, yet in no pool. */
+  missing?: boolean;
+  /* Before qualifying starts: whether Singles are in Automatic mode. */
+  auto?: boolean;
+};
 
-/* " Pool C · rider 4." / " Pool given when qualifying starts." / "". */
+/* " Pool C · rider 4." / " Pool given when qualifying starts." /
+   " Not in a pool yet: send them to the scoring desk." / "". */
 const deskPoolText = (pool: DeskPool | null | undefined) => {
   if (!pool) {
     return "";
   }
 
   if (!pool.started) {
-    return " Pool given when qualifying starts.";
+    // In Manual mode no pool is given on check-in, so nothing is promised.
+    return pool.auto === false ? "" : " Pool given when qualifying starts.";
   }
 
   if (pool.pool && pool.position) {
     return ` Pool ${pool.pool} · rider ${pool.position}.`;
+  }
+
+  if (pool.missing) {
+    return " Not in a pool yet: send them to the scoring desk.";
   }
 
   return "";

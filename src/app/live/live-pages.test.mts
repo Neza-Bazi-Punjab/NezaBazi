@@ -660,3 +660,8 @@ test("/live never calls a rider Out before the rules have settled it", () => {
   const board = read("./LiveBoard.tsx");
   assert.match(board, /const standingsRows = withProvisionalOuts\(\s+isCurrentRound \? \(state\?\.leaderboard \?\? \[\]\) : \(earlier\.rows \?\? \[\]\),\s+selectedRound\s+\);/);
 });
+
+test("/live lists the rounds already ridden, whether or not they were marked complete", () => {
+  const board = read("./LiveBoard.tsx");
+  assert.match(board, /option\.id === round\?\.id \|\|\s+option\.status !== "upcoming" \|\|\s+\(round !== null && option\.sort_order < round\.sort_order\)/);
+});
