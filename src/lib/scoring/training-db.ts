@@ -9,8 +9,11 @@
 // Service role only, from server code only: the table has row level security
 // on and no policies, and every browser role is revoked
 // (supabase/migrations/20261107120000_scoring_training_sessions.sql). It holds
-// the invented sample riders only, never a registration or a real result, so
-// the public demo addresses (?sample=demo) may read it.
+// the practice riders, never a real result: the invented sample riders, or,
+// after "Reset training data" on the live site, a copy of the registered solo
+// riders (training-riders.ts) with the commentators' facts about them. The
+// public demo addresses (?sample=demo) read it through sample-session.ts,
+// which hands them the runs only (name, horse, location), never the facts.
 //
 // Saves are optimistic: each one says which version it loaded, and only
 // succeeds when the row is still at that version (or, for a first save, when
@@ -81,15 +84,67 @@ const isSeed = (value: unknown): value is SampleSeed => {
   );
 };
 
+/* The last state each server instance read or saved, by session key. Every
+   panel polls every two seconds and the whole state is one large row (a demo
+   on the registered riders is a few hundred runs), so a read first asks for
+   the version and its time alone and fetches the state only when either has
+   moved (a row deleted and started again counts from version 1 once more, so
+   the version by itself would not do). Callers get their own clone, never
+   this object. */
+type CachedTraining = { version: number; savedAt: number; state: SampleSeed };
+
+const trainingCache = (): Map<string, CachedTraining> => {
+  const store = globalThis as typeof globalThis & {
+    __nezaBaziTrainingRows?: Map<string, CachedTraining>;
+  };
+  return (store.__nezaBaziTrainingRows ??= new Map<string, CachedTraining>());
+};
+
+const remember = (key: string, version: number, updatedAt: unknown, state: SampleSeed) => {
+  const savedAt = typeof updatedAt === "string" ? Date.parse(updatedAt) : Number.NaN;
+
+  if (Number.isNaN(savedAt)) {
+    trainingCache().delete(key);
+    return;
+  }
+
+  trainingCache().set(key, { version, savedAt, state: structuredClone(state) });
+};
+
 /* The session's state and version. null = no row yet (start from the sample
    seed). Throws TrainingNotConfigured when the table is missing. */
 export const loadTrainingState = async (
   client: TrainingDatabase,
   key: string
 ): Promise<StoredTraining | null> => {
+  const cached = trainingCache().get(key);
+
+  if (cached) {
+    const probe = await client
+      .from(TRAINING_TABLE)
+      .select("version, updated_at")
+      .eq("id", key)
+      .maybeSingle();
+
+    if (probe.error) {
+      return fail("read", probe.error);
+    }
+
+    if (!probe.data) {
+      trainingCache().delete(key);
+      return null;
+    }
+
+    const found = probe.data as { version: number | string; updated_at: string };
+
+    if (Number(found.version) === cached.version && Date.parse(found.updated_at) === cached.savedAt) {
+      return { state: structuredClone(cached.state), version: cached.version };
+    }
+  }
+
   const { data, error } = await client
     .from(TRAINING_TABLE)
-    .select("state, version")
+    .select("state, version, updated_at")
     .eq("id", key)
     .maybeSingle();
 
@@ -98,16 +153,18 @@ export const loadTrainingState = async (
   }
 
   if (!data) {
+    trainingCache().delete(key);
     return null;
   }
 
-  const row = data as { state: unknown; version: number | string };
+  const row = data as { state: unknown; version: number | string; updated_at: unknown };
   const version = Number(row.version);
 
   if (!isSeed(row.state) || !Number.isSafeInteger(version)) {
     throw new Error("The practice session row is unreadable. Reset training data to start it again.");
   }
 
+  remember(key, version, row.updated_at, row.state);
   return { state: row.state, version };
 };
 
@@ -136,6 +193,7 @@ export const saveTrainingState = async (
       return fail("save", error);
     }
 
+    remember(key, 1, updatedAt, state);
     return true;
   }
 
@@ -150,11 +208,16 @@ export const saveTrainingState = async (
     return fail("save", error);
   }
 
+  if (Array.isArray(data) && data.length === 1) {
+    remember(key, expectedVersion + 1, updatedAt, state);
+  }
+
   return Array.isArray(data) && data.length === 1;
 };
 
 /* "Reset training data": delete the row, so the next load seeds afresh. */
 export const deleteTrainingState = async (client: TrainingDatabase, key: string): Promise<void> => {
+  trainingCache().delete(key);
   const { error } = await client.from(TRAINING_TABLE).delete().eq("id", key);
 
   if (error) {

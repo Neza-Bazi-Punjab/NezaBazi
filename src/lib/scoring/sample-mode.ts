@@ -17,15 +17,17 @@
 //
 // A training request is answered from the practice session in
 // sample-session.ts (in memory on the laptop, the scoring_training_sessions
-// row on the live site). That branch never reads or writes the scoring or
-// registration tables and never returns real data — the riders are invented
-// — which is why the scoring routes answer it before, and instead of, their
-// own role check.
+// row on the live site). That branch never reads or writes the scoring
+// tables, never writes a registration and never returns a real result (the
+// riders are the invented ones, or after a reset on the live site a copy of
+// the registered solo riders), which is why the scoring routes answer it
+// before, and instead of, their own role check.
 //
 // ?sample=demo is the public, read-only view of the same demo for the vMix
 // feeds, /api/live/state, /live and the overlays (isDemoRequest below, and
-// demoTrainingSession in sample-session.ts); it needs no login because the
-// demo holds invented riders only.
+// demoTrainingSession in sample-session.ts); it needs no login because it
+// shows only what the real scoreboard shows on the day (name, horse, district
+// and state), with practice scores.
 import "server-only";
 
 import { verifyRoleRequest } from "@/lib/scoring/auth";

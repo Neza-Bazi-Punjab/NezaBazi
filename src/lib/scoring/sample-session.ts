@@ -29,9 +29,16 @@
 // instance, and the demo pages show the "unshared" banner of training.ts,
 // "(not yet shared between devices)". Nothing breaks.
 //
-// It never touches the scoring or registration tables and never returns real
-// data: the 30 riders and the commentators' background facts below are
-// invented. A session starts at the top of Qualification (Pools A, B and C of
+// It never touches the scoring tables and never returns a real result. The 30
+// riders and the commentators' background facts below are invented; on the
+// live site "Reset training data" replaces them with a copy of the registered
+// solo riders (training-registrations.ts reads them, training-riders.ts draws
+// them into pools of about twelve), so the organisers rehearse on the real
+// entry list. It is a copy taken at that moment, read only: nothing here
+// writes a registration. The commentators' facts about real riders stay in
+// the session row and go to the commentary panel only; the public demo
+// addresses get the runs (name, horse, location) and nothing else. A session
+// starts at the top of Qualification (Pools A, B and C of
 // ten, three attempts, ridden round by round) with nobody ridden yet, and the
 // engine builds each Aarhi round from the riders who carried, through to the
 // Final (SampleProgression in sample-engine.ts), so a practice runs the whole
@@ -63,6 +70,8 @@ import {
   saveTrainingState,
   type TrainingDatabase,
 } from "@/lib/scoring/training-db";
+import { loadRegisteredRiders } from "@/lib/scoring/training-registrations";
+import { buildRegisteredSeed } from "@/lib/scoring/training-riders";
 import { createTrainingStore, type TrainingStore } from "@/lib/scoring/training-store";
 import { withAttemptMarks } from "@/lib/scoring/blocks";
 import { upNextRuns } from "@/lib/scoring/next-to-ride";
@@ -427,13 +436,52 @@ export const takeOut = async (
   by: string | null = null
 ) => withSession(key, (engine) => engine.takeOut(roundId, entrantKey, out), { by });
 
+/* The registered solo riders, drawn into a fresh Qualification, or null when
+   they cannot be read or there are too few: the reset then falls back to the
+   invented sample riders rather than fail. */
+const registeredSeed = async (client: TrainingDatabase): Promise<SampleSeed | null> => {
+  try {
+    return buildRegisteredSeed(await loadRegisteredRiders(client), {
+      roundId: TRAINING_QUALIFICATION_ROUND_ID,
+    });
+  } catch (caught) {
+    console.error("[scoring] the demo could not copy the registered riders; using the sample riders", caught);
+    return null;
+  }
+};
+
+/* Puts `seed` in the session's row whatever is there now. A panel saving at
+   the same moment can win the version check; the reset simply goes again. */
+const replaceStoredSession = async (client: TrainingDatabase, key: string, seed: SampleSeed) => {
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    const stored = await loadTrainingState(client, key);
+
+    if (await saveTrainingState(client, key, seed, stored?.version ?? null, null)) {
+      return;
+    }
+  }
+
+  throw new SampleRefusal("22023", LOST_RACE_MESSAGE);
+};
+
 /* Back to the start: the top of Qualification. On the live site that is the
-   shared demo, so it restarts for everyone, on every device: the row is
-   deleted and the next read seeds afresh. */
+   shared demo, so it restarts for everyone, on every device, on a fresh copy
+   of the registered solo riders in a new random draw. When they cannot be
+   read (or there are none yet) the row is deleted and the next read seeds
+   the invented sample riders afresh. A laptop's own session always uses the
+   sample riders. */
 export const reset = async (key: string) => {
   if (key !== LOCAL_TRAINING_SESSION) {
     try {
-      await deleteTrainingState(openTrainingDatabase(), key);
+      const client = openTrainingDatabase();
+      const seed = await registeredSeed(client);
+
+      if (seed) {
+        await replaceStoredSession(client, key, seed);
+      } else {
+        await deleteTrainingState(openTrainingDatabase(), key);
+      }
+
       globalStore.__nezaBaziDemoSnapshots?.delete(key);
       return;
     } catch (caught) {
@@ -470,7 +518,14 @@ export const readDemoSnapshot = async (
   key: string = SHARED_TRAINING_SESSION,
   now: number = Date.now()
 ): Promise<SampleSeed> => {
-  const read = () => withSession(key, (engine): SampleSeed => engine.snapshot());
+  // The public addresses read through here: the commentators' facts about
+  // real riders are left behind, so they cannot reach a feed or a screen.
+  const read = () =>
+    withSession(key, (engine): SampleSeed => {
+      const { riders: staffOnly, ...shown } = engine.snapshot();
+      void staffOnly;
+      return shown;
+    });
 
   if (key === LOCAL_TRAINING_SESSION) {
     return read();
@@ -573,7 +628,11 @@ const SAMPLE_FACTS: Record<string, SampleFacts & { is_leader?: boolean }> = Obje
 /* loadRiderDetails over the session: the run's own snapshot plus the facts
    above, and every run this rider has in the session as `today`. */
 const riderDetail = (run: ScoringRun, all: SampleSeed): RiderDetail => {
-  const facts = SAMPLE_FACTS[run.rider_name];
+  // A demo on the registered riders carries each rider's facts by
+  // registration id; the invented riders' are looked up by name.
+  const facts: (SampleFacts & { is_leader?: boolean }) | undefined =
+    (run.solo_registration_id !== null ? all.riders?.[run.solo_registration_id] : undefined) ??
+    SAMPLE_FACTS[run.rider_name];
   const roundsById = new Map<string, ScoringRound>(all.rounds.map((round) => [round.id, round]));
   const sameRider = (other: ScoringRun) =>
     run.solo_registration_id !== null
