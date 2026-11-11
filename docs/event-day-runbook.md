@@ -220,7 +220,7 @@ This page carries personal details. Do not put it on a screen the audience or th
 
 ## 7. The public scoreboard at `/live`
 
-Anyone can open `/live` on a phone; it is linked as **Live Scores** in the site footer. It shows the announcement message, the "Pool B — get ready" card during a call-up, the rider on course, the last result, who is up next, the **Standings** (pool tabs, and earlier rounds with their final standings and podium) and a **Pools** tab where a rider can type their name and find their pool. Before scoring is set up it says "Live scoring begins on November 11, 2026". It never shows parents' names, ages or contact details. It updates within about a second of each result, and follows the screens' mode: Standings puts the standings first, Rider shows the rider alone (with a button to open the standings), and Pool call-up shows the call-up card.
+Anyone can open `/live` on a phone; it is linked as **Live Scores** in the navbar and the site footer. It shows the announcement message, the "Pool B — get ready" card during a call-up, the rider on course, the last result, who is up next, the **Standings** (pool tabs, and earlier rounds with their final standings and podium) and a **Pools** tab where a rider can type their name and find their pool. Before scoring is set up it says "Live scoring begins on November 11, 2026". It never shows parents' names, ages or contact details. It updates within about a second of each result, and follows the screens' mode: Standings puts the standings first, Rider shows the rider alone (with a button to open the standings), and Pool call-up shows the call-up card.
 
 Tell riders at the briefing to check the Pools tab for their pool, and to listen for "Pool … get ready".
 

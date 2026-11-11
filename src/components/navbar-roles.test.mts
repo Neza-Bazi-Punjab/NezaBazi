@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 import { PROFILE_ROLES, isProfileRole } from "../lib/scoring/types.ts";
-import { navLinks } from "../lib/site.ts";
+import { navLinks, site } from "../lib/site.ts";
 
 const source = readFileSync(new URL("./Navbar.tsx", import.meta.url), "utf8");
 
@@ -112,12 +112,17 @@ test("desktop and mobile both list the staff links among the account items", () 
   assert.ok(accountClass);
   assert.equal(classAfter(desktop, "staffLinks.map("), accountClass);
 
-  // An administrator's row only fits beside Register Now from xl up, so the
-  // button gives way below xl for administrators alone.
+  // An administrator's row only fits beside Live Now from xl up, so the
+  // button gives way below xl for administrators alone. From xl their tabs
+  // stay close together and their button is slimmer, so the row still fits.
   assert.match(source, /const crowded = staffLinks\.length > 1;/);
   assert.match(
     desktop,
-    /href="\/register"\s+className=\{`\$\{crowded \? "hidden xl:block " : ""\}rounded-full/
+    /href=\{site\.liveStreamUrl\}\s+target="_blank"\s+rel="noopener noreferrer"\s+className=\{`\$\{crowded \? "hidden px-5 xl:inline-flex " : "inline-flex px-6 "\}items-center/
+  );
+  assert.match(
+    desktop,
+    /<ul className=\{`hidden items-center gap-5 lg:flex \$\{crowded \? "" : "xl:gap-7"\}`\}>/
   );
 
   // Mobile: one equal-tap-area row per staff link, in the signed-in branch,
@@ -148,13 +153,14 @@ test("the public tabs are untouched: staff links are never tabs", () => {
     navLinks.map(({ href, label }) => ({ href, label })),
     [
       { href: "/", label: "Home" },
+      { href: "/live", label: "Live Scores" },
       { href: "/event", label: "Event" },
       { href: "/rules", label: "Rulebook" },
     ]
   );
 
   const desktopTabs = desktop.match(
-    /<ul className="hidden items-center gap-7 lg:flex">([\s\S]*?)<\/ul>/
+    /<ul className=\{`hidden items-center gap-5 lg:flex [^`]*`\}>([\s\S]*?)<\/ul>/
   );
   assert.ok(desktopTabs);
   assert.match(desktopTabs[1], /navLinks\.map\(/);
@@ -163,4 +169,32 @@ test("the public tabs are untouched: staff links are never tabs", () => {
   const mobileTabs = mobile.match(/\{navLinks\.map\(\(link, i\) => \(([\s\S]*?)\)\)\}/);
   assert.ok(mobileTabs);
   assert.doesNotMatch(mobileTabs[1], /staffLinks|\/admin|\/judge|\/commentary/);
+});
+
+test("the Live Now button opens the YouTube broadcast, on desktop and in the mobile menu", () => {
+  assert.match(site.liveStreamUrl, /^https:\/\/(www\.)?youtube\.com\/live\/[\w-]+$/);
+  assert.match(source, /import \{ navLinks, site \} from "@\/lib\/site";/);
+
+  for (const [name, part] of [
+    ["desktop", desktop],
+    ["mobile", mobile],
+  ] as const) {
+    const button = part.match(
+      /<a\s+href=\{site\.liveStreamUrl\}\s+target="_blank"\s+rel="noopener noreferrer"[\s\S]*?<\/a>/
+    );
+    assert.ok(button, `${name} has a Live Now link to the broadcast, opening in a new tab`);
+    assert.match(button[0], /<LiveDot \/>\s*Live Now/);
+    assert.match(button[0], /<span className="sr-only"> \(opens in a new tab\)<\/span>/);
+    assert.equal(part.match(/href=\{site\.liveStreamUrl\}/g)?.length, 1);
+  }
+
+  // The mobile button closes the menu and stays out of the tab order while
+  // the menu is shut, like every other row.
+  assert.match(
+    mobile,
+    /href=\{site\.liveStreamUrl\}[\s\S]*?onClick=\{\(\) => setOpen\(false\)\}\s+tabIndex=\{open \? undefined : -1\}/
+  );
+
+  // Registration is no longer a navbar button; it stays in the footer.
+  assert.doesNotMatch(source, /\/register|Register Now/);
 });

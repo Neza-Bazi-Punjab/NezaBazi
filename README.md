@@ -219,9 +219,10 @@ On event day judges record every run from a phone, and a public scoreboard, a co
   the `DissolvePhoto` component, which masks their edges so they melt into the
   parchment background, echoing the poster.
 - `/players` and `/rankings` are still placeholder pages that unlock in later phases. `/login`, `/signup`, `/forgot-password`, `/reset-password`, `/register`, `/register/solo`, `/register/paper`, `/register-team`, `/account`, `/admin`, `/admin/scoring`, `/admin/paper`, `/live`, `/judge`, `/commentary` and `/overlay` are all live in the code; the scoring pages show "not set up yet" until their migrations are applied.
-- The navbar links only Home, Event and Rulebook ([src/lib/site.ts](src/lib/site.ts)); the
+- The navbar links only Home, Live Scores, Event and Rulebook ([src/lib/site.ts](src/lib/site.ts)); the
   account, registration and admin pages are reached from the footer, the CTAs, or
-  directly by URL. `/live` is linked from the footer ("Live Scores"), not the navbar.
+  directly by URL. The navbar and home page "Live Now" buttons open the YouTube
+  broadcast (`site.liveStreamUrl`).
   The staff panels and overlays are left out of the sitemap and marked `noindex`.
 - `npm test` runs Node's built-in test runner over the `.test.mts` files. These are
   source-text assertions, not behavioral tests — they read the component, route and

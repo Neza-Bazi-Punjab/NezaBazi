@@ -3,6 +3,7 @@ import AddToHomeScreen from "@/components/AddToHomeScreen";
 import BrushDivider from "@/components/BrushDivider";
 import ButtonLink from "@/components/Button";
 import FlagRow from "@/components/FlagRow";
+import LiveDot from "@/components/LiveDot";
 import {
   CalendarIcon,
   MapPinIcon,
@@ -72,7 +73,10 @@ export default function Home() {
             </div>
 
             <div className="mt-6 flex flex-wrap gap-4">
-              <ButtonLink href="/register">Register Now</ButtonLink>
+              <ButtonLink href={site.liveStreamUrl}>
+                <LiveDot />
+                Live Now
+              </ButtonLink>
               <ButtonLink href="/event" variant="outline">
                 Event Details
               </ButtonLink>

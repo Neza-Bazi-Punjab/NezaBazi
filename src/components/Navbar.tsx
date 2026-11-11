@@ -5,7 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { isProfileRole, type ProfileRole } from "@/lib/scoring/types";
 import { createClient } from "@/lib/supabase/client";
-import { navLinks } from "@/lib/site";
+import { navLinks, site } from "@/lib/site";
+import LiveDot from "./LiveDot";
 import Logo from "./Logo";
 import { CloseIcon, MenuIcon } from "./icons";
 
@@ -18,8 +19,8 @@ const getUserLabel = ({
 }) => user_metadata?.full_name ?? email ?? "Player";
 
 /* The staff panels each role can open. They sit among the account items
-   (beside My Account), never as tabs: the public tabs stay Home, Event and
-   Rulebook. Administrators can open every panel; players see nothing extra.
+   (beside My Account), never as tabs: the public tabs stay Home, Live Scores,
+   Event and Rulebook. Administrators can open every panel; players see nothing extra.
    The panels check the role again server-side, so this is only a shortcut. */
 const staffLinksByRole: Record<ProfileRole, readonly { href: string; label: string }[]> = {
   player: [],
@@ -48,9 +49,11 @@ export default function Navbar() {
   /* Only a signed-in person ever sees staff links, even for the moment
      between signing out and the role being cleared. */
   const staffLinks = userLabel ? staffLinksByRole[role] : [];
-  /* An administrator's three staff links, My Account, Log Out and Register
-     Now do not fit in one desktop row until xl (they wrap at 1024px), so
-     below xl the Register Now button gives way for administrators only. */
+  /* An administrator's three staff links, My Account, Log Out and Live Now do
+     not fit in one desktop row beside the four tabs until xl (they wrap at
+     1024px), so below xl the Live Now button gives way for administrators
+     only. The row is as wide as the page from xl up, so an administrator's
+     tabs stay close together and their button a little slimmer to fit. */
   const crowded = staffLinks.length > 1;
 
   /* Shared styling for mobile menu rows so nav links, auth links and the
@@ -162,7 +165,7 @@ export default function Navbar() {
       >
         <Logo />
 
-        <ul className="hidden items-center gap-7 lg:flex">
+        <ul className={`hidden items-center gap-5 lg:flex ${crowded ? "" : "xl:gap-7"}`}>
           {navLinks.map((link) => {
             const active = pathname === link.href;
             return (
@@ -226,12 +229,16 @@ export default function Navbar() {
                 </Link>
               </div>
             ))}
-          <Link
-            href="/register"
-            className={`${crowded ? "hidden xl:block " : ""}rounded-full bg-bronze px-6 py-2.5 font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream shadow-sm transition-[background-color,transform,box-shadow] duration-[var(--dur-base)] ease-[var(--ease-soft)] hover:bg-bronze-dark hover:shadow-md motion-safe:hover:-translate-y-0.5`}
+          <a
+            href={site.liveStreamUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`${crowded ? "hidden px-5 xl:inline-flex " : "inline-flex px-6 "}items-center gap-2.5 whitespace-nowrap rounded-full bg-bronze py-2.5 font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream shadow-sm transition-[background-color,transform,box-shadow] duration-[var(--dur-base)] ease-[var(--ease-soft)] hover:bg-bronze-dark hover:shadow-md motion-safe:hover:-translate-y-0.5`}
           >
-            Register Now
-          </Link>
+            <LiveDot />
+            Live Now
+            <span className="sr-only"> (opens in a new tab)</span>
+          </a>
         </div>
 
         <button
@@ -360,14 +367,18 @@ export default function Navbar() {
               className={`pt-4 ${mobileItemClass}`}
               style={mobileItemStyle(accountRowIndex + 2)}
             >
-              <Link
-                href="/register"
+              <a
+                href={site.liveStreamUrl}
+                target="_blank"
+                rel="noopener noreferrer"
                 onClick={() => setOpen(false)}
                 tabIndex={open ? undefined : -1}
-                className="block rounded-full bg-bronze px-6 py-3 text-center font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze-dark"
+                className="flex items-center justify-center gap-2.5 rounded-full bg-bronze px-6 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze-dark"
               >
-                Register Now
-              </Link>
+                <LiveDot />
+                Live Now
+                <span className="sr-only"> (opens in a new tab)</span>
+              </a>
             </li>
           </ul>
         </div>

@@ -27,15 +27,30 @@ export default function ButtonLink({
   arrow = true,
   className = "",
 }: ButtonLinkProps) {
-  return (
-    <Link
-      href={href}
-      className={`group inline-flex items-center gap-2.5 rounded-lg px-6 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] transition-[background-color,border-color,color,transform,box-shadow] duration-[var(--dur-base)] ease-[var(--ease-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:hover:-translate-y-0.5 motion-safe:hover:shadow-md ${variants[variant]} ${className}`}
-    >
+  const classes = `group inline-flex items-center gap-2.5 rounded-lg px-6 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] transition-[background-color,border-color,color,transform,box-shadow] duration-[var(--dur-base)] ease-[var(--ease-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:hover:-translate-y-0.5 motion-safe:hover:shadow-md ${variants[variant]} ${className}`;
+  const content = (
+    <>
       {children}
       {arrow && (
         <ArrowRightIcon className="h-4 w-4 transition-transform duration-[var(--dur-base)] ease-[var(--ease-soft)] motion-safe:group-hover:translate-x-1" />
       )}
+    </>
+  );
+
+  /* A link to another site (the YouTube broadcast) opens in a new tab, so the
+     visitor keeps this site open behind it. */
+  if (/^https?:\/\//.test(href)) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className={classes}>
+        {content}
+        <span className="sr-only"> (opens in a new tab)</span>
+      </a>
+    );
+  }
+
+  return (
+    <Link href={href} className={classes}>
+      {content}
     </Link>
   );
 }

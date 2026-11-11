@@ -235,14 +235,14 @@ test("public pages read only the public live state, never staff or registration 
   assert.deepEqual(tables, ["scoring_leaderboard"]);
 });
 
-test("/live is public, titled and linked from the footer but not the navbar", () => {
+test("/live is public, titled and linked from the footer and as a navbar tab", () => {
   const page = read("./page.tsx");
   assert.match(page, /title: "Live Scores"/);
   assert.doesNotMatch(page, /robots/);
 
   assert.ok(footerQuickLinks.some((link) => link.href === "/live" && link.label === "Live Scores"));
-  assert.ok(!navLinks.some((link) => (link.href as string) === "/live"), "three-tab navbar rule");
-  assert.equal(navLinks.length, 3);
+  assert.ok(navLinks.some((link) => link.href === "/live" && link.label === "Live Scores"));
+  assert.equal(navLinks.length, 4, "four-tab navbar: Home, Live Scores, Event, Rulebook");
 });
 
 test("the sitemap lists /live and leaves out the staff panels and overlays", () => {
