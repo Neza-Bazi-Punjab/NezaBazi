@@ -196,7 +196,7 @@ test("/api/live/state serves ?sample=demo from the shared session, publicly cach
   assert.doesNotMatch(branch, /private/);
   assert.match(
     repoFile("src/lib/scoring/http.ts"),
-    /PUBLIC_LIVE_CACHE = "public, s-maxage=1, stale-while-revalidate=4"/
+    /PUBLIC_LIVE_CACHE = "public, s-maxage=3, stale-while-revalidate=6"/
   );
   // The local ?sample=1 path is unchanged: environment flag only, never cached.
   assert.match(

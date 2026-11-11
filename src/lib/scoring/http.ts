@@ -18,8 +18,11 @@ const GENERIC_ERROR_MESSAGE = "Something went wrong. Please try again.";
 export const PRIVATE_NO_STORE = "private, no-store";
 
 /* Thousands of spectators poll the public state; Vercel's edge answers all but
-   one request a second. */
-export const PUBLIC_LIVE_CACHE = "public, s-maxage=1, stale-while-revalidate=4";
+   one request every three seconds. Three, not one, since the event day of
+   11 Nov 2026: the database was answering slowly under the day's load
+   (p95 of 2 to 3 seconds), and the public feeds were the easiest reads to
+   thin out so the judges' saves had more room. */
+export const PUBLIC_LIVE_CACHE = "public, s-maxage=3, stale-while-revalidate=6";
 
 /* Request bodies here are a handful of ids and short strings. */
 export const MAX_BODY_BYTES = 16 * 1024;
