@@ -477,6 +477,8 @@ export type BroadcastPhotoRow = {
   photo_file: string;
   photo_url: string;
   photo_path: string;
+  /* The name the public feeds give this photo, "<Rider Name>.png". */
+  vmix_photo: string;
 };
 
 export const EMPTY_BROADCAST_PHOTO_ROW: BroadcastPhotoRow = {
@@ -487,6 +489,7 @@ export const EMPTY_BROADCAST_PHOTO_ROW: BroadcastPhotoRow = {
   photo_file: "",
   photo_url: "",
   photo_path: "",
+  vmix_photo: "",
 };
 
 const byName = (first: IndexedRider, second: IndexedRider) =>
@@ -518,6 +521,7 @@ export const toBroadcastPhotoRows = (
       photo_file: cells.file,
       photo_url: cells.url,
       photo_path: cells.path,
+      vmix_photo: rider.photo?.vmix_file ?? "",
     };
   });
 };

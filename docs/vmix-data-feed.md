@@ -255,7 +255,7 @@ Every row has all of its feed's columns, in the order below, and ends with `samp
 > **Bind the title's image to `photo_url`.** For example, `https://www.nezabazipunjab.com/api/live/vmix/photo/Harpreet%20Singh.png`. The first time a picture is asked for it is fetched from the website; after that it comes from a cache and is quick.
 
 - **File names are `<rider name>.png`**, the name as the feed shows it, without characters a file name cannot hold. When two riders share a name, **a short code is added** to each of them, e.g. `Harpreet Singh 1a2b.png`, so two riders never share a picture.
-- The pictures are **JPEG images inside**, although the name ends in `.png`. vMix shows them either way.
+- The pictures are **PNG images with the background removed** (transparent). A photo added very recently may show with its background for a short while, until its cut-out has been made.
 - A rider with no photo has **empty photo columns**, so give each title a default picture for when the column is empty. Section rows (teams) have empty photo columns too.
 - Sample rows (`sample=…`) carry one placeholder picture for every invented rider, named `sample-rider.png`.
 

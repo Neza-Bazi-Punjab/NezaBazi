@@ -4,11 +4,13 @@
 // Public, no key. The name is looked up in the photo index
 // (src/lib/broadcast/photo-index.ts) by exact file name, case-insensitively;
 // names are unique (a short id is added when two riders share a name). The
-// object is read with the service role and sent as stored: the photos are
-// JPEGs, so the type is image/jpeg although the name ends in .png. Unknown
+// object is read with the service role: the rider's cut-out PNG (background
+// removed, src/lib/broadcast/cutout.ts) when one exists, otherwise the photo
+// as stored, a JPEG sent as image/jpeg although the name ends in .png. Unknown
 // name, no photo or any error: a bare 404, never cached.
 import { HEADSHOT_BUCKET } from "@/lib/headshots";
 import { createServiceRoleClient } from "@/lib/admin/server";
+import { CUTOUT_BUCKET, cutoutObjectName } from "@/lib/broadcast/cutout";
 import { getPhotoIndex } from "@/lib/broadcast/photo-index";
 import { vmixPhotoLookupKey } from "@/lib/broadcast/rows";
 
@@ -55,9 +57,29 @@ export async function GET(_request: Request, context: RouteContext) {
       return notFound();
     }
 
-    const { data, error } = await createServiceRoleClient()
-      .storage.from(HEADSHOT_BUCKET)
-      .download(path);
+    const client = createServiceRoleClient();
+
+    /* The cut-out (PNG, background removed) made from exactly this photo,
+       when there is one; otherwise the photo as stored (a JPEG), cached only
+       briefly so the cut-out takes over soon after it is uploaded. */
+    try {
+      const cutout = await client.storage.from(CUTOUT_BUCKET).download(cutoutObjectName(path));
+
+      if (!cutout.error && cutout.data) {
+        return new Response(cutout.data, {
+          headers: {
+            "Content-Type": "image/png",
+            "Cache-Control": "public, max-age=300, s-maxage=300, stale-while-revalidate=3600",
+            "X-Content-Type-Options": "nosniff",
+            "X-Robots-Tag": "noindex",
+          },
+        });
+      }
+    } catch {
+      // Fall through to the stored photo.
+    }
+
+    const { data, error } = await client.storage.from(HEADSHOT_BUCKET).download(path);
 
     if (error || !data) {
       return notFound();
@@ -66,7 +88,7 @@ export async function GET(_request: Request, context: RouteContext) {
     return new Response(data, {
       headers: {
         "Content-Type": "image/jpeg",
-        "Cache-Control": "public, max-age=300, s-maxage=300, stale-while-revalidate=3600",
+        "Cache-Control": "public, max-age=60, s-maxage=60",
         "X-Content-Type-Options": "nosniff",
         "X-Robots-Tag": "noindex",
       },
