@@ -373,7 +373,89 @@ export const getSoloHeadshotUrl = async (
       })
     : null);
 
-export type SoloHeadshot = { url: string | null };
+/* One rider, two entries: a rider who registered solo and is also on a team
+   (Form teams copies the solo entry, and assign_confirmation_code gives the
+   team place the same code) has a photo in either place. The check-in desk
+   already treats them as one rider: the solo entry's photo first, then the
+   team place's. These two do the same for the screens that look up one row. */
+
+/* A solo rider's photo, or else their team place's own photo. */
+export const getLinkedSoloHeadshotUrl = async (
+  client: ServiceRoleClient,
+  registration: {
+    id: string;
+    profile_id: string | null;
+    email: string | null;
+    full_name: string | null;
+    confirmation_code?: string | null;
+  }
+): Promise<string | null> => {
+  const own = await getSoloHeadshotUrl(client, registration);
+
+  if (own || !registration.confirmation_code) {
+    return own;
+  }
+
+  try {
+    const { data } = await client
+      .from("team_members")
+      .select("id")
+      .eq("confirmation_code", registration.confirmation_code)
+      .limit(1);
+    const twinId = (data?.[0] as { id?: string } | undefined)?.id;
+
+    return twinId ? await getPaperHeadshotUrl(client, twinId, "team") : null;
+  } catch {
+    return null;
+  }
+};
+
+/* A team rider's photo: their solo entry's first, then the team place's
+   (getTeamRiderHeadshotUrl). */
+export const getLinkedTeamRiderHeadshotUrl = async (
+  client: ServiceRoleClient,
+  rider: {
+    id?: string | null;
+    email: string | null | undefined;
+    full_name: string | null | undefined;
+    confirmation_code?: string | null;
+  },
+  leaderProfileId: string | null
+): Promise<string | null> => {
+  if (rider.confirmation_code) {
+    try {
+      const { data } = await client
+        .from("solo_registrations")
+        .select("id, profile_id, email, full_name")
+        .eq("confirmation_code", rider.confirmation_code)
+        .limit(1);
+      const solo = data?.[0] as
+        | { id: string; profile_id: string | null; email: string | null; full_name: string | null }
+        | undefined;
+      const url = solo ? await getSoloHeadshotUrl(client, solo) : null;
+
+      if (url) {
+        return url;
+      }
+    } catch {
+      // Fall through to the team place's own photo.
+    }
+  }
+
+  return getTeamRiderHeadshotUrl(client, rider, leaderProfileId);
+};
+
+/* A photo for a list's Photo column, and, when the photo shown belongs to
+   the rider's other entry (or a rider with no photo has a solo entry), the
+   row the cell's Add / Replace / Remove must act on instead of its own. */
+export type SoloHeadshot = {
+  url: string | null;
+  target?: { kind: "solo" | "team"; id: string };
+};
+
+/* A rider's team place, for the Solo riders list, keyed by confirmation code. */
+export type TeamTwin = { id: string; headshot_path?: string | null };
+
 
 /* What loadAuthUserIndex finds: each account's own photo path (or null), with
    the account's email and name, which decide whether a registration is the
@@ -428,12 +510,13 @@ export const loadAuthUserIndex = async (
   }
 };
 
-type SoloHeadshotRow = {
+export type SoloHeadshotRow = {
   id: string;
   profile_id: string | null;
   email: string;
   full_name: string;
   headshot_path?: string | null;
+  confirmation_code?: string | null;
 };
 
 /* Which stored photo is each solo registration's, keyed by registration id
@@ -493,7 +576,11 @@ export const chooseSoloHeadshotPaths = (
 export const matchSoloHeadshots = async (
   index: AuthUserIndex | null,
   registrations: SoloHeadshotRow[],
-  client: ServiceRoleClient
+  client: ServiceRoleClient,
+  /* The riders' team places by code: a photo taken on the Teams list (or
+     at the desk on the team place) shows here when the entry has none, and
+     Replace / Remove then act on the team place. */
+  teamTwinByCode: Map<string, TeamTwin> = new Map()
 ): Promise<Record<string, SoloHeadshot>> => {
   const result: Record<string, SoloHeadshot> = {};
 
@@ -506,6 +593,17 @@ export const matchSoloHeadshots = async (
 
     for (const registration of registrations) {
       result[registration.id] = { url: null };
+
+      const twin =
+        !pathByRegistration.has(registration.id) && registration.confirmation_code
+          ? teamTwinByCode.get(registration.confirmation_code)
+          : undefined;
+      const twinPath = twin ? readPaperHeadshotPath(twin.id, twin.headshot_path) : null;
+
+      if (twin && twinPath) {
+        pathByRegistration.set(registration.id, twinPath);
+        result[registration.id].target = { kind: "team", id: twin.id };
+      }
     }
 
     await signInto(client, pathByRegistration, result);
@@ -556,6 +654,7 @@ type TeamHeadshotRow = {
   full_name: string;
   is_leader: boolean;
   headshot_path?: string | null;
+  confirmation_code?: string | null;
 };
 
 /* Which stored photo is each team rider's, keyed by team_members id (riders
@@ -612,7 +711,13 @@ export const matchTeamHeadshots = async (
   members: TeamHeadshotRow[],
   leaderProfileByTeam: Map<string, string | null>,
   soloProfileByEmail: Map<string, string>,
-  client: ServiceRoleClient
+  client: ServiceRoleClient,
+  /* Every solo registration, with its code: a rider's solo photo (same code;
+     a team made on Form teams is a copy of the solo entry) shows first, as
+     at the check-in desk, so a photo taken on the Solo riders list carries
+     over to their team. Every one, because chooseSoloHeadshotPaths counts
+     each account's entries. */
+  soloRows: SoloHeadshotRow[] = []
 ): Promise<Record<string, SoloHeadshot>> => {
   const result: Record<string, SoloHeadshot> = {};
 
@@ -627,6 +732,35 @@ export const matchTeamHeadshots = async (
       leaderProfileByTeam,
       soloProfileByEmail
     );
+    const soloPaths = chooseSoloHeadshotPaths(index, soloRows);
+    const soloTwinByCode = new Map<string, SoloHeadshotRow>();
+
+    for (const row of soloRows) {
+      if (row.confirmation_code && !soloTwinByCode.has(row.confirmation_code)) {
+        soloTwinByCode.set(row.confirmation_code, row);
+      }
+    }
+
+    for (const member of members) {
+      const twin = member.confirmation_code
+        ? soloTwinByCode.get(member.confirmation_code)
+        : undefined;
+
+      if (!twin) {
+        continue;
+      }
+
+      const twinPath = soloPaths.get(twin.id);
+
+      if (twinPath) {
+        pathByMember.set(member.id, twinPath);
+        result[member.id].target = { kind: "solo", id: twin.id };
+      } else if (!pathByMember.has(member.id)) {
+        // No photo anywhere: a new one goes on the solo entry, so it shows
+        // in both lists (the desk's rule).
+        result[member.id].target = { kind: "solo", id: twin.id };
+      }
+    }
 
     await signInto(client, pathByMember, result);
   } catch (error) {

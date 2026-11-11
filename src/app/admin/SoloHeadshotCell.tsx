@@ -5,8 +5,9 @@
 
    A rider with a photo shows a small round thumbnail; clicking it opens the
    photo in a pop-up over the page, with Replace photo and Remove photo. A
-   rider without one shows an add button with two choices: choose a file, or
-   take a photo (Replace offers the same two). On a phone or tablet "Take
+   rider without one shows an add button that opens a pop-up with three ways
+   in: drop a picture on it, take a photo, or choose a file (the button itself
+   also takes a dropped picture). Replace offers files or camera. On a phone or tablet "Take
    photo" opens the device camera directly; on a computer it opens the webcam
    in a pop-up. Either way the photo is rotated, downscaled and re-encoded in
    the browser exactly as a rider's own upload is, then stored as that rider's
@@ -21,7 +22,12 @@ import {
   validateHeadshotSource,
 } from "@/lib/headshots";
 
-export type RiderHeadshotState = { url: string | null };
+/* `target`: the row the photo belongs to when it is not the row the cell
+   sits in (a rider's solo entry and team place share one photo). */
+export type RiderHeadshotState = {
+  url: string | null;
+  target?: { kind: RiderKind; id: string };
+};
 export type SoloHeadshotState = RiderHeadshotState;
 
 /* Which list the cell sits in: a solo registration or a team rider's row. */
@@ -283,8 +289,193 @@ function WebcamCapture({
   );
 }
 
+/* The picture in a drop: the first image among the dropped files, or a clear
+   message for the admin. An empty type (some HEIC files) is let through and
+   left to the decoder, as the file picker does. */
+const pickDroppedImage = (
+  dropped: FileList
+): { file: File } | { error: string } => {
+  const files = Array.from(dropped);
+  const file = files.find((each) => each.type.startsWith("image/")) ?? files[0];
+
+  if (!file) {
+    return { error: "Drop a photo file (JPG or PNG) to add it." };
+  }
+
+  if (file.type !== "" && !file.type.startsWith("image/")) {
+    return { error: `"${file.name}" isn't an image. Drop a photo (JPG or PNG) instead.` };
+  }
+
+  return { file };
+};
+
+/* The pop-up the add button opens: a drop zone for a picture dragged in from
+   the computer, Take photo, and Choose file. It closes on Esc, a click outside
+   it, or once the photo is saved. */
+function AddPhotoPopup({
+  riderName,
+  busy,
+  error,
+  onFile,
+  onRejected,
+  onWebcam,
+  close,
+}: {
+  riderName: string;
+  busy: boolean;
+  error: string | null;
+  /* Uploads through the cell's one path; true once saved. */
+  onFile: (file: File) => Promise<boolean>;
+  onRejected: (message: string) => void;
+  /* A computer's webcam opens in its own pop-up. */
+  onWebcam: () => void;
+  close: () => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  const send = async (file: File) => {
+    if (await onFile(file)) {
+      close();
+    }
+  };
+
+  const handleInput = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (file) {
+      void send(file);
+    }
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    if (busy || !Array.from(event.dataTransfer.types).includes("Files")) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setDragOver(true);
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDragOver(false);
+
+    if (busy) {
+      return;
+    }
+
+    const picked = pickDroppedImage(event.dataTransfer.files);
+
+    if ("error" in picked) {
+      onRejected(picked.error);
+      return;
+    }
+
+    void send(picked.file);
+  };
+
+  const takePhoto = () => {
+    if (isTouchDevice()) {
+      cameraInputRef.current?.click();
+    } else {
+      close();
+      onWebcam();
+    }
+  };
+
+  const buttonClass =
+    "flex-1 rounded-lg px-4 py-2.5 font-display text-xs font-semibold uppercase tracking-[0.12em] transition-colors disabled:cursor-not-allowed disabled:opacity-60";
+
+  return (
+    /* The whole card takes the drop, so a near miss on the zone still lands
+       here instead of the browser opening the picture. */
+    <div
+      onDragEnter={handleDragOver}
+      onDragOver={handleDragOver}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setDragOver(false);
+        }
+      }}
+      onDrop={handleDrop}
+      className="w-[min(92vw,420px)] rounded-2xl bg-cream p-4 shadow-2xl sm:p-5"
+    >
+      <p className="pr-6 font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
+        Add a photo
+      </p>
+      <p className="mt-0.5 truncate text-sm text-brown">{riderName}</p>
+
+      <div
+        data-photo-drop
+        data-drop-active={dragOver || undefined}
+        className={`mt-4 flex min-h-36 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors ${
+          dragOver
+            ? "border-solid border-bronze bg-parchment ring-4 ring-bronze/25"
+            : "border-bronze/40 bg-parchment/40"
+        }`}
+      >
+        {busy ? (
+          <>
+            <span className="h-6 w-6 animate-spin rounded-full border-2 border-bronze/30 border-t-bronze" />
+            <span className="mt-2 text-sm text-brown">Saving photo…</span>
+          </>
+        ) : (
+          <>
+            <span className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-bronze-dark">
+              {dragOver ? "Drop to add" : "Drag a photo here"}
+            </span>
+            <span className="text-xs text-brown/70">JPG or PNG, from your computer</span>
+          </>
+        )}
+      </div>
+
+      <div className="mt-4 flex gap-2">
+        <button
+          type="button"
+          onClick={takePhoto}
+          disabled={busy}
+          className={`${buttonClass} border border-bronze/20 text-bronze-dark hover:border-bronze/40`}
+        >
+          Take photo
+        </button>
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={busy}
+          className={`${buttonClass} bg-bronze-deep text-cream hover:bg-bronze`}
+        >
+          Choose file
+        </button>
+      </div>
+
+      {error && <p className="mt-3 text-sm text-red-800">{error}</p>}
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={HEADSHOT_ACCEPT}
+        onChange={handleInput}
+        className="hidden"
+      />
+      {/* Phones and tablets: the back camera, as the admin photographs the rider. */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleInput}
+        className="hidden"
+      />
+    </div>
+  );
+}
+
 /* The pop-up for a rider's photo: the photo, their name, Replace photo (files
-   or camera, as the add menu) and Remove photo (asks once more before removing
+   or camera) and Remove photo (asks once more before removing
    it, so a stray tap can't). */
 function PhotoViewer({
   url,
@@ -439,13 +630,12 @@ export default function RiderHeadshotCell({
      keep both in step. */
   onChange?: (url: string | null) => void;
 }) {
-  const buttonRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [url, setUrl] = useState<string | null>(initial?.url ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setErrorState] = useState<string | null>(null);
-  const [menu, setMenu] = useState<{ left: number; top: number } | null>(null);
+  const [adding, setAdding] = useState(false);
   const [viewing, setViewing] = useState(false);
   const [webcam, setWebcam] = useState(false);
 
@@ -457,41 +647,13 @@ export default function RiderHeadshotCell({
     [onError, riderName]
   );
 
-  /* The menu is fixed to the window, so it closes when anything else is
-     clicked, the page scrolls, or Esc is pressed. */
-  useEffect(() => {
-    if (!menu) {
-      return;
-    }
-
-    const dismiss = () => setMenu(null);
-    const onPointer = (event: PointerEvent) => {
-      const target = event.target as Node;
-
-      if (!buttonRef.current?.contains(target) && !(target as Element).closest?.("[data-photo-menu]")) {
-        dismiss();
-      }
-    };
-    const onKey = (event: KeyboardEvent) => event.key === "Escape" && dismiss();
-
-    window.addEventListener("pointerdown", onPointer);
-    window.addEventListener("scroll", dismiss, true);
-    window.addEventListener("resize", dismiss);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("pointerdown", onPointer);
-      window.removeEventListener("scroll", dismiss, true);
-      window.removeEventListener("resize", dismiss);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [menu]);
-
-  const upload = async (file: File) => {
+  /* True once the photo is saved, so the add pop-up knows to close. */
+  const upload = async (file: File): Promise<boolean> => {
     const problem = validateHeadshotSource(file);
 
     if (problem) {
       setError(problem);
-      return;
+      return false;
     }
 
     setError(null);
@@ -502,7 +664,7 @@ export default function RiderHeadshotCell({
 
       if (!prepared) {
         setError("This browser couldn't read that photo. Try a JPG or PNG.");
-        return;
+        return false;
       }
 
       const body = new FormData();
@@ -519,14 +681,16 @@ export default function RiderHeadshotCell({
 
       if (!response.ok) {
         setError(result.error ?? "The photo couldn't be saved.");
-        return;
+        return false;
       }
 
       const nextUrl = result.url ?? URL.createObjectURL(prepared.blob);
       setUrl(nextUrl);
       onChange?.(nextUrl);
+      return true;
     } catch {
       setError("The photo couldn't be saved. Check the connection and try again.");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -541,22 +705,53 @@ export default function RiderHeadshotCell({
     }
   };
 
-  const openMenu = () => {
-    if (menu) {
-      setMenu(null);
+  /* The add button is also a drop zone: a picture dragged from the desktop
+     or another window and dropped on it goes through the same upload as one
+     chosen from files. Only a drag that carries files lights it up. */
+  const [dragOver, setDragOver] = useState(false);
+  const dragHasFiles = (event: React.DragEvent) =>
+    Array.from(event.dataTransfer.types).includes("Files");
+
+  const handleDragOver = (event: React.DragEvent<HTMLButtonElement>) => {
+    if (busy || !dragHasFiles(event)) {
       return;
     }
 
-    const box = buttonRef.current?.getBoundingClientRect();
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setDragOver(true);
+  };
 
-    if (box) {
-      setMenu({ left: box.left, top: box.bottom + 6 });
+  const handleDragLeave = (event: React.DragEvent<HTMLButtonElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setDragOver(false);
     }
   };
 
-  const takePhoto = () => {
-    setMenu(null);
+  const handleDrop = (event: React.DragEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    setDragOver(false);
 
+    if (busy) {
+      return;
+    }
+
+    const picked = pickDroppedImage(event.dataTransfer.files);
+
+    if ("error" in picked) {
+      setError(picked.error);
+      return;
+    }
+
+    void upload(picked.file);
+  };
+
+  const openAdd = () => {
+    setError(null);
+    setAdding(true);
+  };
+
+  const takePhoto = () => {
     if (isTouchDevice()) {
       cameraInputRef.current?.click();
     } else {
@@ -576,6 +771,7 @@ export default function RiderHeadshotCell({
     }
   }, [onChange]);
   const closeWebcam = useCallback(() => setWebcam(false), []);
+  const closeAdd = useCallback(() => setAdding(false), []);
 
   const replaceFrom = (source: "files" | "camera") => {
     if (source === "files") {
@@ -584,9 +780,6 @@ export default function RiderHeadshotCell({
       takePhoto();
     }
   };
-
-  const menuItemClass =
-    "block w-full whitespace-nowrap px-4 py-2 text-left text-sm text-brown transition-colors hover:bg-parchment";
 
   return (
     <div className="flex items-center">
@@ -610,18 +803,24 @@ export default function RiderHeadshotCell({
         </button>
       ) : (
         <button
-          ref={buttonRef}
           type="button"
-          onClick={openMenu}
+          onClick={openAdd}
+          onDragEnter={handleDragOver}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
           disabled={busy}
-          aria-haspopup="menu"
-          aria-expanded={Boolean(menu)}
+          aria-haspopup="dialog"
+          aria-expanded={adding}
           aria-label={`Add a photo for ${riderName}`}
-          title={error ?? "Add a photo"}
-          className={`relative flex ${boxClassName} items-center justify-center border border-dashed font-semibold ${large ? "text-2xl" : "text-xs"} transition-colors ${
-            error
-              ? "border-red-700 text-red-700"
-              : "border-bronze/40 text-bronze-dark hover:border-bronze hover:bg-parchment"
+          title={error ?? "Add a photo, or drop one here"}
+          data-drop-active={dragOver || undefined}
+          className={`relative flex ${boxClassName} items-center justify-center border border-dashed font-semibold ${large ? "text-2xl" : "text-xs"} transition-[color,background-color,border-color,transform] ${
+            dragOver
+              ? `${large ? "scale-[1.03]" : "scale-110"} border-2 border-solid border-bronze bg-parchment text-bronze-dark ring-4 ring-bronze/25`
+              : error
+                ? "border-red-700 text-red-700"
+                : "border-bronze/40 text-bronze-dark hover:border-bronze hover:bg-parchment"
           } disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent`}
         >
           {busy ? (
@@ -659,31 +858,21 @@ export default function RiderHeadshotCell({
         </Overlay>
       )}
 
-      {menu &&
-        createPortal(
-          <div
-            data-photo-menu
-            role="menu"
-            style={{ left: menu.left, top: menu.top }}
-            className="fixed z-50 overflow-hidden rounded-lg border border-bronze/20 bg-cream py-1 shadow-lg"
-          >
-            <button
-              type="button"
-              role="menuitem"
-              className={menuItemClass}
-              onClick={() => {
-                setMenu(null);
-                fileInputRef.current?.click();
-              }}
-            >
-              Choose from files
-            </button>
-            <button type="button" role="menuitem" className={menuItemClass} onClick={takePhoto}>
-              Take photo
-            </button>
-          </div>,
-          document.body
-        )}
+      {adding && (
+        <Overlay label={`Add a photo for ${riderName}`} onClose={closeAdd}>
+          {(close) => (
+            <AddPhotoPopup
+              riderName={riderName}
+              busy={busy}
+              error={error}
+              onFile={upload}
+              onRejected={setError}
+              onWebcam={() => setWebcam(true)}
+              close={close}
+            />
+          )}
+        </Overlay>
+      )}
 
       {webcam && (
         <Overlay label={`Take a photo of ${riderName}`} onClose={closeWebcam}>

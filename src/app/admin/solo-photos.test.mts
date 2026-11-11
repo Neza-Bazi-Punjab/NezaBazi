@@ -19,6 +19,7 @@ const accountRoute = repoFile("src/app/api/account/profile/route.ts");
 const accountLoader = repoFile("src/app/account/page.tsx");
 const accountPage = repoFile("src/app/account/AccountPage.tsx");
 const dashboard = repoFile("src/app/admin/AdminDashboard.tsx");
+const section = repoFile("src/app/admin/AdminDashboardSection.tsx");
 const identity = repoFile("src/lib/registration-identity.ts");
 const soloPage = repoFile("src/app/register/solo/page.tsx");
 const soloForm = repoFile("src/app/register/solo/RegisterForm.tsx");
@@ -209,7 +210,7 @@ test("staff screens show the registration's photo first, the account's only for 
   );
   assert.match(solo, /onlyRegistration: await isOnlySoloRegistration\(client, registration\.profile_id\)/);
   assert.match(checkInRoute, /getSoloHeadshotUrl\(serviceSupabase, data\)/);
-  assert.match(riderDetail, /getSoloHeadshotUrl\(client, solo\)/);
+  assert.match(riderDetail, /getLinkedSoloHeadshotUrl\(client, solo\)/);
 
   // Team riders: the email lookup stays, but only an account whose name is
   // the rider's counts.
@@ -219,7 +220,7 @@ test("staff screens show the registration's photo first, the account's only for 
   // name is always required.
   assert.match(team, /getOwnAccountHeadshotUrl\(client, profileId, rider\);/);
   assert.match(checkInRoute, /getTeamRiderHeadshotUrl\(/);
-  assert.match(riderDetail, /getTeamRiderHeadshotUrl\(/);
+  assert.match(riderDetail, /getLinkedTeamRiderHeadshotUrl\(/);
   for (const source of [checkInRoute, riderDetail]) {
     assert.doesNotMatch(source, /findProfileIdByEmail|getHeadshotUrl\b/);
   }
@@ -326,4 +327,73 @@ test("a first entry starts with the account's details, editable, photo box only 
   // The photo box follows the name as it is typed, normalised.
   assert.match(soloForm, /normaliseIdentityText\(fullName\) === normaliseIdentityText\(holderName\)/);
   assert.match(soloForm, /const headshotShown = showHeadshot && riderIsHolder;/);
+});
+
+test("the add button opens a pop-up to drag, take or choose a photo", () => {
+  const popup = sectionOf(cell, "function AddPhotoPopup(");
+  const picked = sectionOf(cell, "const pickDroppedImage = ");
+  // The + opens the pop-up (not a menu, not the picker straight away).
+  assert.match(cell, /onClick=\{openAdd\}/);
+  assert.match(cell, /<AddPhotoPopup[\s\S]*?onFile=\{upload\}/);
+  assert.doesNotMatch(cell, /data-photo-menu/);
+  // Three ways in: a drop zone, Take photo, Choose file.
+  assert.match(popup, /data-photo-drop/);
+  assert.match(popup, /Drag a photo here/);
+  assert.match(popup, />\s*Take photo\s*</);
+  assert.match(popup, />\s*Choose file\s*</);
+  // Only a drag carrying files lights it up; a non-image drop gets a clear message.
+  assert.match(popup, /dataTransfer\.types\)\.includes\("Files"\)/);
+  assert.match(popup, /pickDroppedImage\(event\.dataTransfer\.files\)/);
+  assert.match(picked, /isn't an image\. Drop a photo \(JPG or PNG\) instead\./);
+  // It closes once the photo is saved; Esc and a click outside come from Overlay.
+  assert.match(popup, /if \(await onFile\(file\)\) \{\s*close\(\);/);
+  assert.match(cell, /event\.key === "Escape"/);
+  assert.match(cell, /event\.target === event\.currentTarget/);
+  // Fits a phone.
+  assert.match(popup, /w-\[min\(92vw,420px\)\]/);
+  // Phone camera and the file picker both stay.
+  assert.match(popup, /capture="environment"/);
+  assert.match(popup, /accept=\{HEADSHOT_ACCEPT\}/);
+  // The same upload path: same checks, same API, says when it saved.
+  assert.match(
+    sectionOf(cell, "const upload = async"),
+    /validateHeadshotSource\(file\)[\s\S]*fetch\("\/api\/admin\/headshots", \{ method: "POST", body \}\)[\s\S]*return true;/
+  );
+  // The + button itself still takes a dropped picture.
+  assert.match(cell, /onDrop=\{handleDrop\}/);
+});
+
+test("a rider's solo entry and team place share one photo, solo first (Form teams)", () => {
+  // The Teams list: the solo entry's photo (same code) replaces the team
+  // row's, and a rider with no photo yet gets it added on the solo entry.
+  const teams = sectionOf(headshotUrls, "export const matchTeamHeadshots");
+  assert.ok(
+    teams.indexOf("chooseTeamHeadshotPaths(") < teams.indexOf("soloPaths.get(twin.id)"),
+    "the solo photo is applied over the team row's"
+  );
+  assert.match(teams, /const soloPaths = chooseSoloHeadshotPaths\(index, soloRows\);/);
+  assert.match(teams, /pathByMember\.set\(member\.id, twinPath\);\s*result\[member\.id\]\.target = \{ kind: "solo", id: twin\.id \};/);
+  assert.match(teams, /\} else if \(!pathByMember\.has\(member\.id\)\) \{[\s\S]*?target = \{ kind: "solo", id: twin\.id \}/);
+
+  // The Solo riders list: the team place's own photo when the entry has none,
+  // and Replace / Remove then act on the team place.
+  const solo = sectionOf(headshotUrls, "export const matchSoloHeadshots");
+  assert.match(solo, /!pathByRegistration\.has\(registration\.id\) && registration\.confirmation_code/);
+  assert.match(solo, /target = \{ kind: "team", id: twin\.id \}/);
+
+  // The page loads both sides.
+  assert.match(section, /\.select\("id, email, profile_id, full_name, headshot_path, confirmation_code"\)/);
+  assert.match(section, /\.from\("team_members"\)\s*\.select\("id, confirmation_code, headshot_path"\)/);
+  assert.match(section, /photoService,\s*soloRows\s*\)/);
+
+  // The commentary panel: the same rule, by code.
+  assert.match(riderDetail, /getLinkedSoloHeadshotUrl\(client, solo\)/);
+  assert.match(riderDetail, /full_name, confirmation_code, age/);
+  const linkedTeam = sectionOf(headshotUrls, "export const getLinkedTeamRiderHeadshotUrl");
+  assert.ok(linkedTeam.indexOf('.from("solo_registrations")') < linkedTeam.indexOf("getTeamRiderHeadshotUrl("));
+  const linkedSolo = sectionOf(headshotUrls, "export const getLinkedSoloHeadshotUrl");
+  assert.ok(linkedSolo.indexOf("getSoloHeadshotUrl(") < linkedSolo.indexOf('.from("team_members")'));
+
+  // The cell takes the target the list hands it.
+  assert.match(cell, /target\?: \{ kind: RiderKind; id: string \};/);
 });
