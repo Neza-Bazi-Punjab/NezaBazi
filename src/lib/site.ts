@@ -18,8 +18,8 @@ export const site = {
   instagram: "https://www.instagram.com/nezabazipanjab/",
   socialHandle: "@nezabazipanjab",
   youtube: "https://youtube.com/@nezabazipunjab",
-  // The championship's YouTube live broadcast. The "Live Now" buttons in the
-  // navbar and on the home page open it.
+  // The championship's YouTube live broadcast. The "Live Now" buttons that
+  // opened it are taken down for now.
   liveStreamUrl: "https://youtube.com/live/XuGGgWDIclw",
   // TODO: set to the rules explainer video (any YouTube URL). While empty,
   // the Rulebook page shows a "video coming soon" note instead of the player.
@@ -28,7 +28,7 @@ export const site = {
 
 export const navLinks = [
   { href: "/", label: "Home" },
-  { href: "/live", label: "Live Scores" },
+  { href: "/stats", label: "Stats" },
   { href: "/event", label: "Event" },
   { href: "/rules", label: "Rulebook" },
 ] as const;
@@ -37,7 +37,7 @@ export const footerQuickLinks = [
   { href: "/event", label: "Event" },
   { href: "/rules", label: "Rulebook" },
   { href: "/register", label: "Registration" },
-  { href: "/live", label: "Live Scores" },
+  { href: "/stats", label: "Stats" },
   { href: "/login", label: "Login" },
   { href: "/privacy", label: "Privacy Policy" },
 ] as const;

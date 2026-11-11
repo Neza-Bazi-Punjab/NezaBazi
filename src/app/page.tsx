@@ -3,7 +3,6 @@ import AddToHomeScreen from "@/components/AddToHomeScreen";
 import BrushDivider from "@/components/BrushDivider";
 import ButtonLink from "@/components/Button";
 import FlagRow from "@/components/FlagRow";
-import LiveDot from "@/components/LiveDot";
 import {
   CalendarIcon,
   MapPinIcon,
@@ -72,15 +71,11 @@ export default function Home() {
               </p>
             </div>
 
-            {/* The two live buttons carry no arrow, so they share one row on
-                a phone and the hero still fits the first screen. */}
+            {/* The Stats button carries no arrow, so it shares one row on a
+                phone and the hero still fits the first screen. */}
             <div className="mt-6 flex flex-wrap gap-4">
-              <ButtonLink href={site.liveStreamUrl} arrow={false}>
-                <LiveDot />
-                Live Now
-              </ButtonLink>
-              <ButtonLink href="/live" variant="outline" arrow={false}>
-                Live Scores
+              <ButtonLink href="/stats" variant="outline" arrow={false}>
+                Stats
               </ButtonLink>
               <ButtonLink href="/event" variant="outline">
                 Event Details
