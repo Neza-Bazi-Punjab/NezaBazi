@@ -1819,6 +1819,39 @@ export default function ScoringAdmin({
     });
   };
 
+  /* Who a podium place can go to: everyone who rode in any round of the same
+     event, the newest round first. 3rd place is often decided in its own
+     round and 1st and 2nd in another, so the podium is not tied to one
+     round's riders. */
+  const podiumChoices = (target: ScoringRound) => {
+    const seen = new Set<string>();
+    const choices: { entrant_key: string; label: string; name: string }[] = [];
+
+    for (const candidate of [...rounds]
+      .filter((other) => other.event_type === target.event_type)
+      .sort((first, second) => second.sort_order - first.sort_order)) {
+      const rows = [...(data?.leaderboards_by_round[candidate.id] ?? [])].sort(
+        (first, second) => first.rank - second.rank
+      );
+
+      for (const row of rows) {
+        if (!seen.has(row.entrant_key)) {
+          seen.add(row.entrant_key);
+          choices.push({
+            entrant_key: row.entrant_key,
+            name: row.name,
+            label:
+              candidate.id === target.id
+                ? `${row.rank}. ${row.name} (${row.points} pts)`
+                : `${row.name} · ${candidate.name}`,
+          });
+        }
+      }
+    }
+
+    return choices;
+  };
+
   const podiumFor = (target: ScoringRound): [string, string, string] => {
     const draft = podiumDrafts[target.id];
 
@@ -1846,7 +1879,7 @@ export default function ScoringAdmin({
     const names = entries
       .map(
         (entry) =>
-          `${entry.place}. ${leaderboard.find((row) => row.entrant_key === entry.entrant_key)?.name ?? "?"}`
+          `${entry.place}. ${podiumChoices(target).find((row) => row.entrant_key === entry.entrant_key)?.name ?? "?"}`
       )
       .join(", ");
 
@@ -3004,7 +3037,9 @@ export default function ScoringAdmin({
                 <h3 className={subheadingClass}>Podium</h3>
                 <p className="text-sm leading-6 text-brown/80">
                   For the final: record 1st, 2nd and 3rd once the chief judge has decided. Shown on the
-                  public scoreboard.
+                  public scoreboard. A place can go to anyone who rode in any{" "}
+                  {round.event_type === "section" ? "team" : "Single"} round, so 3rd can come from its own
+                  round.
                 </p>
                 {leaderboard.length === 0 ? (
                   <p className="text-sm text-brown/75">The podium can be recorded once the round has entrants.</p>
@@ -3026,9 +3061,9 @@ export default function ScoringAdmin({
                             className={inputClass}
                           >
                             <option value="">—</option>
-                            {leaderboard.map((row) => (
+                            {podiumChoices(round).map((row) => (
                               <option key={row.entrant_key} value={row.entrant_key}>
-                                {row.rank}. {row.name} ({row.points} pts)
+                                {row.label}
                               </option>
                             ))}
                           </select>
