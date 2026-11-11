@@ -175,25 +175,33 @@ export default function PoolBuilder({
   }, [candidates, isTeams, runs]);
 
   const placedCount = builderCount(pools);
-  const unplaced = useMemo(() => {
-    const waiting = [...entrants.values()]
-      .filter((entrant) => entrant.checkedIn && !builderHas(pools, entrant.key))
-      .sort((first, second) => first.name.localeCompare(second.name));
-
-    if (query.trim() === "") {
-      return waiting;
+  const searching = query.trim() !== "";
+  /* Without a search: the checked-in entrants not placed yet, to tap. With a
+     search: EVERY match, as the check-in desk and the riders lists show them,
+     placed or not, checked in or not; each row says where they stand. */
+  const shown = useMemo(() => {
+    if (!searching) {
+      return [...entrants.values()]
+        .filter((entrant) => entrant.checkedIn && !builderHas(pools, entrant.key))
+        .sort((first, second) => first.name.localeCompare(second.name));
     }
 
     // The check-in desk's search: best match first, by name, phone, code,
     // parents, horse or town.
-    const byKey = new Map(waiting.map((entrant) => [entrant.key, entrant]));
+    const everyone = [...entrants.values()];
+    const byKey = new Map(everyone.map((entrant) => [entrant.key, entrant]));
     const found = searchRiders(
-      waiting.map((entrant) => ({ ...entrant.search, key: entrant.key })),
+      everyone.map((entrant) => ({ ...entrant.search, key: entrant.key })),
       query
     );
 
     return found.flatMap((match) => byKey.get(match.key) ?? []);
-  }, [entrants, pools, query]);
+  }, [entrants, pools, query, searching]);
+  /* Where an entrant is in the builder: pool index and place, or null. */
+  const placeOf = (key: string) => {
+    const index = pools.findIndex((pool) => pool.includes(key));
+    return index < 0 ? null : { index, position: pools[index].indexOf(key) + 1 };
+  };
   const waitingCount = [...entrants.values()].filter(
     (entrant) => entrant.checkedIn && !builderHas(pools, entrant.key)
   ).length;
@@ -357,44 +365,93 @@ export default function PoolBuilder({
           </label>
 
           <p className="text-sm text-brown/80">
-            {plural(waitingCount, isTeams ? "checked-in team" : "checked-in rider")} not placed yet
-            {isTeams ? " (all four riders checked in)" : ""}.
+            {searching
+              ? `${plural(shown.length, "match", "matches")}, placed or not.`
+              : `${plural(waitingCount, isTeams ? "checked-in team" : "checked-in rider")} not placed yet${
+                  isTeams ? " (all four riders checked in)" : ""
+                }.`}
           </p>
 
-          {unplaced.length === 0 ? (
+          {shown.length === 0 ? (
             <p className="rounded-lg border border-bronze/20 bg-cream px-3 py-4 text-sm text-brown/80">
-              {waitingCount === 0
-                ? `Every checked-in ${noun} is placed.`
-                : `Nobody matches “${query.trim()}”.`}
+              {searching ? `Nobody matches “${query.trim()}”.` : `Every checked-in ${noun} is placed.`}
             </p>
           ) : (
             <ul className="max-h-[28rem] space-y-1 overflow-y-auto rounded-lg border border-bronze/20 bg-cream p-1">
-              {unplaced.map((entrant) => (
-                <li key={entrant.key}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPools(builderAdd(pools, entrant.key, currentIndex));
-                      setLastAdded(entrant.key);
-                    }}
-                    disabled={busy || unpooledStarted}
-                    className="flex w-full items-center justify-between gap-2 rounded-md px-3 py-3 text-left text-brown transition-colors hover:bg-parchment disabled:opacity-60"
-                  >
-                    <span className="min-w-0">
-                      <span className="block font-semibold text-ink">{entrant.name}</span>
-                      {entrant.horse && (
-                        <span className="block text-sm text-brown/75">{entrant.horse}</span>
-                      )}
-                      {entrant.about && (
-                        <span className="block text-sm text-brown/75">{entrant.about}</span>
+              {shown.map((entrant) => {
+                const place = placeOf(entrant.key);
+                const details = (
+                  <span className="min-w-0">
+                    <span className="block font-semibold text-ink">
+                      {entrant.name}
+                      {!entrant.checkedIn && (
+                        <span className="ml-2 inline-block whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 align-middle font-display text-[0.6rem] font-semibold uppercase tracking-[0.12em] text-amber-900">
+                          Not checked in
+                        </span>
                       )}
                     </span>
-                    <span className="shrink-0 font-display text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-bronze-dark">
-                      + {pooled ? `Pool ${currentLabel}` : "Add"}
-                    </span>
-                  </button>
-                </li>
-              ))}
+                    {entrant.horse && <span className="block text-sm text-brown/75">{entrant.horse}</span>}
+                    {entrant.about && <span className="block text-sm text-brown/75">{entrant.about}</span>}
+                  </span>
+                );
+
+                if (place) {
+                  const placeLabel = pooled
+                    ? `In Pool ${builderPoolLabel(place.index)} · ${place.position}`
+                    : `In the list · ${place.position}`;
+                  const canMove =
+                    pooled && place.index !== currentIndex && !isLocked(place.index) && !unpooledStarted;
+
+                  return (
+                    <li
+                      key={entrant.key}
+                      className="flex items-center justify-between gap-2 rounded-md bg-parchment/60 px-3 py-3 text-brown"
+                    >
+                      {details}
+                      <span className="flex shrink-0 flex-col items-end gap-1 text-right">
+                        <span className="font-display text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-ink">
+                          {placeLabel}
+                        </span>
+                        {isLocked(place.index) && (
+                          <span className="text-xs text-brown/70">ridden, kept</span>
+                        )}
+                        {canMove && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              update(builderMoveToPool(pools, entrant.key, currentIndex));
+                              setLastAdded(entrant.key);
+                            }}
+                            disabled={busy}
+                            className={smallButton}
+                          >
+                            Move to {currentLabel}
+                          </button>
+                        )}
+                      </span>
+                    </li>
+                  );
+                }
+
+                return (
+                  <li key={entrant.key}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPools(builderAdd(pools, entrant.key, currentIndex));
+                        setLastAdded(entrant.key);
+                      }}
+                      disabled={busy || unpooledStarted}
+                      className="flex w-full items-center justify-between gap-2 rounded-md px-3 py-3 text-left text-brown transition-colors hover:bg-parchment disabled:opacity-60"
+                    >
+                      {details}
+                      <span className="shrink-0 font-display text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-bronze-dark">
+                        + {pooled ? `Pool ${currentLabel}` : "Add"}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
