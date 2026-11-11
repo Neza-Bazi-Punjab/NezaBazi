@@ -61,6 +61,11 @@ type TeamEmergencyContact = {
 
 type RiderMatch = {
   id: string;
+  /* Extra search text (parents, place, horse, ...). */
+  details?: string[];
+  /* The same, labelled: father, horse and town show on the match card, and
+     any other detail the search matched. */
+  facts?: Array<{ label: string; value: string }>;
   source: "solo" | "team";
   entries: Array<"solo" | "team">;
   full_name: string;
@@ -72,6 +77,62 @@ type RiderMatch = {
   confirmation_code: string;
   checked_in_at: string | null;
 };
+
+/* Labels always shown on a match card: what tells two riders with the same
+   name apart at a glance. */
+const KEY_FACTS = ["Father", "Horse", "Town"];
+
+/* The match card's extra line: father, horse and town, then whichever other
+   detail (mother, Dal Panth, emergency contact) the search matched, so a
+   rider found by it shows why. */
+function MatchFacts({
+  facts,
+  query,
+}: {
+  facts: Array<{ label: string; value: string }> | undefined;
+  query: string;
+}) {
+  if (!facts || facts.length === 0) {
+    return null;
+  }
+
+  const typed = query.toLowerCase().replace(/\s+/g, " ").trim();
+  const shown = KEY_FACTS.flatMap((label) => facts.filter((fact) => fact.label === label).slice(0, 1));
+  const matched =
+    typed.length >= 2
+      ? facts.filter(
+          (fact) =>
+            !shown.includes(fact) &&
+            fact.value.toLowerCase().replace(/\s+/g, " ").includes(typed)
+        )
+      : [];
+
+  return (
+    <>
+      {shown.length > 0 && (
+        <span className="text-sm text-brown/80">
+          {shown.map((fact, index) => (
+            <span key={`${fact.label}:${fact.value}`}>
+              {index > 0 && " · "}
+              <span className="text-brown/60">{fact.label}:</span> {fact.value}
+            </span>
+          ))}
+        </span>
+      )}
+      {matched.length > 0 && (
+        <span className="text-sm text-bronze-dark">
+          Matched{" "}
+          {matched.map((fact, index) => (
+            <span key={`${fact.label}:${fact.value}`}>
+              {index > 0 && " · "}
+              <span className="font-semibold">{fact.label}:</span> {fact.value}
+            </span>
+          ))}
+        </span>
+      )}
+    </>
+  );
+}
 
 type LookupResponse = {
   rider?: Rider;
@@ -740,7 +801,7 @@ export default function CheckInPanel() {
               htmlFor="check-in-search"
               className="block font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink"
             >
-              No code? Search by name, email or phone
+              No code? Search by anything: name, phone, parents, horse, place
               <span className="ml-2 normal-case tracking-normal text-brown/60">
                 {roster
                   ? "results appear as you type"
@@ -756,7 +817,7 @@ export default function CheckInPanel() {
                 id="check-in-search"
                 value={query}
                 onChange={(event) => changeQuery(event.target.value)}
-                placeholder="Rider name, email or phone number"
+                placeholder="Name, phone, email, parents, horse, place…"
                 autoComplete="off"
                 className="w-full rounded-lg border border-bronze/40 bg-cream px-4 py-3 text-ink outline-none focus:border-bronze"
               />
@@ -841,6 +902,7 @@ export default function CheckInPanel() {
                           {" · "}
                           {match.phone}
                         </span>
+                        <MatchFacts facts={match.facts} query={query} />
                         {match.checked_in_at && (
                           <span className="text-xs text-green-900/80">
                             Checked in {formatTime(match.checked_in_at)}

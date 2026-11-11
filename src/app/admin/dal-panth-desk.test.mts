@@ -28,12 +28,15 @@ const between = (source: string, start: string, end?: string) => {
 // ---------------------------------------------------------------------------
 // Check-in route
 
-test("the check-in lookup reads Dal Panth separately, never in the roster or search selects", () => {
+test("the check-in lookup reads Dal Panth separately; the roster only searches by it", () => {
   const search = between(checkInRoute, "const searchRiders", "const ROSTER_LIMIT");
   const roster = between(checkInRoute, "const listRiders", "type CheckInRequest");
 
   assert.doesNotMatch(search, /dal_panth/i);
-  assert.doesNotMatch(roster, /dal_panth/i);
+  // The desk's instant search can find a rider by Dal Panth, but the list is
+  // read again without it on any failure, so it can never break the desk.
+  assert.match(roster, /const extra = withDalPanth \? ", dal_panth" : "";/);
+  assert.match(roster, /if \(solo\.error \|\| team\.error\) \{\s*\[solo, team\] = await read\(false\);/);
 
   // Its own small read, by code, solo entry first then the team entry.
   const helper = between(checkInRoute, "const readDalPanth", "const codePattern");

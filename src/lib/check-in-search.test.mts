@@ -33,14 +33,16 @@ test("a surname, or the start of several words, finds the rider", () => {
   assert.equal(matchRank(harpreet, "sandhu"), 1);
   assert.equal(matchRank(harpreet, "har san"), 1);
   assert.equal(matchRank(harpreet, "harpreet singh"), 0);
-  assert.equal(matchRank(harpreet, "andhu"), null);
+  // Inside a word only by the last "anywhere" rule.
+  assert.equal(matchRank(harpreet, "andhu"), 5);
 });
 
 test("email and code match from the start, with or without NBP-", () => {
   assert.equal(matchRank(rider("Gill Arman", { email: "arman@example.com" }), "arman@"), 2);
   assert.equal(matchRank(arman, "7k4m"), 2);
   assert.equal(matchRank(arman, "NBP-7K4"), 2);
-  assert.equal(matchRank(arman, "NBP-7K"), null);
+  // Under three code characters: only the last "anywhere" rule.
+  assert.equal(matchRank(arman, "NBP-7K"), 5);
   assert.equal(matchRank(arman, "nbp7k4"), 2);
   // One letter never matches on email or code alone, only on names.
   assert.equal(matchRank(rider("Navjot Grewal", { email: "amritsar@example.com", confirmation_code: "NBP-A7K4M2" }), "a"), null);
@@ -60,4 +62,32 @@ test("ranking: name start, then word start, then the rest, ties by name", () => 
     "Janav Arora",
   ]);
   assert.deepEqual(searchRiders(riders, "   "), []);
+});
+
+test("anything else on the entry matches anywhere in it, below every other match", () => {
+  const gurdeep = rider("Gurdeep Singh", {
+    details: ["Baldev Singh", "Gurpreet Kaur", "Ludhiana", "Toofan", "Budha Dal", null],
+  });
+
+  // Horse, mother, place and Dal Panth, from the middle of a word too.
+  assert.equal(matchRank(gurdeep, "toofan"), 5);
+  assert.equal(matchRank(gurdeep, "kaur"), 5);
+  assert.equal(matchRank(gurdeep, "dhiana"), 5);
+  assert.equal(matchRank(gurdeep, "budha dal"), 5);
+  // The rest of the entry from the middle as well, as the riders lists do.
+  assert.equal(matchRank(harpreet, "andhu"), 5);
+  assert.equal(matchRank(harpreet, "riders"), 3);
+  // An emergency contact's number, from three digits; two digits match nothing.
+  const withContact = rider("Simran Kaur", { phone: "+91 90000 00000", details: ["+91 81234 56789"] });
+  assert.equal(matchRank(withContact, "56789"), 5);
+  assert.equal(matchRank(withContact, "67"), null);
+  assert.equal(matchRank(arman, "4m2q"), 5);
+
+  // One letter stays the short "begins with" list.
+  assert.equal(matchRank(gurdeep, "k"), null);
+  assert.equal(matchRank(gurdeep, "qx"), null);
+
+  // A name match still comes first.
+  const toofanSingh = rider("Toofan Singh");
+  assert.deepEqual(names(searchRiders([gurdeep, toofanSingh], "toofan")), ["Toofan Singh", "Gurdeep Singh"]);
 });

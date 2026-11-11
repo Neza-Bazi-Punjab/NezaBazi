@@ -15,7 +15,7 @@ import {
   getSoloHeadshotUrl,
   getTeamRiderHeadshotUrl,
 } from "@/lib/admin/headshot-urls";
-import { mergeRidersByCode, type RiderMatch } from "@/lib/check-in-roster";
+import { mergeRidersByCode, type RiderFact, type RiderMatch } from "@/lib/check-in-roster";
 import { escapeIlikePattern } from "@/lib/supabase/query";
 
 type LookupRequest = { code?: unknown; query?: unknown; roster?: unknown };
@@ -125,21 +125,80 @@ const searchRiders = async (
    are selected. ~150 riders today; ROSTER_LIMIT is far above any real field. */
 const ROSTER_LIMIT = 5000;
 
+/* What else the desk can search by (RiderMatch.details), as the admin
+   riders lists do. Admins only, as those lists are. Dal Panth is the newest
+   column: if the read fails (it is not there yet, say) the list is read
+   again without it, so the search never breaks over it. */
+const SHARED_DETAIL_COLUMNS = "father_name, mother_name, location, horse_name";
+const SOLO_DETAIL_COLUMNS = `${SHARED_DETAIL_COLUMNS}, emergency_contact_name, emergency_contact_phone`;
+const FACT_LABELS: Record<string, string> = {
+  father_name: "Father",
+  mother_name: "Mother",
+  location: "Town",
+  horse_name: "Horse",
+  dal_panth: "Dal Panth",
+  emergency_contact_name: "Emergency contact",
+  emergency_contact_phone: "Emergency phone",
+};
+
+/* The row's searchable details, labelled for the match card. */
+const factsOf = (row: Record<string, unknown>, columns: string): RiderFact[] =>
+  columns.split(", ").flatMap((column) => {
+    const value = row[column];
+
+    return typeof value === "string" && value.trim() !== ""
+      ? [{ label: FACT_LABELS[column] ?? column, value: value.trim() }]
+      : [];
+  });
+
+const withFacts = (facts: RiderFact[]) => ({
+  facts,
+  details: facts.map((fact) => fact.value),
+});
+
+type RosterRow = {
+  id: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  confirmation_code: string;
+  checked_in_at: string | null;
+};
+
+type TeamRosterRow = RosterRow & {
+  is_leader: boolean | null;
+  team_id: string;
+  teams: unknown;
+};
+
 const listRiders = async (
   serviceSupabase: ServiceRoleClient
 ): Promise<{ riders: RiderMatch[]; error: string | null }> => {
-  const [solo, team] = await Promise.all([
-    serviceSupabase
-      .from("solo_registrations")
-      .select("id, full_name, email, phone, confirmation_code, checked_in_at")
-      .limit(ROSTER_LIMIT),
-    serviceSupabase
-      .from("team_members")
-      .select(
-        "id, full_name, email, phone, confirmation_code, checked_in_at, is_leader, team_id, teams(team_name)"
-      )
-      .limit(ROSTER_LIMIT),
-  ]);
+  const read = (withDalPanth: boolean) => {
+    const extra = withDalPanth ? ", dal_panth" : "";
+    // Built at runtime, which supabase-js cannot type: rows are typed below.
+    const soloColumns: string = `id, full_name, email, phone, confirmation_code, checked_in_at, ${SOLO_DETAIL_COLUMNS}${extra}`;
+    const teamColumns: string = `id, full_name, email, phone, confirmation_code, checked_in_at, is_leader, team_id, teams(team_name), ${SHARED_DETAIL_COLUMNS}${extra}`;
+
+    return Promise.all([
+      serviceSupabase
+        .from("solo_registrations")
+        .select(soloColumns)
+        .limit(ROSTER_LIMIT),
+      serviceSupabase
+        .from("team_members")
+        .select(teamColumns)
+        .limit(ROSTER_LIMIT),
+    ]);
+  };
+
+  let [solo, team] = await read(true);
+
+  // Any failure with the extra columns: read the list without Dal Panth, as
+  // the desk did before, so the search never fails over it.
+  if (solo.error || team.error) {
+    [solo, team] = await read(false);
+  }
 
   const failure = solo.error ?? team.error;
 
@@ -150,7 +209,7 @@ const listRiders = async (
   // One row per code, as in searchRiders.
   const rows: RiderMatch[] = [];
 
-  for (const row of solo.data ?? []) {
+  for (const row of (solo.data ?? []) as unknown as RosterRow[]) {
     rows.push({
       id: row.id,
       source: "solo",
@@ -163,10 +222,11 @@ const listRiders = async (
       is_leader: null,
       confirmation_code: row.confirmation_code,
       checked_in_at: row.checked_in_at,
+      ...withFacts(factsOf(row as unknown as Record<string, unknown>, `${SOLO_DETAIL_COLUMNS}, dal_panth`)),
     });
   }
 
-  for (const row of team.data ?? []) {
+  for (const row of (team.data ?? []) as unknown as TeamRosterRow[]) {
     const relation = row.teams as unknown as
       | { team_name: string }
       | { team_name: string }[]
@@ -185,6 +245,7 @@ const listRiders = async (
       is_leader: row.is_leader,
       confirmation_code: row.confirmation_code,
       checked_in_at: row.checked_in_at,
+      ...withFacts(factsOf(row as unknown as Record<string, unknown>, `${SHARED_DETAIL_COLUMNS}, dal_panth`)),
     });
   }
 
