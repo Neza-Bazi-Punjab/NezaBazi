@@ -14,6 +14,7 @@
    From `xl` up nothing changes. */
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { teamOnTrack } from "@/lib/scoring/team-on-track";
 import {
   DISPLAY_MODE_CHOICES,
   normalizeCommentaryState,
@@ -198,6 +199,11 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
   const rider = currentRun ? (state?.current_rider ?? null) : justRode ? (state?.last_rider ?? null) : null;
   const calledPool = live?.called_pool_label ?? null;
   const leaderboard = useMemo(() => state?.leaderboard ?? [], [state]);
+  /* Team rounds: the side on the track, with all of its riders. */
+  const trackTeam = useMemo(
+    () => (state ? teamOnTrack({ ...state, current_run: currentRun }, "now") : null),
+    [state, currentRun]
+  );
   const attempts = round?.attempts_per_rider ?? 1;
   const manyAttempts = attempts > 1;
 
@@ -392,6 +398,50 @@ export default function CommentaryPanel({ sample }: { sample?: TrainingScope }) 
           aria-labelledby="rider-name"
           className="flex min-w-0 flex-col gap-3.5 xl:overflow-y-auto xl:pb-6"
         >
+          {/* Team rounds: the whole side at once ------------------------- */}
+          {trackTeam && (
+            <div
+              aria-label={`Team on the track: ${trackTeam.name}`}
+              className="flex flex-col border-[3px] border-[var(--ledger-rule)] bg-[var(--ledger-panel)] p-3"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-2 pb-2">
+                <span className="text-[22px] font-bold uppercase leading-tight">{trackTeam.name}</span>
+                <span className="mono text-[14px] uppercase text-[var(--ledger-bronze)]">
+                  {plural(trackTeam.points, "point")}
+                  {trackTeam.target !== null ? ` · target ${trackTeam.target}` : ""}
+                  {trackTeam.through === true ? " · through" : trackTeam.through === false ? " · not through" : ""}
+                </span>
+              </div>
+              {trackTeam.members.map((member, index) => (
+                <div
+                  key={`${member.rider_name}-${index}`}
+                  className="flex items-baseline justify-between gap-3 border-t border-[var(--ledger-rule)] py-1.5"
+                >
+                  <span className="min-w-0 text-[18px] font-bold">
+                    <span className="mono mr-2 text-[13px] text-[var(--ledger-bronze)]">{index + 1}</span>
+                    {member.rider_name}
+                    {member.horse_name && (
+                      <span className="ml-2 text-[14px] font-normal text-[var(--ledger-muted)]">
+                        {member.horse_name}
+                      </span>
+                    )}
+                  </span>
+                  <span className="shrink-0 text-[18px] font-bold">
+                    {member.result === "carry"
+                      ? "Carried 4"
+                      : member.result === "strike"
+                        ? "Struck 2"
+                        : member.result === "miss"
+                          ? "Miss 0"
+                          : member.status === "void"
+                            ? "Out"
+                            : "—"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
           <span className="mono text-[13px] uppercase text-[var(--ledger-bronze)]">
             {currentRun
               ? `● On course · Rider ${blockPosition(runs, currentRun).index} of ${blockPosition(runs, currentRun).size}`

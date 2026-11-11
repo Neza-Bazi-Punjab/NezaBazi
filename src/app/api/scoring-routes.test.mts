@@ -64,6 +64,7 @@ test("every expected route exists", () => {
     "src/app/api/live/vmix/leaderboard/route.ts",
     PUBLIC_PHOTO_ROUTE,
     "src/app/api/live/vmix/rounds/route.ts",
+    "src/app/api/live/vmix/team/route.ts",
   ]);
   assert.ok(routesUnder("src/app/api/admin/scoring").includes(EXPORT_ROUTE));
 });
@@ -223,11 +224,15 @@ test("public feeds carry name-level data plus the rider's photo, and no other re
   // The one registration read behind the public feeds: the photo index
   // (src/lib/broadcast/photo-index.ts) reads the registrations with the
   // service role to choose each rider's photo. Only a file name and a link
-  // to the picture reach a feed (public-photos.ts); the rounds feed and the
-  // public state have no photos at all.
+  // to the picture reach a feed (public-photos.ts); the rounds feed, the team
+  // feed and the public state have no photos at all.
   for (const path of publicFeedRoutes) {
     const source = repoFile(path);
-    if (path.endsWith("/rounds/route.ts") || path.endsWith("/live/state/route.ts")) {
+    if (
+      path.endsWith("/rounds/route.ts") ||
+      path.endsWith("/team/route.ts") ||
+      path.endsWith("/live/state/route.ts")
+    ) {
       assert.doesNotMatch(source, /photo/i, path);
     } else {
       assert.match(source, /import \{ loadVmixPhotos, sampleVmixPhotos \} from "@\/lib\/broadcast\/public-photos";/, path);
