@@ -2613,11 +2613,13 @@ export default function ScoringAdmin({
                 {leaderboard.length === 0 ? (
                   <p className="text-sm text-brown/75">No standings until the start list is drawn.</p>
                 ) : (
-                  /* A list, not a table: it fits a phone and a wide screen with
-                     no sideways scroll. One rider per row; on a phone the row
-                     stacks (who, standing, override), on a wide screen the
-                     three sit side by side. */
-                  <div className="rounded-lg border border-bronze/20 bg-cream">
+                  /* A list, not a table: it fits any width with no sideways
+                     scroll. One rider per row, in three parts (who, standing,
+                     override) that sit side by side where there is room and
+                     wrap under each other where there is not. It wraps by the
+                     room the card has, not by screen size: the card is narrow
+                     on a small laptop, beside the rounds list. */
+                  <div className="overflow-hidden rounded-lg border border-bronze/20 bg-cream">
                     {standings.map((row, index) => {
                       const override = overridesByKey.get(row.entrant_key);
                       const newPool =
@@ -2631,8 +2633,8 @@ export default function ScoringAdmin({
                               Pool {row.pool_label}
                             </h4>
                           )}
-                          <div className="grid gap-2 border-b border-bronze/10 px-3 py-3 text-sm text-brown last:border-0 lg:grid-cols-[minmax(0,5fr)_minmax(0,3fr)_minmax(0,6fr)] lg:items-center lg:gap-4">
-                            <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-bronze/10 px-3 py-3 text-sm text-brown last:border-0">
+                            <div className="min-w-0 grow basis-52">
                               <p className="break-words font-semibold text-ink">{row.name}</p>
                               <p className="text-xs text-brown/75">
                                 Rank {row.rank}
@@ -2646,7 +2648,7 @@ export default function ScoringAdmin({
                                 </span>
                               </p>
                             </div>
-                            <div className="min-w-0">
+                            <div className="min-w-0 grow basis-28">
                               <span
                                 className={
                                   row.advanced === true
@@ -2667,7 +2669,7 @@ export default function ScoringAdmin({
                                 <span className="mt-1 block break-words text-xs text-brown/75">{override.note}</span>
                               )}
                             </div>
-                            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+                            <div className="flex min-w-0 grow-[2] basis-64 flex-wrap items-center gap-2">
                               <input
                                 value={noteDrafts[row.entrant_key] ?? override?.note ?? ""}
                                 onChange={(event) =>
@@ -2679,9 +2681,9 @@ export default function ScoringAdmin({
                                 maxLength={300}
                                 placeholder="Reason (optional)"
                                 aria-label={`Override note for ${row.name}`}
-                                className="w-full min-w-0 rounded-lg border border-bronze/20 bg-cream px-2 py-2 text-sm text-brown focus:border-bronze focus:outline-none sm:flex-1"
+                                className="min-w-0 grow basis-32 rounded-lg border border-bronze/20 bg-cream px-2 py-2 text-sm text-brown focus:border-bronze focus:outline-none"
                               />
-                              <div className="flex shrink-0 flex-wrap gap-1">
+                              <div className="flex flex-wrap gap-1">
                                 <button type="button" onClick={() => setOverride(round, row, true)} disabled={busy} className={secondaryButton}>
                                   Through
                                 </button>
