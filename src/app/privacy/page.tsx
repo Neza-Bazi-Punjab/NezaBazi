@@ -29,7 +29,7 @@ export default function PrivacyPolicyPage() {
               <strong className="text-ink">Effective date:</strong> July 31, 2026
             </p>
             <p>
-              <strong className="text-ink">Last updated:</strong> October 25, 2026
+              <strong className="text-ink">Last updated:</strong> November 10, 2026
             </p>
             <p>
               <strong className="text-ink">Privacy contact:</strong>{" "}
@@ -147,7 +147,11 @@ export default function PrivacyPolicyPage() {
                   emergency contacts are never shown publicly. The event&apos;s
                   judges and commentators see your parents&apos; names, age,
                   experience, horse details and optional headshot on staff-only
-                  screens so they can introduce you.
+                  screens so they can introduce you. If you give a headshot, it may
+                  also be shown next to your name on the event&apos;s live broadcast
+                  and its recordings, and it is given to the broadcast graphics team
+                  for that purpose only. It is never published on the website&apos;s
+                  public pages.
                 </li>
                 <li>
                   Communicate about accounts, registration, security, support, and

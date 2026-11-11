@@ -453,49 +453,9 @@ export type SoloHeadshot = {
   target?: { kind: "solo" | "team"; id: string };
 };
 
-/* A rider's other entry, for the lists, keyed by confirmation code. */
-export type SoloTwin = {
-  id: string;
-  profile_id: string | null;
-  email: string | null;
-  full_name: string | null;
-  headshot_path?: string | null;
-};
+/* A rider's team place, for the Solo riders list, keyed by confirmation code. */
 export type TeamTwin = { id: string; headshot_path?: string | null };
 
-/* The solo entry's own photo path: the registration's own, else the
-   account's for the account holder's own registration. */
-const soloPathOf = (
-  accountById: AuthUserIndex["accountById"] | null,
-  registration: SoloTwin,
-  rowsByProfile: Map<string, number>
-): string | null => {
-  const account =
-    registration.profile_id && accountById ? accountById.get(registration.profile_id) : undefined;
-
-  return (
-    readPaperHeadshotPath(registration.id, registration.headshot_path) ??
-    (account &&
-    isOwnRegistration(registration, account, {
-      onlyRegistration: rowsByProfile.get(registration.profile_id ?? "") === 1,
-    })
-      ? account.path
-      : null)
-  );
-};
-
-/* How many solo registrations each account entered. */
-export const countSoloRowsByProfile = (rows: Array<{ profile_id: string | null }>) => {
-  const counts = new Map<string, number>();
-
-  for (const row of rows) {
-    if (row.profile_id) {
-      counts.set(row.profile_id, (counts.get(row.profile_id) ?? 0) + 1);
-    }
-  }
-
-  return counts;
-};
 
 /* What loadAuthUserIndex finds: each account's own photo path (or null), with
    the account's email and name, which decide whether a registration is the
@@ -550,25 +510,76 @@ export const loadAuthUserIndex = async (
   }
 };
 
+export type SoloHeadshotRow = {
+  id: string;
+  profile_id: string | null;
+  email: string;
+  full_name: string;
+  headshot_path?: string | null;
+  confirmation_code?: string | null;
+};
+
+/* Which stored photo is each solo registration's, keyed by registration id
+   (rows with no photo are left out). The registration's own photo first; the
+   account's only for the account holder's own registration. `registrations`
+   must be every solo registration: an account with one can only hold its
+   own. With no index, only the registrations' own photos. The one rule for
+   the admin Solo riders list (matchSoloHeadshots) and the broadcast photo
+   index (src/lib/broadcast/photo-index.ts). Pure: no reads, no signing. */
+export const chooseSoloHeadshotPaths = (
+  index: AuthUserIndex | null,
+  registrations: SoloHeadshotRow[]
+): Map<string, string> => {
+  const accountById = index?.accountById ?? new Map<string, never>();
+
+  // How many registrations each account entered: the list is every solo
+  // registration, so an account with one can only hold its own.
+  const rowsByProfile = new Map<string, number>();
+
+  for (const registration of registrations) {
+    if (registration.profile_id) {
+      rowsByProfile.set(
+        registration.profile_id,
+        (rowsByProfile.get(registration.profile_id) ?? 0) + 1
+      );
+    }
+  }
+
+  const pathByRegistration = new Map<string, string>();
+
+  for (const registration of registrations) {
+    const account = registration.profile_id
+      ? accountById.get(registration.profile_id)
+      : undefined;
+    const path =
+      readPaperHeadshotPath(registration.id, registration.headshot_path) ??
+      (account &&
+      isOwnRegistration(registration, account, {
+        onlyRegistration: rowsByProfile.get(registration.profile_id ?? "") === 1,
+      })
+        ? account.path
+        : null);
+
+    if (path) {
+      pathByRegistration.set(registration.id, path);
+    }
+  }
+
+  return pathByRegistration;
+};
+
 /* Photos for the admin Solo riders list, keyed by registration id, from the
    account index above and one batch signing call for the whole list, rather
-   than a lookup per rider. The registration's own photo first; the account's
-   only for the account holder's own registration. With no index (the listing
-   failed) the list gets no thumbnails at all, as before. A failure only means
-   no thumbnails, never a broken page. */
+   than a lookup per rider. Which photo is whose: chooseSoloHeadshotPaths.
+   With no index (the listing failed) the list gets no thumbnails at all, as
+   before. A failure only means no thumbnails, never a broken page. */
 export const matchSoloHeadshots = async (
   index: AuthUserIndex | null,
-  registrations: Array<{
-    id: string;
-    profile_id: string | null;
-    email: string;
-    full_name: string;
-    headshot_path?: string | null;
-    confirmation_code?: string | null;
-  }>,
+  registrations: SoloHeadshotRow[],
   client: ServiceRoleClient,
   /* The riders' team places by code: a photo taken on the Teams list (or
-     at the desk on the team place) shows here when the entry has none. */
+     at the desk on the team place) shows here when the entry has none, and
+     Replace / Remove then act on the team place. */
   teamTwinByCode: Map<string, TeamTwin> = new Map()
 ): Promise<Record<string, SoloHeadshot>> => {
   const result: Record<string, SoloHeadshot> = {};
@@ -577,34 +588,24 @@ export const matchSoloHeadshots = async (
     return result;
   }
 
-  // The list is every solo registration, so an account with one can only
-  // hold its own.
-  const rowsByProfile = countSoloRowsByProfile(registrations);
-
   try {
-    const pathByRegistration = new Map<string, string>();
+    const pathByRegistration = chooseSoloHeadshotPaths(index, registrations);
 
     for (const registration of registrations) {
       result[registration.id] = { url: null };
 
-      let path = soloPathOf(index.accountById, registration, rowsByProfile);
-
-      if (!path) {
-        const twin = registration.confirmation_code
+      const twin =
+        !pathByRegistration.has(registration.id) && registration.confirmation_code
           ? teamTwinByCode.get(registration.confirmation_code)
           : undefined;
-        const twinPath = twin ? readPaperHeadshotPath(twin.id, twin.headshot_path) : null;
+      const twinPath = twin ? readPaperHeadshotPath(twin.id, twin.headshot_path) : null;
 
-        if (twin && twinPath) {
-          path = twinPath;
-          result[registration.id].target = { kind: "team", id: twin.id };
-        }
-      }
-
-      if (path) {
-        pathByRegistration.set(registration.id, path);
+      if (twin && twinPath) {
+        pathByRegistration.set(registration.id, twinPath);
+        result[registration.id].target = { kind: "team", id: twin.id };
       }
     }
+
     await signInto(client, pathByRegistration, result);
   } catch (error) {
     console.error("[headshots] solo list lookup failed", error);
@@ -646,74 +647,115 @@ const signInto = async (
   }
 };
 
-/* Photos for the admin Teams list, keyed by team_members id. The rider's own
-   photo on the row first; then, as getTeamRiderHeadshotUrl does for the
-   desk, the leader's account (leader's row only), an account behind a solo
-   entry under the rider's email, or a confirmed account with that email,
-   and only an account whose email and full name are the rider's. With no
-   account index, only the riders' own photos. Never throws. */
+type TeamHeadshotRow = {
+  id: string;
+  team_id: string;
+  email: string;
+  full_name: string;
+  is_leader: boolean;
+  headshot_path?: string | null;
+  confirmation_code?: string | null;
+};
+
+/* Which stored photo is each team rider's, keyed by team_members id (riders
+   with no photo are left out). The rider's own photo on the row first; then,
+   as getTeamRiderHeadshotUrl does for the desk, the leader's account
+   (leader's row only), an account behind a solo entry under the rider's
+   email, or a confirmed account with that email, and only an account whose
+   email and full name are the rider's. With no account index, only the
+   riders' own photos. The one rule for the admin Teams list
+   (matchTeamHeadshots) and the broadcast photo index
+   (src/lib/broadcast/photo-index.ts). Pure: no reads, no signing. */
+export const chooseTeamHeadshotPaths = (
+  index: AuthUserIndex | null,
+  members: TeamHeadshotRow[],
+  leaderProfileByTeam: Map<string, string | null>,
+  soloProfileByEmail: Map<string, string>
+): Map<string, string> => {
+  const pathByMember = new Map<string, string>();
+
+  for (const member of members) {
+    let path = readPaperHeadshotPath(member.id, member.headshot_path);
+
+    if (!path && index) {
+      const address = member.email?.trim().toLowerCase() ?? "";
+      const candidates = [
+        member.is_leader ? leaderProfileByTeam.get(member.team_id) ?? null : null,
+        address ? soloProfileByEmail.get(address) ?? null : null,
+        address ? index.confirmedIdByEmail.get(address) ?? null : null,
+      ];
+
+      for (const profileId of new Set(candidates)) {
+        const account = profileId ? index.accountById.get(profileId) : undefined;
+
+        if (account?.path && isOwnRegistration(member, account)) {
+          path = account.path;
+          break;
+        }
+      }
+    }
+
+    if (path) {
+      pathByMember.set(member.id, path);
+    }
+  }
+
+  return pathByMember;
+};
+
+/* Photos for the admin Teams list, keyed by team_members id, with one batch
+   signing call. Which photo is whose: chooseTeamHeadshotPaths. Never
+   throws. */
 export const matchTeamHeadshots = async (
   index: AuthUserIndex | null,
-  members: Array<{
-    id: string;
-    team_id: string;
-    email: string;
-    full_name: string;
-    is_leader: boolean;
-    headshot_path?: string | null;
-    confirmation_code?: string | null;
-  }>,
+  members: TeamHeadshotRow[],
   leaderProfileByTeam: Map<string, string | null>,
   soloProfileByEmail: Map<string, string>,
   client: ServiceRoleClient,
-  /* The riders' solo entries by code (with each account's solo entry count):
-     a rider's solo photo shows first, as at the check-in desk, so a photo
-     taken on the Solo riders list carries over to their team. */
-  soloTwinByCode: Map<string, SoloTwin> = new Map(),
-  soloRowsByProfile: Map<string, number> = new Map()
+  /* Every solo registration, with its code: a rider's solo photo (same code;
+     a team made on Form teams is a copy of the solo entry) shows first, as
+     at the check-in desk, so a photo taken on the Solo riders list carries
+     over to their team. Every one, because chooseSoloHeadshotPaths counts
+     each account's entries. */
+  soloRows: SoloHeadshotRow[] = []
 ): Promise<Record<string, SoloHeadshot>> => {
   const result: Record<string, SoloHeadshot> = {};
 
   try {
-    const pathByMember = new Map<string, string>();
-
     for (const member of members) {
       result[member.id] = { url: null };
+    }
 
+    const pathByMember = chooseTeamHeadshotPaths(
+      index,
+      members,
+      leaderProfileByTeam,
+      soloProfileByEmail
+    );
+    const soloPaths = chooseSoloHeadshotPaths(index, soloRows);
+    const soloTwinByCode = new Map<string, SoloHeadshotRow>();
+
+    for (const row of soloRows) {
+      if (row.confirmation_code && !soloTwinByCode.has(row.confirmation_code)) {
+        soloTwinByCode.set(row.confirmation_code, row);
+      }
+    }
+
+    for (const member of members) {
       const twin = member.confirmation_code
         ? soloTwinByCode.get(member.confirmation_code)
         : undefined;
-      const twinPath = twin ? soloPathOf(index?.accountById ?? null, twin, soloRowsByProfile) : null;
 
-      if (twin && twinPath) {
-        pathByMember.set(member.id, twinPath);
-        result[member.id].target = { kind: "solo", id: twin.id };
+      if (!twin) {
         continue;
       }
 
-      let path = readPaperHeadshotPath(member.id, member.headshot_path);
+      const twinPath = soloPaths.get(twin.id);
 
-      if (!path && index) {
-        const address = member.email?.trim().toLowerCase() ?? "";
-        const candidates = [
-          member.is_leader ? leaderProfileByTeam.get(member.team_id) ?? null : null,
-          address ? soloProfileByEmail.get(address) ?? null : null,
-          address ? index.confirmedIdByEmail.get(address) ?? null : null,
-        ];
-
-        for (const profileId of new Set(candidates)) {
-          const account = profileId ? index.accountById.get(profileId) : undefined;
-
-          if (account?.path && isOwnRegistration(member, account)) {
-            path = account.path;
-            break;
-          }
-        }
-      }
-
-      if (path) {
-        pathByMember.set(member.id, path);
-      } else if (twin) {
+      if (twinPath) {
+        pathByMember.set(member.id, twinPath);
+        result[member.id].target = { kind: "solo", id: twin.id };
+      } else if (!pathByMember.has(member.id)) {
         // No photo anywhere: a new one goes on the solo entry, so it shows
         // in both lists (the desk's rule).
         result[member.id].target = { kind: "solo", id: twin.id };

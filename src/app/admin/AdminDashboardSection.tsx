@@ -24,8 +24,7 @@ import {
   loadAuthUserIndex,
   matchSoloHeadshots,
   matchTeamHeadshots,
-  countSoloRowsByProfile,
-  type SoloTwin,
+  type SoloHeadshotRow,
   type TeamTwin,
   type SoloHeadshot,
 } from "@/lib/admin/headshot-urls";
@@ -231,19 +230,16 @@ async function AdminSectionData({
      then the account rule (matchTeamHeadshots). */
   if (needs.teams && photoService && authUserIndexLoad && soloContactsLoad) {
     const [index, soloContacts] = await Promise.all([authUserIndexLoad, soloContactsLoad]);
-    const soloRows = (soloContacts.data ?? []) as Array<SoloTwin & { confirmation_code: string | null }>;
+    const soloRows = ((soloContacts.data ?? []) as Array<
+      Omit<SoloHeadshotRow, "email" | "full_name"> & { email: string | null; full_name: string | null }
+    >).map((row) => ({ ...row, email: row.email ?? "", full_name: row.full_name ?? "" }));
     const soloProfileByEmail = new Map<string, string>();
-    const soloTwinByCode = new Map<string, SoloTwin>();
 
     for (const row of soloRows) {
-      const address = row.email?.trim().toLowerCase();
+      const address = row.email.trim().toLowerCase();
 
       if (address && row.profile_id && !soloProfileByEmail.has(address)) {
         soloProfileByEmail.set(address, row.profile_id);
-      }
-
-      if (row.confirmation_code && !soloTwinByCode.has(row.confirmation_code)) {
-        soloTwinByCode.set(row.confirmation_code, row);
       }
     }
 
@@ -253,8 +249,7 @@ async function AdminSectionData({
       new Map(((teams ?? []) as Team[]).map((team) => [team.id, team.leader_profile_id ?? null])),
       soloProfileByEmail,
       photoService,
-      soloTwinByCode,
-      countSoloRowsByProfile(soloRows)
+      soloRows
     );
   }
 

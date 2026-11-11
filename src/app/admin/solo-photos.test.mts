@@ -188,10 +188,15 @@ test("removing an account photo is allowed only for the holder's own registratio
 
 test("staff screens show the registration's photo first, the account's only for the holder", () => {
   // The Solo riders list.
-  const match = sectionOf(headshotUrls, "export const matchSoloHeadshots");
-  assert.match(match, /let path = soloPathOf\(index\.accountById, registration, rowsByProfile\);/);
+  // The rule lives in chooseSoloHeadshotPaths, shared with the broadcast
+  // photo index; the list only signs what it chooses.
   assert.match(
-    sectionOf(headshotUrls, "const soloPathOf = ("),
+    sectionOf(headshotUrls, "export const matchSoloHeadshots"),
+    /chooseSoloHeadshotPaths\(index, registrations\)/
+  );
+  const match = sectionOf(headshotUrls, "export const chooseSoloHeadshotPaths");
+  assert.match(
+    match,
     /readPaperHeadshotPath\(registration\.id, registration\.headshot_path\) \?\?\s*\(account &&\s*isOwnRegistration\(registration, account, \{\s*onlyRegistration: rowsByProfile\.get\(registration\.profile_id \?\? ""\) === 1,/
   );
   assert.doesNotMatch(match, /email\?\.trim\(\)/);
@@ -359,27 +364,27 @@ test("the add button opens a pop-up to drag, take or choose a photo", () => {
 });
 
 test("a rider's solo entry and team place share one photo, solo first (Form teams)", () => {
-  // The Teams list: the solo entry's photo (same code) before the team row's,
-  // and a rider with no photo yet gets it added on the solo entry.
+  // The Teams list: the solo entry's photo (same code) replaces the team
+  // row's, and a rider with no photo yet gets it added on the solo entry.
   const teams = sectionOf(headshotUrls, "export const matchTeamHeadshots");
   assert.ok(
-    teams.indexOf("soloTwinByCode.get(member.confirmation_code)") <
-      teams.indexOf("readPaperHeadshotPath(member.id, member.headshot_path)"),
-    "solo photo before the team row's"
+    teams.indexOf("chooseTeamHeadshotPaths(") < teams.indexOf("soloPaths.get(twin.id)"),
+    "the solo photo is applied over the team row's"
   );
-  assert.match(teams, /result\[member\.id\]\.target = \{ kind: "solo", id: twin\.id \};\s*continue;/);
-  assert.match(teams, /\} else if \(twin\) \{[\s\S]*?target = \{ kind: "solo", id: twin\.id \}/);
+  assert.match(teams, /const soloPaths = chooseSoloHeadshotPaths\(index, soloRows\);/);
+  assert.match(teams, /pathByMember\.set\(member\.id, twinPath\);\s*result\[member\.id\]\.target = \{ kind: "solo", id: twin\.id \};/);
+  assert.match(teams, /\} else if \(!pathByMember\.has\(member\.id\)\) \{[\s\S]*?target = \{ kind: "solo", id: twin\.id \}/);
 
   // The Solo riders list: the team place's own photo when the entry has none,
   // and Replace / Remove then act on the team place.
   const solo = sectionOf(headshotUrls, "export const matchSoloHeadshots");
-  assert.match(solo, /if \(!path\) \{[\s\S]*?teamTwinByCode\.get\(registration\.confirmation_code\)/);
+  assert.match(solo, /!pathByRegistration\.has\(registration\.id\) && registration\.confirmation_code/);
   assert.match(solo, /target = \{ kind: "team", id: twin\.id \}/);
 
   // The page loads both sides.
   assert.match(section, /\.select\("id, email, profile_id, full_name, headshot_path, confirmation_code"\)/);
   assert.match(section, /\.from\("team_members"\)\s*\.select\("id, confirmation_code, headshot_path"\)/);
-  assert.match(section, /countSoloRowsByProfile\(soloRows\)/);
+  assert.match(section, /photoService,\s*soloRows\s*\)/);
 
   // The commentary panel: the same rule, by code.
   assert.match(riderDetail, /getLinkedSoloHeadshotUrl\(client, solo\)/);

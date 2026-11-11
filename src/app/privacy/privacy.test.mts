@@ -26,6 +26,16 @@ test("the policy covers parents' names, paper registration and public results", 
   assert.match(page, /parents&apos; names and\s+emergency contacts are never shown publicly/);
 });
 
+test("the policy says the optional headshot may be shown on the live broadcast only", async () => {
+  const { readFileSync } = await import("node:fs");
+  const page = readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
+
+  assert.match(page, /If you give a headshot, it may\s+also be shown next to your name on the event&apos;s live broadcast/);
+  assert.match(page, /given to the broadcast graphics team\s+for that purpose only/);
+  assert.match(page, /never published on the website&apos;s\s+public pages/);
+  assert.match(page, /private file storage,\s+including optional rider headshots/);
+});
+
 test("the policy lists the Dal Panth an organiser may record, staff-only", async () => {
   const { readFileSync } = await import("node:fs");
   const page = readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
