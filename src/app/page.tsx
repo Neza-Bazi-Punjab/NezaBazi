@@ -72,10 +72,15 @@ export default function Home() {
               </p>
             </div>
 
+            {/* The two live buttons carry no arrow, so they share one row on
+                a phone and the hero still fits the first screen. */}
             <div className="mt-6 flex flex-wrap gap-4">
-              <ButtonLink href={site.liveStreamUrl}>
+              <ButtonLink href={site.liveStreamUrl} arrow={false}>
                 <LiveDot />
                 Live Now
+              </ButtonLink>
+              <ButtonLink href="/live" variant="outline" arrow={false}>
+                Live Scores
               </ButtonLink>
               <ButtonLink href="/event" variant="outline">
                 Event Details
