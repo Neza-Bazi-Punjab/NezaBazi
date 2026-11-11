@@ -228,3 +228,12 @@ test("the builder shows and searches horse names", () => {
   assert.match(state, /\.select\("id, full_name, horse_name, checked_in_at"\)/);
   assert.match(state, /\.select\("team_id, horse_name, checked_in_at"\)/);
 });
+
+test("builder: a tap can go into any pool, not only the last", () => {
+  assert.deepEqual(builderAdd([[A], [B]], C, 0), [[A, C], [B]]);
+  assert.deepEqual(builderAdd([[A], [B]], C, 1), [[A], [B, C]]);
+  assert.deepEqual(builderAdd([[A], [B]], C, 9), [[A], [B, C]]);
+  assert.deepEqual(builderAdd([[A], [B]], A, 1), [[A], [B]]);
+  assert.match(builder, /role="group" aria-label="Add to pool"/);
+  assert.match(builder, /builderAdd\(pools, entrant\.key, currentIndex\)/);
+});

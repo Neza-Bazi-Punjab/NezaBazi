@@ -63,6 +63,20 @@ export default function PoolBuilder({
      adjusted rather than rebuilt. */
   const [pools, setPools] = useState<BuilderPools>(() => builderFromRuns(runs));
   const [query, setQuery] = useState("");
+  /* The pool a tap adds to, by index; null means the last pool. */
+  const [active, setActive] = useState<number | null>(null);
+  /* The entrant tapped most recently: what "Undo" takes out. */
+  const [lastAdded, setLastAdded] = useState<string | null>(null);
+
+  /* A change that drops a pool shifts the letters: go back to the last pool
+     rather than add to a different pool than the one shown. */
+  const update = (next: BuilderPools) => {
+    if (next.length < pools.length) {
+      setActive(null);
+    }
+
+    setPools(next);
+  };
 
   /* Every entrant of this event type, by key: who can be tapped (checked in)
      and the names of anyone already placed. */
@@ -121,11 +135,20 @@ export default function PoolBuilder({
     (entrant) => entrant.checkedIn && !builderHas(pools, entrant.key)
   ).length;
 
-  const currentIndex = pools.length - 1;
+  const lastIndex = pools.length - 1;
+  const currentIndex = active !== null && active < pools.length ? active : lastIndex;
   const currentLabel = pooled ? builderPoolLabel(currentIndex) : null;
   const currentSize = pools[currentIndex]?.length ?? 0;
-  /* The last entrant in the current pool: what "Undo" takes out. */
-  const lastKey = currentSize > 0 ? pools[currentIndex][currentSize - 1] : null;
+  const lastKey = lastAdded !== null && builderHas(pools, lastAdded) ? lastAdded : null;
+  const lastPlace = (() => {
+    if (!lastKey) {
+      return "";
+    }
+
+    const index = pools.findIndex((pool) => pool.includes(lastKey));
+    const position = pools[index].indexOf(lastKey) + 1;
+    return pooled ? `${builderPoolLabel(index)}${position}` : `#${position}`;
+  })();
   const toSave = builderToSave(pools);
   const labels = toSave.map((_, index) => builderPoolLabel(index));
   const nameOf = (key: string) => entrants.get(key)?.name ?? "Unknown entrant";
@@ -138,7 +161,7 @@ export default function PoolBuilder({
             Build Pools By Hand
           </h3>
           <p className="mt-1 text-sm leading-6 text-brown/80">
-            Tap {isTeams ? "teams" : "riders"} in riding order: each goes next in the current pool.
+            Tap {isTeams ? "teams" : "riders"} in riding order: each goes next in the pool picked under “Add to”.
             {pooled ? " “New pool” starts the next letter." : " This round has no pools: one list."}{" "}
             Nothing changes until you save.
           </p>
@@ -146,7 +169,11 @@ export default function PoolBuilder({
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => setPools(emptyBuilder())}
+            onClick={() => {
+              setPools(emptyBuilder());
+              setActive(null);
+              setLastAdded(null);
+            }}
             disabled={busy || placedCount === 0}
             className={secondaryButton}
           >
@@ -161,7 +188,48 @@ export default function PoolBuilder({
       <div className="grid gap-4 md:grid-cols-2">
         {/* Tap to add */}
         <div className="space-y-3">
-          <div className="sticky top-[var(--nav-height)] z-10 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-bronze/30 bg-parchment px-3 py-2">
+          <div className="sticky top-[var(--nav-height)] z-10 space-y-2 rounded-lg border border-bronze/30 bg-parchment px-3 py-2">
+            {pooled && (
+              <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Add to pool">
+                <span className={labelClass}>Add to</span>
+                {pools.map((pool, index) => {
+                  const selected = index === currentIndex;
+
+                  return (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => setActive(index === lastIndex ? null : index)}
+                      disabled={busy}
+                      aria-pressed={selected}
+                      className={`min-w-[3rem] rounded-lg border px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.08em] transition-colors disabled:opacity-60 ${
+                        selected
+                          ? "border-bronze-deep bg-bronze-deep text-cream"
+                          : "border-bronze/30 bg-cream text-bronze-dark hover:border-bronze/60"
+                      }`}
+                    >
+                      {builderPoolLabel(index)}
+                      <span className={`ml-1 font-sans font-normal ${selected ? "text-cream/80" : "text-brown/60"}`}>
+                        {pool.length}
+                      </span>
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPools(builderStartPool(pools));
+                    setActive(null);
+                  }}
+                  disabled={busy || !builderCanStartPool(pools)}
+                  title={builderCanStartPool(pools) ? undefined : "Put someone in the last pool first."}
+                  className={primaryButton}
+                >
+                  + New Pool {builderPoolLabel(lastIndex + 1)}
+                </button>
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-2">
             <div className="min-w-0" aria-live="polite">
               <p className="text-sm font-semibold text-ink">
                 {pooled ? `Adding to Pool ${currentLabel}` : "Adding to the list"} · {currentSize}
@@ -169,14 +237,17 @@ export default function PoolBuilder({
               </p>
               {lastKey && (
                 <p className="truncate text-xs text-brown/80">
-                  Last: {nameOf(lastKey)} ({currentLabel ? `${currentLabel}${currentSize}` : `#${currentSize}`})
+                  Last: {nameOf(lastKey)} ({lastPlace})
                 </p>
               )}
             </div>
             {lastKey && (
               <button
                 type="button"
-                onClick={() => setPools(builderRemove(pools, lastKey))}
+                onClick={() => {
+                  update(builderRemove(pools, lastKey));
+                  setLastAdded(null);
+                }}
                 disabled={busy}
                 aria-label={`Undo: take ${nameOf(lastKey)} out`}
                 className={secondaryButton}
@@ -184,16 +255,7 @@ export default function PoolBuilder({
                 Undo
               </button>
             )}
-            {pooled && (
-              <button
-                type="button"
-                onClick={() => setPools(builderStartPool(pools))}
-                disabled={busy || !builderCanStartPool(pools)}
-                className={primaryButton}
-              >
-                New Pool {builderPoolLabel(currentIndex + 1)}
-              </button>
-            )}
+            </div>
           </div>
 
           <label className="block">
@@ -225,7 +287,10 @@ export default function PoolBuilder({
                 <li key={entrant.key}>
                   <button
                     type="button"
-                    onClick={() => setPools(builderAdd(pools, entrant.key))}
+                    onClick={() => {
+                      setPools(builderAdd(pools, entrant.key, currentIndex));
+                      setLastAdded(entrant.key);
+                    }}
                     disabled={busy}
                     className="flex w-full items-center justify-between gap-2 rounded-md px-3 py-3 text-left text-brown transition-colors hover:bg-parchment disabled:opacity-60"
                   >
@@ -264,10 +329,22 @@ export default function PoolBuilder({
                 key={poolIndex}
                 className={`rounded-lg border bg-cream ${isCurrent ? "border-bronze" : "border-bronze/20"}`}
               >
-                <p className="border-b border-bronze/20 bg-parchment px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
-                  {label ? `Pool ${label}` : "Start list"} · {pool.length}
-                  {isCurrent && pooled ? " · adding here" : ""}
-                </p>
+                <div className="flex items-center justify-between gap-2 border-b border-bronze/20 bg-parchment px-3 py-2">
+                  <p className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
+                    {label ? `Pool ${label}` : "Start list"} · {pool.length}
+                    {isCurrent && pooled ? " · adding here" : ""}
+                  </p>
+                  {pooled && !isCurrent && (
+                    <button
+                      type="button"
+                      onClick={() => setActive(poolIndex === lastIndex ? null : poolIndex)}
+                      disabled={busy}
+                      className={smallButton}
+                    >
+                      Add here
+                    </button>
+                  )}
+                </div>
                 {pool.length === 0 ? (
                   <p className="px-3 py-3 text-sm text-brown/70">Tap a {noun} to put them here.</p>
                 ) : (
@@ -295,7 +372,7 @@ export default function PoolBuilder({
                             <button
                               type="button"
                               aria-label={`Move ${name} earlier`}
-                              onClick={() => setPools(builderShift(pools, key, -1))}
+                              onClick={() => update(builderShift(pools, key, -1))}
                               disabled={busy || position === 0}
                               className={smallButton}
                             >
@@ -304,7 +381,7 @@ export default function PoolBuilder({
                             <button
                               type="button"
                               aria-label={`Move ${name} later`}
-                              onClick={() => setPools(builderShift(pools, key, 1))}
+                              onClick={() => update(builderShift(pools, key, 1))}
                               disabled={busy || position === pool.length - 1}
                               className={smallButton}
                             >
@@ -319,7 +396,7 @@ export default function PoolBuilder({
                                   const target = Number(event.target.value);
 
                                   if (event.target.value !== "" && Number.isInteger(target)) {
-                                    setPools(builderMoveToPool(pools, key, target));
+                                    update(builderMoveToPool(pools, key, target));
                                   }
                                 }}
                                 className="rounded-md border border-bronze/20 bg-cream px-1 py-1 text-sm text-brown"
@@ -337,7 +414,7 @@ export default function PoolBuilder({
                             <button
                               type="button"
                               aria-label={`Take ${name} out`}
-                              onClick={() => setPools(builderRemove(pools, key))}
+                              onClick={() => update(builderRemove(pools, key))}
                               disabled={busy}
                               className={`${smallButton} text-red-800`}
                             >
