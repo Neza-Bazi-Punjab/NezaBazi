@@ -303,7 +303,11 @@ test("route and card: Singles and Teams each have their own step and switch", ()
   assert.match(route, /rpc\("scoring_set_engine_mode", \{/);
   assert.match(route, /rpc\("scoring_start_teams", actor\)/);
   assert.match(route, /searchParams\.get\("event"\)/);
-  assert.match(admin, /\["single", "Singles"\],\s+\["section", "Teams"\],/);
+  // Singles and Teams, with the Aarhi view of Singles between them.
+  assert.match(
+    admin,
+    /\["single", "Singles", false\],\s+\["single", "Aarhi", true\],\s+\["section", "Teams", false\],/
+  );
   assert.match(admin, /`\/api\/admin\/scoring\/next-round\?event=\$\{event\}`/);
   assert.match(admin, /\{ action: "switch", auto_on: autoOn, event_type: engineEvent \}/);
   assert.match(admin, /\{ action: "start_teams" \}/);

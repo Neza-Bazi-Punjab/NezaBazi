@@ -570,6 +570,30 @@ const advancedLabel = (row: LeaderboardRow) =>
 
 /* Main ------------------------------------------------------------------------------ */
 
+/* Leaderboard rows pool by pool in pool order and, inside a pool, in riding
+   order: the layout of the start list and the paper sheet, and the order the
+   next round is drawn in. A round with no pools keeps the ranking. */
+const inRidingOrder = (leaderboard: LeaderboardRow[], runs: ScoringRun[]): LeaderboardRow[] => {
+  const firstRide = new Map<string, number>();
+
+  for (const run of runs) {
+    const known = firstRide.get(run.entrant_key);
+
+    if (known === undefined || run.run_order < known) {
+      firstRide.set(run.entrant_key, run.run_order);
+    }
+  }
+
+  const poolOf = (label: string | null) => (label ? poolIndex(label) : -1);
+
+  return [...leaderboard].sort(
+    (first, second) =>
+      poolOf(first.pool_label) - poolOf(second.pool_label) ||
+      (firstRide.get(first.entrant_key) ?? 0) - (firstRide.get(second.entrant_key) ?? 0) ||
+      first.rank - second.rank
+  );
+};
+
 /* Next step (Automatic mode) ---------------------------------------------------- */
 
 /* Automatic / Manual for Single tent pegging. Automatic: Start qualifying
@@ -586,11 +610,19 @@ function NextStepCard({
   onStart,
   onUndo,
   onSwitch,
+  aarhiOpen,
+  onAarhi,
+  aarhi,
   children,
 }: {
   /* Singles or Teams: each has its own Automatic / Manual switch. */
   event: EngineEvent;
   onEvent: (event: EngineEvent) => void;
+  /* The Aarhi tab: who is through so far and the button that starts the next
+     Single round. It is a view of Singles, not a third event. */
+  aarhiOpen: boolean;
+  onAarhi: (open: boolean) => void;
+  aarhi: ReactNode;
   step: NextStep | null | undefined;
   busy: boolean;
   onStartQualifying: (checkedIn: number) => void;
@@ -604,26 +636,44 @@ function NextStepCard({
   const eventTabs = (
     <div role="tablist" aria-label="Event" className="flex gap-1 border-b border-bronze/20 print:hidden">
       {([
-        ["single", "Singles"],
-        ["section", "Teams"],
-      ] as const).map(([value, label]) => (
-        <button
-          key={value}
-          type="button"
-          role="tab"
-          aria-selected={event === value}
-          onClick={() => onEvent(value)}
-          className={`-mb-px whitespace-nowrap border-b-2 px-4 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] transition-colors ${
-            event === value
-              ? "border-bronze-deep text-ink"
-              : "border-transparent text-bronze-dark hover:text-ink"
-          }`}
-        >
-          {label}
-        </button>
-      ))}
+        ["single", "Singles", false],
+        ["single", "Aarhi", true],
+        ["section", "Teams", false],
+      ] as const).map(([value, label, isAarhi]) => {
+        const selected = isAarhi ? aarhiOpen : !aarhiOpen && event === value;
+
+        return (
+          <button
+            key={label}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            onClick={() => {
+              onEvent(value);
+              onAarhi(isAarhi);
+            }}
+            className={`-mb-px whitespace-nowrap border-b-2 px-4 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] transition-colors ${
+              selected
+                ? "border-bronze-deep text-ink"
+                : "border-transparent text-bronze-dark hover:text-ink"
+            }`}
+          >
+            {label}
+          </button>
+        );
+      })}
     </div>
   );
+
+  // The Aarhi tab: its own panel, in every mode.
+  if (aarhiOpen) {
+    return (
+      <section aria-label="Aarhi" className={`${cardClass} space-y-4 print:hidden`}>
+        {eventTabs}
+        {aarhi}
+      </section>
+    );
+  }
 
   // Still loading, or the read failed: the round tools are never held back
   // by it. Set Live, the start list and the pool sheet must always be there.
@@ -866,6 +916,8 @@ export default function ScoringAdmin({
   /* The auto engine's next step: undefined while loading, null when the
      migration is not applied yet. */
   const [engineEvent, setEngineEvent] = useState<EngineEvent>("single");
+  /* The Aarhi tab is open (a view of Singles). */
+  const [aarhiOpen, setAarhiOpen] = useState(false);
   const [nextSteps, setNextSteps] = useState<Record<EngineEvent, NextStep | null | undefined>>({
     single: undefined,
     section: undefined,
@@ -1013,30 +1065,10 @@ export default function ScoringAdmin({
   /* The standings table, pool by pool in pool order and, inside a pool, in
      riding order: the same layout as the start list and the paper sheet, so a
      wrong score is found by pool. A round with no pools keeps the ranking. */
-  const standings = useMemo(() => {
-    if (!leaderboard.some((row) => row.pool_label)) {
-      return leaderboard;
-    }
-
-    const firstRide = new Map<string, number>();
-
-    for (const run of runs) {
-      const known = firstRide.get(run.entrant_key);
-
-      if (known === undefined || run.run_order < known) {
-        firstRide.set(run.entrant_key, run.run_order);
-      }
-    }
-
-    const poolOf = (label: string | null) => (label ? poolIndex(label) : -1);
-
-    return [...leaderboard].sort(
-      (first, second) =>
-        poolOf(first.pool_label) - poolOf(second.pool_label) ||
-        (firstRide.get(first.entrant_key) ?? 0) - (firstRide.get(second.entrant_key) ?? 0) ||
-        first.rank - second.rank
-    );
-  }, [leaderboard, runs]);
+  const standings = useMemo(
+    () => (leaderboard.some((row) => row.pool_label) ? inRidingOrder(leaderboard, runs) : leaderboard),
+    [leaderboard, runs]
+  );
   const scoredCount = runs.filter((run) => run.status === "scored").length;
   const poolLabels = groups
     .map((group) => group.label)
@@ -1855,6 +1887,160 @@ export default function ScoringAdmin({
 
   const roundHasStartList = runs.length > 0;
 
+
+  /* The Aarhi tab ------------------------------------------------------------ */
+  /* Who is through so far from the latest Single round, in the order the next
+     round will ride, kept current by the page's own refresh; and the button
+     that starts that round once nobody is left to ride. */
+  const aarhiPanel = (() => {
+    if (!data) {
+      return null;
+    }
+
+    const singles = rounds
+      .filter((candidate) => candidate.event_type === "single")
+      .sort((first, second) => first.sort_order - second.sort_order);
+    const source = singles[singles.length - 1] ?? null;
+
+    if (!source) {
+      return (
+        <p className="text-sm leading-6 text-brown/85">
+          No Single round yet. The riders who come through qualifying will be listed here.
+        </p>
+      );
+    }
+
+    const sourceRuns = data.runs_by_round[source.id] ?? [];
+    const board = inRidingOrder(data.leaderboards_by_round[source.id] ?? [], sourceRuns);
+    const through = board.filter((row) => row.advanced === true);
+    const waiting = new Set(
+      sourceRuns
+        .filter((run) => run.status === "pending" || run.status === "on_course")
+        .map((run) => run.entrant_key)
+    ).size;
+    const ridden = sourceRuns.some((run) => run.status === "scored");
+    const step = nextSteps.single ?? null;
+    const plan = step && step.plan.round_id === source.id ? step.plan : null;
+    const ready = Boolean(step?.engine.auto_on && plan?.state === "ready");
+    /* A round the last Start made, still unridden: it is the Aarhi round. */
+    const fresh = source.round_number > 0 && !ridden && sourceRuns.length > 0;
+
+    return (
+      <>
+        <div className="space-y-1">
+          <h2 className={subheadingClass}>Aarhi · through from {source.name}</h2>
+          <p className="text-sm leading-6 text-brown/85">
+            {plural(through.length, "rider")} through so far, in the order they will ride.{" "}
+            {waiting > 0
+              ? `${plural(waiting, "rider")} still to ride in ${source.name}.`
+              : `Nobody is left to ride in ${source.name}.`}{" "}
+            This list keeps itself up to date.
+          </p>
+        </div>
+
+        {fresh ? (
+          <div className="flex flex-col gap-3 rounded-lg border border-bronze/30 bg-parchment px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm leading-6 text-ink">
+              {source.name} is made, with {plural(new Set(sourceRuns.map((run) => run.entrant_key)).size, "rider")}.
+              Open it to change the order, add or remove a rider, and set it live.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedRoundId(source.id);
+                setAarhiOpen(false);
+              }}
+              className={primaryButton}
+            >
+              Open {source.name}
+            </button>
+          </div>
+        ) : ready && plan ? (
+          <div className="flex flex-col gap-3 rounded-lg border border-bronze/30 bg-parchment px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm leading-6 text-ink">
+              {plan.message} The new round is made as upcoming: open it and press Set Live when the
+              riders are ready.
+            </p>
+            <button type="button" onClick={() => startNextRound(plan)} disabled={busy} className={primaryButton}>
+              {startButtonLabel(plan)}
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3 rounded-lg border-l-4 border-amber-600 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950 sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              {step === null || step === undefined
+                ? "The Start button is not available yet. Make the next round by hand on the Singles tab."
+                : !step.engine.auto_on
+                  ? "Singles is on Manual. Switch to Automatic to start the next round from here."
+                  : (plan?.message ?? step.plan.message)}
+            </p>
+            {step && !step.engine.auto_on && (
+              <button type="button" onClick={() => switchEngine(true)} disabled={busy} className={secondaryButton}>
+                Switch To Automatic
+              </button>
+            )}
+          </div>
+        )}
+
+        {step?.undo && (
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm leading-6 text-brown/85">
+              Nobody has ridden {step.undo.round_name} yet, so it can still be undone.
+            </p>
+            <button
+              type="button"
+              onClick={() => step.undo && undoNextRound(step.undo)}
+              disabled={busy}
+              className={dangerButton}
+            >
+              Undo {step.undo.round_name}
+            </button>
+          </div>
+        )}
+
+        {through.length === 0 ? (
+          <p className="rounded-lg border border-bronze/20 bg-cream px-3 py-4 text-sm text-brown/80">
+            Nobody is through from {source.name} yet.
+          </p>
+        ) : (
+          <ol className="overflow-hidden rounded-lg border border-bronze/20 bg-cream">
+            {through.map((row, index) => (
+              <li
+                key={row.entrant_key}
+                className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-bronze/10 px-3 py-2 text-sm text-brown last:border-0"
+              >
+                <span className="w-8 shrink-0 tabular-nums text-brown/70">{index + 1}</span>
+                <span className="min-w-0 grow basis-48">
+                  <span className="block break-words font-semibold text-ink">{row.name}</span>
+                  <span className="block text-xs text-brown/75">
+                    {row.pool_label ? `Pool ${row.pool_label} · ` : ""}
+                    {plural(row.points, "point")}
+                    {row.best_result ? ` · ${RESULT_LABELS[row.best_result]}` : ""}
+                    {row.advanced_overridden ? " · ticked through" : ""}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setOverride(source, row, false)}
+                  disabled={busy}
+                  aria-label={`Mark ${row.name} out`}
+                  className={secondaryButton}
+                >
+                  Out
+                </button>
+              </li>
+            ))}
+          </ol>
+        )}
+
+        <p className="text-sm leading-6 text-brown/75">
+          To add a rider who is not on this list, press Through on their row in Standings on the Singles
+          tab. Once the round is made, its order can be changed with the arrows on its start list.
+        </p>
+      </>
+    );
+  })();
+
   return (
     <div className={`space-y-8 ${confirmation ? "pb-40" : ""}`}>
       {/* Header: back link, live summary, refresh */}
@@ -1919,6 +2105,9 @@ export default function ScoringAdmin({
         onStart={startNextRound}
         onUndo={undoNextRound}
         onSwitch={switchEngine}
+        aarhiOpen={aarhiOpen}
+        onAarhi={setAarhiOpen}
+        aarhi={aarhiPanel}
       >
         {/* Every round tool, in Manual and Automatic alike */}
       <div className="grid gap-8 lg:grid-cols-[320px_minmax(0,1fr)]">
