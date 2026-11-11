@@ -252,8 +252,10 @@ test("the cell sends its kind and the Teams list has a Photo column", () => {
   assert.match(cell, /kind: RiderKind;/);
   assert.match(cell, /body\.append\("kind", kind\);/);
   assert.match(cell, /JSON\.stringify\(\{ registrationId, kind \}\)/);
-  assert.match(dashboard, /<RiderHeadshotCell\s+registrationId=\{registration\.id\}\s+kind="solo"/);
-  assert.match(dashboard, /<RiderHeadshotCell\s+registrationId=\{member\.id\}\s+kind="team"\s+riderName=\{member\.full_name\}\s+initial=\{teamHeadshots\[member\.id\]\}/);
+  // Each list acts on its own row unless the photo shown is the rider's
+  // other entry's (see matchSoloHeadshots / matchTeamHeadshots).
+  assert.match(dashboard, /<RiderHeadshotCell\s+registrationId=\{soloHeadshots\[registration\.id\]\?\.target\?\.id \?\? registration\.id\}\s+kind=\{soloHeadshots\[registration\.id\]\?\.target\?\.kind \?\? "solo"\}/);
+  assert.match(dashboard, /<RiderHeadshotCell\s+registrationId=\{teamHeadshots\[member\.id\]\?\.target\?\.id \?\? member\.id\}\s+kind=\{teamHeadshots\[member\.id\]\?\.target\?\.kind \?\? "team"\}\s+riderName=\{member\.full_name\}\s+initial=\{teamHeadshots\[member\.id\]\}/);
   assert.match(section, /teamHeadshots = await matchTeamHeadshots\(/);
   assert.match(section, /teamHeadshots=\{teamHeadshots\}/);
 });
@@ -274,7 +276,7 @@ test("a team rider's own photo comes first everywhere, then the account rule", (
 
   // The check-in desk and the commentary panel pass the member's id.
   assert.match(checkInRoute, /\{ id: teammate\.id, email, full_name: teammate\.full_name \}/);
-  assert.match(riderDetail, /getTeamRiderHeadshotUrl\(\s*client,\s*member,/);
+  assert.match(riderDetail, /getLinkedTeamRiderHeadshotUrl\(\s*client,\s*member,/);
 });
 
 // ---------------------------------------------------------------------------

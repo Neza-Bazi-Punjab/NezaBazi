@@ -2304,8 +2304,8 @@ export default function AdminDashboard({
                       <tr key={registration.id} className="border-b border-bronze/10 last:border-0">
                         <td className="px-3 py-2">
                           <RiderHeadshotCell
-                            registrationId={registration.id}
-                            kind="solo"
+                            registrationId={soloHeadshots[registration.id]?.target?.id ?? registration.id}
+                            kind={soloHeadshots[registration.id]?.target?.kind ?? "solo"}
                             riderName={registration.full_name}
                             initial={soloHeadshots[registration.id]}
                             onError={setPhotoError}
@@ -3360,8 +3360,8 @@ export default function AdminDashboard({
                               >
                                 <td className="px-3 py-2">
                                   <RiderHeadshotCell
-                                    registrationId={member.id}
-                                    kind="team"
+                                    registrationId={teamHeadshots[member.id]?.target?.id ?? member.id}
+                                    kind={teamHeadshots[member.id]?.target?.kind ?? "team"}
                                     riderName={member.full_name}
                                     initial={teamHeadshots[member.id]}
                                     onError={setPhotoError}
