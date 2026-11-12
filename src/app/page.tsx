@@ -74,7 +74,7 @@ export default function Home() {
             {/* The Stats button carries no arrow, so it shares one row on a
                 phone and the hero still fits the first screen. */}
             <div className="mt-6 flex flex-wrap gap-4">
-              <ButtonLink href="/stats" variant="outline" arrow={false}>
+              <ButtonLink href="/stats" arrow={false}>
                 Stats
               </ButtonLink>
               <ButtonLink href="/event" variant="outline">
