@@ -63,9 +63,13 @@ export class ScoringReadError extends Error {
 }
 
 /* No session, no cookies: the anonymous role, exactly what a spectator's
-   browser has. */
-export const createPublicScoringClient = (): ScoringDbClient =>
-  createClient(
+   browser has. One client per server instance: it holds no session, so every
+   request can share it, and the public builders below know a call made with
+   it (their default) from a call that brings its own client. */
+let publicScoringClient: ScoringDbClient | null = null;
+
+export const createPublicScoringClient = (): ScoringDbClient => {
+  publicScoringClient ??= createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -75,6 +79,66 @@ export const createPublicScoringClient = (): ScoringDbClient =>
       },
     }
   );
+
+  return publicScoringClient;
+};
+
+/* Shared public reads --------------------------------------------------------- */
+
+/* On event day every public feed rebuilt the same state on its own: about
+   75,000 builds of five reads each in a day. A public read made with the
+   shared anonymous client is now shared: calls that arrive within
+   SHARED_READ_MS of one starting get the same answer, whether it has landed
+   yet or not. (A read slower than that is not waited on by later calls: they
+   start their own, so one stuck read can never hold up every feed.) The
+   public feeds are cached at the edge for five seconds anyway, so one second
+   more on a server instance changes nothing a spectator can see. A failed
+   read is never shared after it fails, and a call that brings its own client
+   (a test, any other caller) always reads for itself. The judge, commentary
+   and admin reads never come through here: a judge must always see their own
+   write. */
+const SHARED_READ_MS = 1_000;
+
+type SharedRead = { startedAt: number; promise: Promise<unknown> };
+
+const sharedReads = new Map<string, SharedRead>();
+
+const sharedPublicRead = <T>(
+  client: ScoringDbClient,
+  key: string,
+  read: () => Promise<T>
+): Promise<T> => {
+  if (client !== publicScoringClient) {
+    return read();
+  }
+
+  const now = Date.now();
+
+  // Forget reads that have expired, so round ids from the query string cannot
+  // pile up.
+  for (const [entryKey, entry] of sharedReads) {
+    if (now - entry.startedAt >= SHARED_READ_MS) {
+      sharedReads.delete(entryKey);
+    }
+  }
+
+  const existing = sharedReads.get(key);
+
+  if (existing) {
+    return existing.promise as Promise<T>;
+  }
+
+  const promise = read();
+  const entry: SharedRead = { startedAt: now, promise };
+  sharedReads.set(key, entry);
+  promise.catch(() => {
+    if (sharedReads.get(key) === entry) {
+      sharedReads.delete(key);
+    }
+  });
+
+  return promise;
+};
 
 /* Column lists ---------------------------------------------------------------- */
 
@@ -414,7 +478,7 @@ export const loadLiveSnapshot = async (client: ScoringDbClient): Promise<LiveSna
 export const buildPublicLiveSnapshot = async (
   client: ScoringDbClient = createPublicScoringClient()
 ) => {
-  const snapshot = await loadLiveSnapshot(client);
+  const snapshot = await sharedPublicRead(client, "live", () => loadLiveSnapshot(client));
   return { state: toPublicLiveState(snapshot.state), runCount: snapshot.runs.length };
 };
 
@@ -438,7 +502,7 @@ export const buildPublicRoundFeed = async (
   client: ScoringDbClient = createPublicScoringClient()
 ): Promise<PublicRoundFeed> => {
   if (roundId === null) {
-    const snapshot = await loadLiveSnapshot(client);
+    const snapshot = await sharedPublicRead(client, "live", () => loadLiveSnapshot(client));
     return {
       configured: snapshot.state.configured,
       round: snapshot.state.current_round,
