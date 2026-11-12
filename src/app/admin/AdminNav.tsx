@@ -105,11 +105,15 @@ export default function AdminNav({ initialCollapsed = false }: { initialCollapse
             <ul className="flex gap-1 lg:block lg:space-y-0.5">
               {section.items.map((item) => {
                 const active = isActive(pathname, item.href);
+                // No prefetch: every admin page is rendered per request, and
+                // the menu on each page prefetching every other one cost
+                // about a thousand calls a page on event day.
 
                 return (
                   <li key={item.href} className="shrink-0">
                     <Link
                       href={item.href}
+                      prefetch={false}
                       aria-current={active ? "page" : undefined}
                       className={`block whitespace-nowrap rounded-lg px-3 py-2 font-display text-sm font-semibold uppercase tracking-[0.12em] transition-colors ${
                         active
