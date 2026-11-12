@@ -159,3 +159,21 @@ test("the idle cache is longer, and only the real public states use it", () => {
   // The activity rule loads anywhere: no imports, no server-only.
   assert.doesNotMatch(repoFile("src/lib/scoring/activity.ts"), /^import /m);
 });
+
+test("the live-state hook polls once a minute while quiet, and only then", () => {
+  const hook = repoFile("src/lib/scoring/use-live-state.ts");
+
+  assert.match(hook, /import \{ isScoringIdle \} from "@\/lib\/scoring\/activity";/);
+  assert.match(hook, /POLL_WHILE_IDLE_MS = 60_000;/);
+  // Training first, then quiet, then the usual two intervals.
+  assert.match(
+    hook,
+    /training\s*\? POLL_IN_TRAINING_MS\s*: idleRef\.current\s*\? POLL_WHILE_IDLE_MS\s*: isSubscribed\s*\? subscribedPollMs\s*: POLL_WHILE_UNSUBSCRIBED_MS/
+  );
+  // Set from every good payload, the polled ones and a panel's own write.
+  assert.equal(hook.match(/idleRef\.current = isScoringIdle\((payload|next)\);/g)?.length, 2);
+  // A failed or timed-out request clears it, so retries keep their interval.
+  assert.equal(hook.match(/if \(inFlight === controller\) \{\s*idleRef\.current = false;\s*\}/g)?.length, 2);
+  // Realtime events still refetch straight away.
+  assert.match(hook, /\(payload\) => scheduleRefetch\(realtimeCacheKey\(payload\)\)/);
+});
