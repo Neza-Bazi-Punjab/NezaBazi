@@ -11,7 +11,7 @@
 // standings a Section round already publishes, nothing more. ?sample=1
 // answers with rehearsal data instead and never reads the database.
 import { NextResponse } from "next/server";
-import { PRIVATE_NO_STORE, PUBLIC_LIVE_CACHE } from "@/lib/scoring/http";
+import { PRIVATE_NO_STORE, PUBLIC_LIVE_CACHE, publicLiveCacheFor } from "@/lib/scoring/http";
 import { buildPublicLiveSnapshot } from "@/lib/scoring/server";
 import { vmixResponse, wantsCsv, wantsSample } from "@/lib/scoring/vmix";
 import { vmixSampleSource } from "@/lib/scoring/vmix-sample-live";
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
   try {
     const { state } = await buildPublicLiveSnapshot();
 
-    return vmixResponse(VMIX_TEAM_COLUMNS, [toVmixTeamRow(state, which)], csv, PUBLIC_LIVE_CACHE);
+    return vmixResponse(VMIX_TEAM_COLUMNS, [toVmixTeamRow(state, which)], csv, publicLiveCacheFor(state));
   } catch (error) {
     // vMix keeps showing its last good data on an HTTP error, which is better
     // on air than blanking every title.

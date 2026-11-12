@@ -247,7 +247,9 @@ test("/live is taken down for now: it sends visitors to /stats, linked instead",
   const page = read("./page.tsx");
   assert.match(page, /redirect\("\/stats"\)/);
 
-  const stats = read("../stats/page.tsx");
+  // /stats is built from the shared Stats page (src/app/stats/StatsSeason.tsx).
+  assert.match(read("../stats/page.tsx"), /export const metadata = statsMetadata\(LATEST_SEASON, "riders"\);/);
+  const stats = read("../stats/StatsSeason.tsx");
   assert.match(stats, /title: "Stats"/);
   // /stats is the real Stats page now (src/app/stats/stats-page.test.mts).
   assert.doesNotMatch(stats, /Coming Soon/);

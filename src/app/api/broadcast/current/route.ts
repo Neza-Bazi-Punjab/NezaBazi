@@ -14,7 +14,7 @@ import { verifyBroadcastKey } from "@/lib/broadcast/key";
 import { BROADCAST_CURRENT_COLUMNS } from "@/lib/broadcast/columns";
 import { getPhotoIndex } from "@/lib/broadcast/photo-index";
 import { createPhotoContext, toBroadcastCurrentRow } from "@/lib/broadcast/rows";
-import { PRIVATE_NO_STORE, PUBLIC_LIVE_CACHE } from "@/lib/scoring/http";
+import { PRIVATE_NO_STORE, PUBLIC_LIVE_CACHE, publicLiveCacheFor } from "@/lib/scoring/http";
 import { buildPublicLiveSnapshot } from "@/lib/scoring/server";
 import { toVmixCurrentRow, vmixResponse, wantsCsv, wantsSample } from "@/lib/scoring/vmix";
 import { vmixSampleSource } from "@/lib/scoring/vmix-sample-live";
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
       BROADCAST_CURRENT_COLUMNS,
       [toBroadcastCurrentRow(toVmixCurrentRow(state, runCount), state, context)],
       csv,
-      PUBLIC_LIVE_CACHE
+      publicLiveCacheFor(state)
     );
   } catch (error) {
     // vMix keeps showing its last good data on an HTTP error, which is better

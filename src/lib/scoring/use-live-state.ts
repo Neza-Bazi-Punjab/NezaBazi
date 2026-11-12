@@ -20,6 +20,11 @@
 //   replaces the whole state, so a screen that missed events is never more
 //   than about 5 s behind. They are a handful of devices; the public board
 //   keeps 20 s.
+// - Once the last good payload shows no scoring for half an hour (activity.ts:
+//   never on doubt), every screen polls once a minute instead, so a tab left
+//   open after the event costs almost nothing. Realtime events still refetch
+//   at once, a failed request retries at the usual interval, and the first
+//   payload that shows fresh activity brings the usual intervals back.
 // - Refetches when the tab becomes visible again and when the device comes
 //   back online.
 // - Keeps the last good payload when a request fails, and never throws into
@@ -34,6 +39,7 @@
 //   request already in flight when that happens is discarded as older.
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { isScoringIdle } from "@/lib/scoring/activity";
 import { createClient } from "@/lib/supabase/client";
 
 /* The cache key for a realtime event: identical for every viewer who receives
@@ -97,6 +103,7 @@ export const POLL_WHILE_UNSUBSCRIBED_MS = 8_000;
 export const POLL_WHILE_SUBSCRIBED_MS = 20_000;
 export const STAFF_RESYNC_MS = 10_000;
 export const POLL_IN_TRAINING_MS = 2_000;
+export const POLL_WHILE_IDLE_MS = 60_000;
 
 let channelSequence = 0;
 
@@ -172,6 +179,8 @@ export function useLiveState<T>(url: string, options: LiveStateOptions = {}): Li
   const ticketCounter = useRef(0);
   const appliedTicket = useRef(0);
   const refetchRef = useRef<() => void>(() => {});
+  /* True while the last good payload shows no scoring for half an hour. */
+  const idleRef = useRef(false);
 
   useEffect(() => {
     let disposed = false;
@@ -192,9 +201,11 @@ export function useLiveState<T>(url: string, options: LiveStateOptions = {}): Li
         () => void load(),
         training
           ? POLL_IN_TRAINING_MS
-          : isSubscribed
-            ? subscribedPollMs
-            : POLL_WHILE_UNSUBSCRIBED_MS
+          : idleRef.current
+            ? POLL_WHILE_IDLE_MS
+            : isSubscribed
+              ? subscribedPollMs
+              : POLL_WHILE_UNSUBSCRIBED_MS
       );
     };
 
@@ -227,6 +238,11 @@ export function useLiveState<T>(url: string, options: LiveStateOptions = {}): Li
         if (!response.ok) {
           const message = await readErrorMessage(response);
 
+          // A failed request retries at the usual interval, never the idle one.
+          if (inFlight === controller) {
+            idleRef.current = false;
+          }
+
           if (!disposed && ticket > appliedTicket.current) {
             setError(message);
             setFailed(true);
@@ -242,11 +258,18 @@ export function useLiveState<T>(url: string, options: LiveStateOptions = {}): Li
         }
 
         appliedTicket.current = ticket;
+        idleRef.current = isScoringIdle(payload);
         setDataState(payload);
         setError(null);
         setFailed(false);
         setLastUpdated(Date.now());
       } catch {
+        // Timed out or failed (not superseded by a newer load): the usual
+        // retry interval, as above.
+        if (inFlight === controller) {
+          idleRef.current = false;
+        }
+
         if (disposed || controller.signal.aborted) {
           return;
         }
@@ -371,6 +394,7 @@ export function useLiveState<T>(url: string, options: LiveStateOptions = {}): Li
 
   const setData = useCallback((next: T) => {
     appliedTicket.current = ++ticketCounter.current;
+    idleRef.current = isScoringIdle(next);
     setDataState(next);
     setError(null);
     setFailed(false);

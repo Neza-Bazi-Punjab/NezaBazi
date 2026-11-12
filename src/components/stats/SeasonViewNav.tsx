@@ -1,12 +1,16 @@
 import Link from "next/link";
+import { LATEST_SEASON } from "@/lib/stats/seasons";
 import { focusRing } from "./styles";
 
 export type StatsView = "riders" | "teams";
 
-/* The query string that opens a season and view, e.g. ?season=2026&view=teams.
-   The riders view is the default, so it is left out of the link. */
+/* The page that opens a season and view, e.g. /stats/2026/teams. The newest
+   season is the plain /stats (riders) or /stats/teams; the riders view is the
+   default, so it is left out of the link. Each is a page built at deploy
+   time (src/app/stats/StatsSeason.tsx). */
 export function statsHref(season: number, view: StatsView): string {
-  return view === "teams" ? `/stats?season=${season}&view=teams` : `/stats?season=${season}`;
+  const base = season === LATEST_SEASON ? "/stats" : `/stats/${season}`;
+  return view === "teams" ? `${base}/teams` : base;
 }
 
 const pill = (active: boolean) =>

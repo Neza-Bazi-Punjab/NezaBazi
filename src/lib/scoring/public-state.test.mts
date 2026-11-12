@@ -328,3 +328,28 @@ test("every public builder shapes its payload; the staff states keep the full lo
   assert.match(route, /NextResponse\.json\(await samplePublicLiveState\(LOCAL_TRAINING_SESSION\)/);
   assert.match(route, /const state = await buildPublicLiveState\(\);/);
 });
+
+test("the public reads share one database read a second; the staff reads never do", () => {
+  const server = repoFile("src/lib/scoring/server.ts");
+  const body = (name: string) => {
+    const start = server.indexOf(`export const ${name} = async (`);
+    assert.ok(start >= 0, `${name} exists`);
+    return server.slice(start, server.indexOf("\n};", start));
+  };
+
+  // One anonymous client per server instance, so a default call can be told
+  // from a call that brings its own client.
+  assert.match(server, /publicScoringClient \?\?= createClient\(/);
+  assert.match(server, /if \(client !== publicScoringClient\) \{\s*return read\(\);\s*\}/);
+  assert.match(server, /const SHARED_READ_MS = 1_000;/);
+  // A failed read is forgotten as soon as it fails.
+  assert.match(server, /promise\.catch\(\(\) => \{\s*if \(sharedReads\.get\(key\) === entry\) \{\s*sharedReads\.delete\(key\);/);
+
+  assert.match(body("buildPublicLiveSnapshot"), /sharedPublicRead\(client, "live", \(\) => loadLiveSnapshot\(client\)\)/);
+  assert.match(body("buildPublicRoundFeed"), /sharedPublicRead\(client, "live", \(\) => loadLiveSnapshot\(client\)\)/);
+  assert.equal(server.match(/sharedPublicRead\b/g)?.length, 3, "defined once, used by the two public builders");
+
+  for (const name of ["buildJudgeState", "buildCommentaryState"]) {
+    assert.doesNotMatch(body(name), /sharedPublicRead/, name);
+  }
+});

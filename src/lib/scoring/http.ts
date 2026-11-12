@@ -9,6 +9,7 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
+import { isScoringIdle } from "@/lib/scoring/activity";
 import { isScoringNotConfiguredError, type DbError } from "@/lib/scoring/server";
 
 export const NOT_CONFIGURED_MESSAGE = "Live scoring is not set up yet.";
@@ -23,6 +24,19 @@ export const PRIVATE_NO_STORE = "private, no-store";
    (p95 of 2 to 3 seconds), and the public feeds were the easiest reads to
    thin out so the judges' saves had more room. */
 export const PUBLIC_LIVE_CACHE = "public, s-maxage=5, stale-while-revalidate=10";
+
+/* Once scoring has gone quiet (nothing for half an hour, or scoring not set
+   up, or no live row: activity.ts), the edge keeps a public answer for a
+   minute instead. A tab left open after the event then costs the database
+   one read a minute, not one every five seconds. The first change after a
+   quiet spell still reaches the site's own screens at once (the realtime
+   refetch carries its own cache key, which the edge has never seen); a vMix
+   feed, which only polls, can be up to a minute late with it. */
+export const IDLE_PUBLIC_LIVE_CACHE = "public, s-maxage=60, stale-while-revalidate=600";
+
+/* The Cache-Control for a real (not sample) public state. */
+export const publicLiveCacheFor = (state: unknown) =>
+  isScoringIdle(state) ? IDLE_PUBLIC_LIVE_CACHE : PUBLIC_LIVE_CACHE;
 
 /* Request bodies here are a handful of ids and short strings. */
 export const MAX_BODY_BYTES = 16 * 1024;

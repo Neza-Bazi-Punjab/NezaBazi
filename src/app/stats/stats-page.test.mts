@@ -13,8 +13,19 @@ import { LATEST_SEASON, SEASONS, loadSeason, resolveSeason } from "../../lib/sta
 
 const read = (relative: string) => readFileSync(new URL(relative, import.meta.url), "utf8");
 
+/* The four Stats pages (src/app/stats/...) and what each one shows. */
+const STATS_PAGES = [
+  { file: "./page.tsx", season: "latest", view: "riders" },
+  { file: "./teams/page.tsx", season: "latest", view: "teams" },
+  { file: "./[season]/page.tsx", season: "param", view: "riders" },
+  { file: "./[season]/teams/page.tsx", season: "param", view: "teams" },
+] as const;
+
 const statsSources = () => {
-  const files = [{ name: "src/app/stats/page.tsx", source: read("./page.tsx") }];
+  const files = [
+    { name: "src/app/stats/StatsSeason.tsx", source: read("./StatsSeason.tsx") },
+    ...STATS_PAGES.map(({ file }) => ({ name: `src/app/stats/${file.slice(2)}`, source: read(file) })),
+  ];
   const base = new URL("../../components/stats/", import.meta.url);
   for (const name of readdirSync(base).filter((file) => /\.tsx?$/.test(file))) {
     files.push({ name: `src/components/stats/${name}`, source: readFileSync(new URL(name, base), "utf8") });
@@ -23,12 +34,16 @@ const statsSources = () => {
 };
 
 test("/stats is no longer a coming-soon placeholder", () => {
-  const page = read("./page.tsx");
+  const page = read("./StatsSeason.tsx");
   assert.doesNotMatch(page, /coming soon/i);
   assert.match(page, /<PageHeader/);
   assert.match(page, /title: "Stats"/);
-  assert.match(page, /canonical: "\/stats"/);
-  assert.doesNotMatch(page, /^"use client"/);
+  // Each page's canonical address is the one its own links use; the newest
+  // season's is the plain /stats (statsHref, below).
+  assert.match(page, /alternates: \{ canonical: statsHref\(year, view\) \}/);
+  for (const file of ["./StatsSeason.tsx", ...STATS_PAGES.map((entry) => entry.file)]) {
+    assert.doesNotMatch(read(file), /^"use client"/, file);
+  }
 });
 
 test("every listed season file loads and passes its checks, newest first", () => {
@@ -62,7 +77,7 @@ test("every listed season file loads and passes its checks, newest first", () =>
   assert.equal(loadSeason(1999), null);
 });
 
-test("the season in the query string falls back to the newest season", () => {
+test("a season value falls back to the newest season", () => {
   assert.equal(resolveSeason(undefined), LATEST_SEASON);
   assert.equal(resolveSeason("1999"), LATEST_SEASON);
   assert.equal(resolveSeason("abc"), LATEST_SEASON);
@@ -70,21 +85,63 @@ test("the season in the query string falls back to the newest season", () => {
   assert.equal(resolveSeason([String(LATEST_SEASON), "1999"]), LATEST_SEASON);
 });
 
-test("both views are rendered from the query string", () => {
-  const page = read("./page.tsx");
-  assert.match(page, /await searchParams/);
-  assert.match(page, /viewParam === "teams" \? "teams" : "riders"/);
+test("both views of every season are pages built at deploy time", () => {
+  const page = read("./StatsSeason.tsx");
   assert.match(page, /view="riders"/);
   assert.match(page, /view="teams"/);
   assert.match(page, /season\.provisional/);
   assert.match(page, /season\.notes/);
   assert.match(page, /Last updated/);
+  // Every listed season, and nothing else, under its year.
+  assert.match(page, /export const seasonParams = \(\) => SEASONS\.map\(\(year\) => \(\{ season: String\(year\) \}\)\);/);
+  assert.match(page, /if \(!SEASONS\.includes\(year\)\) \{\s*throw new Error/);
+
+  for (const { file, season, view } of STATS_PAGES) {
+    const source = read(file);
+    // Nothing that would render the page per request.
+    assert.doesNotMatch(source, /searchParams|cookies\(|headers\(|force-dynamic|revalidate/, file);
+    if (season === "latest") {
+      assert.ok(source.includes(`export const metadata = statsMetadata(LATEST_SEASON, "${view}");`), file);
+      assert.ok(source.includes(`<StatsSeason year={LATEST_SEASON} view="${view}" />`), file);
+    } else {
+      assert.match(source, /export const dynamicParams = false;/, file);
+      assert.match(source, /export function generateStaticParams\(\) \{\s*return seasonParams\(\);\s*\}/, file);
+      assert.ok(source.includes(`statsMetadata(seasonFromParam((await params).season), "${view}")`), file);
+      assert.ok(source.includes(`<StatsSeason year={seasonFromParam((await params).season)} view="${view}" />`), file);
+    }
+  }
+  for (const { source } of statsSources()) {
+    assert.doesNotMatch(source, /searchParams|useSearchParams/);
+  }
 
   const nav = read("../../components/stats/SeasonViewNav.tsx");
-  assert.match(nav, /view=teams/);
+  assert.match(nav, /const base = season === LATEST_SEASON \? "\/stats" : `\/stats\/\$\{season\}`;/);
+  assert.match(nav, /return view === "teams" \? `\$\{base\}\/teams` : base;/);
+  assert.match(nav, /href=\{statsHref\(year, view\)\}/);
+  assert.match(nav, /href=\{statsHref\(season, id\)\}/);
+  assert.doesNotMatch(nav, /\?season=|view=teams/);
   assert.match(nav, />\s*\{label\}/);
   assert.match(nav, /\["riders", "Riders"\]/);
   assert.match(nav, /\["teams", "Teams"\]/);
+});
+
+test("old ?season= and ?view= links land on the same table", () => {
+  const config = read("../../../next.config.ts");
+  // The redirects know every listed season, so a listed ?season= keeps its year
+  // and any other falls back to the newest season, as it always did.
+  assert.ok(config.includes(`const STATS_SEASON_PATTERN = "(?<season>${SEASONS.join("|")})";`));
+
+  const rules = [
+    /source: "\/stats",\s*has: \[\s*\{ type: "query", key: "season", value: STATS_SEASON_PATTERN \},\s*\{ type: "query", key: "view", value: "teams" \},\s*\],\s*destination: "\/stats\/:season\/teams",/,
+    /source: "\/stats",\s*has: \[\{ type: "query", key: "season", value: STATS_SEASON_PATTERN \}\],\s*destination: "\/stats\/:season",/,
+    /source: "\/stats",\s*has: \[\{ type: "query", key: "view", value: "teams" \}\],\s*destination: "\/stats\/teams",/,
+  ];
+  // In this order: first match wins.
+  const positions = rules.map((rule) => config.search(rule));
+  for (const [index, position] of positions.entries()) {
+    assert.ok(position > 0, `redirect ${index + 1} is there`);
+  }
+  assert.deepEqual([...positions], [...positions].sort((a, b) => a - b));
 });
 
 test("the table is a real, sortable, accessible table", () => {

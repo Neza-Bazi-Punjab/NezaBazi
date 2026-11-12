@@ -203,3 +203,71 @@ test("the Overview draws its heading and countdowns at once and its numbers insi
   assert.match(overview, /<Suspense fallback=\{<PendingDetail \/>\}>/);
   assert.match(overview, /function Pending\(\{ box, bar \}[\s\S]*?aria-busy="true"[\s\S]*?motion-safe:animate-pulse/);
 });
+
+test("the session refresh skips the public, cookie-less endpoints only", () => {
+  const proxy = repoFile("src/proxy.ts");
+  const literal = proxy.match(/matcher: \[\s*'([^']+)',\s*\]/)?.[1];
+  assert.ok(literal, "one matcher");
+  // The source is a JavaScript string: "\\." in it is the pattern's "\.".
+  const matches = new RegExp(`^${literal.replace(/\\\\/g, "\\")}$`);
+
+  for (const path of [
+    "/api/live/state",
+    "/api/live/vmix/current",
+    "/api/broadcast/current",
+    "/api/broadcast/photos/zip",
+    "/api/locations/search",
+    "/overlay",
+    "/overlay/ticker",
+    "/_next/static/chunk.js",
+    "/logo.png",
+  ]) {
+    assert.doesNotMatch(path, matches, `${path} skips the proxy`);
+  }
+  for (const path of [
+    "/",
+    "/stats",
+    "/admin",
+    "/admin/scoring",
+    "/api/judge/state",
+    "/api/commentary/state",
+    "/api/admin/registrations",
+    "/judge",
+    "/live",
+    "/auth/callback",
+    "/account",
+  ]) {
+    assert.match(path, matches, `${path} still refreshes the session`);
+  }
+
+  // Those endpoints never read a session: no cookies, no role check.
+  const routes = [
+    "src/app/api/live/state/route.ts",
+    "src/app/api/live/vmix/current/route.ts",
+    "src/app/api/live/vmix/entrants/route.ts",
+    "src/app/api/live/vmix/leaderboard/route.ts",
+    "src/app/api/live/vmix/rounds/route.ts",
+    "src/app/api/live/vmix/team/route.ts",
+    "src/app/api/live/vmix/photo/[file]/route.ts",
+    "src/app/api/broadcast/current/route.ts",
+    "src/app/api/broadcast/entrants/route.ts",
+    "src/app/api/broadcast/photos/route.ts",
+    "src/app/api/broadcast/photos/zip/route.ts",
+    "src/app/api/broadcast/photo/[signature]/[file]/route.ts",
+    "src/app/api/locations/search/route.ts",
+    "src/app/api/locations/states/route.ts",
+  ];
+  for (const path of routes) {
+    assert.doesNotMatch(
+      code(repoFile(path)),
+      /cookies|next\/headers|lib\/supabase\/server|verifyRoleRequest|resolveSampleAccess|getSessionRole|getClaims/,
+      path
+    );
+  }
+});
+
+test("the admin menu does not prefetch every admin page", () => {
+  const nav = repoFile("src/app/admin/AdminNav.tsx");
+  assert.equal(nav.match(/<Link\b/g)?.length, 1, "one link template for the menu");
+  assert.match(nav, /<Link\s+href=\{item\.href\}\s+prefetch=\{false\}/);
+});
