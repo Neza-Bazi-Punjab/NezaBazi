@@ -6,8 +6,9 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import test from "node:test";
 
-import { RIDER_GROUPS, TEAM_GROUPS } from "../../lib/stats/columns.ts";
-import { riderRows, teamRows } from "../../lib/stats/compute.ts";
+import { RIDER_COLUMNS, RIDER_GROUPS, TEAM_COLUMNS, TEAM_GROUPS } from "../../lib/stats/columns.ts";
+import { riderRows, statesOf, teamRows } from "../../lib/stats/compute.ts";
+import { legendSections } from "../../lib/stats/legend.ts";
 import { LATEST_SEASON, SEASONS, loadSeason, resolveSeason } from "../../lib/stats/seasons.ts";
 
 const read = (relative: string) => readFileSync(new URL(relative, import.meta.url), "utf8");
@@ -116,11 +117,11 @@ test("phones: the table scrolls in its own region, rank and name stay put", () =
   assert.match(browser, /Scroll the table sideways/);
   assert.match(browser, /hidden sm:table-cell/);
 
-  // Riders: Runs and Points by round start off on phones; Columns turns them
-  // on. Teams: the round points are the whole record, so everything is on.
+  // Riders: Runs, Points by round and Rates start off on phones; Columns
+  // turns them on. Teams: the round points are the whole record, so everything is on.
   const phoneOff = (groups: readonly { id: string; onPhone: boolean }[]) =>
     groups.filter((group) => !group.onPhone).map((group) => group.id);
-  assert.deepEqual(phoneOff(RIDER_GROUPS), ["runs", "rounds"]);
+  assert.deepEqual(phoneOff(RIDER_GROUPS), ["runs", "rounds", "rates"]);
   assert.deepEqual(phoneOff(TEAM_GROUPS), []);
 
   // Nothing on the page sets a fixed width wider than a phone.
@@ -133,5 +134,65 @@ test("the stats copy names no group and uses no em dashes", () => {
   for (const { name, source } of statsSources()) {
     assert.doesNotMatch(source, /—/, `${name} has no em dash`);
     assert.doesNotMatch(source, /\b(club|sponsor|organi[sz]er|organi[sz]ation|federation|association)\b/i, `${name} names no group`);
+  }
+});
+
+test("the legend teaches the rules, then the table, for the view on screen", () => {
+  const titles = (view: "riders" | "teams") => legendSections(view).map((section) => section.title);
+  assert.deepEqual(titles("riders"), ["How points work", "How a rider goes through", "Reading the table"]);
+  assert.deepEqual(titles("teams"), ["How points work", "How a team goes through", "Reading the table"]);
+
+  const tableTerms = (view: "riders" | "teams") =>
+    legendSections(view)
+      .find((section) => section.title === "Reading the table")!
+      .terms.map((entry) => entry.term)
+      .join(" | ");
+  // Every column heading of the view is explained.
+  for (const heading of RIDER_COLUMNS.map((column) => column.label)) {
+    assert.ok(tableTerms("riders").includes(heading), `riders legend explains ${heading}`);
+  }
+  for (const heading of TEAM_COLUMNS.map((column) => column.label)) {
+    assert.ok(tableTerms("teams").includes(heading), `teams legend explains ${heading}`);
+  }
+  // Scratched and Out are team marks only; both views explain the dash and a blank.
+  assert.match(tableTerms("teams"), /Scratched/);
+  assert.match(tableTerms("teams"), /\bOut\b/);
+  assert.doesNotMatch(tableTerms("riders"), /Scratched|\bOut\b/);
+  for (const view of ["riders", "teams"] as const) {
+    assert.match(tableTerms(view), /–/);
+    assert.match(tableTerms(view), /Blank/);
+    for (const section of legendSections(view)) {
+      for (const { term, meaning } of section.terms) {
+        assert.doesNotMatch(`${term} ${meaning}`, /—/, `${term}: no em dash`);
+        assert.doesNotMatch(`${term} ${meaning}`, /\b(club|sponsor|organi[sz]er|organi[sz]ation)\b/i);
+        assert.ok(meaning.length <= 100, `${term}: one short line`);
+      }
+    }
+  }
+
+  // The legend panel has a heading and a Close button, and scrolls if tall.
+  const browser = read("../../components/stats/StatsBrowser.tsx");
+  assert.match(browser, /<Popover label="Stats legend" title="Stats legend"/);
+  const popover = read("../../components/stats/Popover.tsx");
+  assert.match(popover, /overflow-y-auto/);
+  assert.match(popover, /Close/);
+});
+
+test("the State filter lists only real states, never a country or a single-part place", () => {
+  const season = loadSeason(LATEST_SEASON)!;
+  const states = statesOf(riderRows(season));
+  assert.ok(states.length > 0);
+  for (const state of states) {
+    assert.doesNotMatch(state, /^(india|canada|pakistan|usa|united states|united kingdom|uk|australia|england)$/i);
+  }
+  // Every state offered is the last part of some rider's two-part location.
+  for (const state of states) {
+    assert.ok(
+      season.riders.some((rider) => {
+        const parts = (rider.location ?? "").split(",").map((part) => part.trim()).filter(Boolean);
+        return parts.length >= 2 && parts.at(-1) === state;
+      }),
+      `${state} comes from a "place, state" location`
+    );
   }
 });

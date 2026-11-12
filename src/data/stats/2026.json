@@ -546,7 +546,7 @@
       "id": "tahel-singh-kabutar",
       "name": "Tahel Singh",
       "horse": "Kabutar",
-      "location": "Punjab, India",
+      "location": "Punjab",
       "runs": [
         {
           "stage": "qualification",
@@ -745,7 +745,7 @@
       "id": "badila-singh-neela",
       "name": "Badila Singh",
       "horse": "Neela",
-      "location": "Punjab, India",
+      "location": "Punjab",
       "runs": [
         {
           "stage": "qualification",
@@ -1386,6 +1386,10 @@
         {
           "stage": "qualification",
           "result": "unknown"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
         }
       ],
       "place": null
@@ -1491,7 +1495,7 @@
         },
         {
           "stage": "aarhi1",
-          "result": "miss"
+          "result": "unknown"
         }
       ],
       "place": null
@@ -1526,6 +1530,10 @@
         {
           "stage": "qualification",
           "result": "strike"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
         }
       ],
       "place": null
@@ -1879,6 +1887,10 @@
         {
           "stage": "qualification",
           "result": "unknown"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "unknown"
         }
       ],
       "place": null
@@ -1933,7 +1945,7 @@
       "id": "ranjodh-singh-naag",
       "name": "Ranjodh Singh",
       "horse": "Naag",
-      "location": "Chandigarh, India",
+      "location": "Chandigarh",
       "runs": [
         {
           "stage": "qualification",
@@ -2150,7 +2162,8 @@
       "rides": [
         {
           "stage": "round1",
-          "points": null
+          "points": null,
+          "status": "scratched"
         }
       ],
       "place": null
@@ -2290,7 +2303,8 @@
       "rides": [
         {
           "stage": "round1",
-          "points": null
+          "points": null,
+          "status": "scratched"
         }
       ],
       "place": null
@@ -2447,7 +2461,8 @@
       "rides": [
         {
           "stage": "round1",
-          "points": null
+          "points": null,
+          "status": "out"
         }
       ],
       "place": null
@@ -2480,7 +2495,8 @@
         },
         {
           "stage": "round2",
-          "points": null
+          "points": null,
+          "status": "out"
         }
       ],
       "place": null
@@ -2509,7 +2525,8 @@
       "rides": [
         {
           "stage": "round1",
-          "points": null
+          "points": null,
+          "status": "scratched"
         }
       ],
       "place": null
@@ -2538,7 +2555,8 @@
       "rides": [
         {
           "stage": "round1",
-          "points": null
+          "points": null,
+          "status": "out"
         }
       ],
       "place": null

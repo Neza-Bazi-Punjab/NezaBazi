@@ -6,7 +6,7 @@
    - An "unknown" run counts as ridden, scores 0, and is left out of both
      percentages and of points per run.
    - A team ride with points: null counts as a ride and is left out of the
-     best ride and the full houses. Teams were placed on each round's result,
+     full houses. Its status, when set, says why it has no total. Teams were placed on each round's result,
      so there is no running team total. */
 
 import {
@@ -16,6 +16,7 @@ import {
   type SeasonStats,
   type SingleStage,
   type StatRider,
+  type StatRideStatus,
   type StatTeam,
   type TeamStage,
 } from "./types.ts";
@@ -56,10 +57,10 @@ export interface TeamRow {
   name: string;
   riders: { name: string; horse: string | null }[];
   rides: number;
-  /* The highest recorded ride total, for the Best ride tile. */
-  best: number | null;
   fullHouses: number;
   stages: Record<TeamStage, StageCell>;
+  /* Why a stage shows no total (scratched or out), where the file says. */
+  statuses: Partial<Record<TeamStage, StatRideStatus>>;
   reached: TeamStage | null;
   reachedIndex: number;
   place: 1 | 2 | 3 | null;
@@ -87,13 +88,41 @@ export const TEAM_STAGE_LABELS: Record<TeamStage, string> = {
 
 /* ---------- riders ---------- */
 
+/* Countries a location might end with. A country is never offered as a
+   state: it is dropped, and what is left must still have two parts. */
+const COUNTRIES = new Set(
+  [
+    "india",
+    "pakistan",
+    "canada",
+    "united states",
+    "united states of america",
+    "usa",
+    "us",
+    "united kingdom",
+    "uk",
+    "england",
+    "scotland",
+    "wales",
+    "australia",
+    "new zealand",
+    "italy",
+    "germany",
+    "kenya",
+  ]
+);
+
+/* The state or province: the last part of "District, State". A location of
+   one part ("Punjab", a city on its own) has no state, and a country is
+   never a state. */
 export function stateOf(location: string | null): string | null {
   if (!location) return null;
   const parts = location
     .split(",")
     .map((part) => part.trim())
     .filter(Boolean);
-  return parts.length ? parts[parts.length - 1] : null;
+  while (parts.length && COUNTRIES.has(parts[parts.length - 1].toLowerCase())) parts.pop();
+  return parts.length >= 2 ? parts[parts.length - 1] : null;
 }
 
 const rate = (count: number, of: number) => (of > 0 ? count / of : null);
@@ -210,23 +239,24 @@ export function riderRows(season: Pick<SeasonStats, "riders">): RiderRow[] {
 /* ---------- teams ---------- */
 
 export function teamNumbers(team: StatTeam): Omit<TeamRow, "rank"> {
-  let best: number | null = null;
   let fullHouses = 0;
   let reachedIndex = -1;
   const stages = Object.fromEntries(TEAM_STAGES.map((stage) => [stage, undefined])) as Record<
     TeamStage,
     StageCell
   >;
+  const statuses: Partial<Record<TeamStage, StatRideStatus>> = {};
 
   for (const ride of team.rides) {
     reachedIndex = Math.max(reachedIndex, TEAM_STAGES.indexOf(ride.stage));
     const before = stages[ride.stage];
     if (ride.points === null) {
       if (before === undefined) stages[ride.stage] = null;
+      if (ride.status && stages[ride.stage] === null) statuses[ride.stage] = ride.status;
       continue;
     }
     stages[ride.stage] = (before ?? 0) + ride.points;
-    best = best === null ? ride.points : Math.max(best, ride.points);
+    delete statuses[ride.stage];
     if (ride.points === FULL_HOUSE) fullHouses += 1;
   }
 
@@ -235,9 +265,9 @@ export function teamNumbers(team: StatTeam): Omit<TeamRow, "rank"> {
     name: team.name,
     riders: team.riders,
     rides: team.rides.length,
-    best,
     fullHouses,
     stages,
+    statuses,
     reached: reachedIndex >= 0 ? TEAM_STAGES[reachedIndex] : null,
     reachedIndex,
     place: team.place,
@@ -256,17 +286,18 @@ export function riderSummary(rows: RiderRow[]) {
     riders: rows.filter((row) => row.runs > 0).length,
     runs: rows.reduce((sum, row) => sum + row.runs, 0),
     carries: rows.reduce((sum, row) => sum + row.carries, 0),
-    reachedAarhi: rows.filter((row) => row.reachedIndex >= SINGLE_STAGES.indexOf("aarhi1")).length,
+    /* Riders who went on from qualification to Aarhi round 1 or further. */
+    throughQualification: rows.filter((row) => row.reachedIndex >= SINGLE_STAGES.indexOf("aarhi1")).length,
   };
 }
 
 export function teamSummary(rows: TeamRow[]) {
-  const bests = rows.map((row) => row.best).filter((best): best is number => best !== null);
   return {
     teams: rows.length,
     rides: rows.reduce((sum, row) => sum + row.rides, 0),
+    /* Teams that went on from Round 1 to Round 2 or further. */
+    throughRound1: rows.filter((row) => row.reachedIndex >= TEAM_STAGES.indexOf("round2")).length,
     fullHouses: rows.reduce((sum, row) => sum + row.fullHouses, 0),
-    best: bests.length ? Math.max(...bests) : null,
   };
 }
 

@@ -36,11 +36,19 @@ export interface StatRider {
   place: 1 | 2 | 3 | null;
 }
 
+/* Why a team ride has no total, when that is known. */
+export type StatRideStatus = "scratched" | "out";
+
 export interface StatTeamRide {
   stage: TeamStage;
   /* Out of 16 (four riders, one peg each). null = the ride happened but its
      total was not recorded; it counts as a ride and is left out of totals. */
   points: number | null;
+  /* Only with points: null. scratched = the ride was struck out and scored
+     nothing (the team set off before it was called, or left a rider behind
+     and rode on); out = the team was put out and no total was announced.
+     No status = the total was simply not recorded. */
+  status?: StatRideStatus;
 }
 
 export interface StatTeam {

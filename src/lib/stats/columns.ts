@@ -4,6 +4,8 @@
    A cell is one of:
    - blank: the rider or team did not ride that stage;
    - dash: ridden, but no result is known (with the reason, read aloud);
+   - status: a team ride with no total because it was scratched or the team
+     was put out ("Scratched" / "Out", with the full meaning read aloud);
    - a value. */
 
 import {
@@ -18,12 +20,31 @@ import {
   type StageCell,
   type TeamRow,
 } from "./compute.ts";
-import { SINGLE_STAGES, TEAM_STAGES, type SingleStage, type TeamStage } from "./types.ts";
+import {
+  SINGLE_STAGES,
+  TEAM_STAGES,
+  type SingleStage,
+  type StatRideStatus,
+  type TeamStage,
+} from "./types.ts";
 
 export type Cell =
   | { kind: "blank"; reason: string }
   | { kind: "dash"; reason: string }
+  | { kind: "status"; text: string; reason: string }
   | { kind: "value"; text: string };
+
+/* What a team ride's status shows: a short word, and its full meaning for
+   the tooltip and screen readers. */
+export const RIDE_STATUS_TEXT: Record<StatRideStatus, { text: string; meaning: string }> = {
+  scratched: { text: "Scratched", meaning: "this ride did not count" },
+  out: { text: "Out", meaning: "no total was announced" },
+};
+
+const statusCell = (status: StatRideStatus): Cell => {
+  const { text, meaning } = RIDE_STATUS_TEXT[status];
+  return { kind: "status", text, reason: `${text}: ${meaning}` };
+};
 
 export interface ColumnGroup {
   id: string;
@@ -61,10 +82,14 @@ const placeCell = (place: 1 | 2 | 3 | null): Cell =>
 
 /* ---------- riders ---------- */
 
+/* On a phone the table opens on who did what: total points, how far each
+   rider got and the place. The run counts, round points and rates are one
+   tap away under Columns. */
 export const RIDER_GROUPS: readonly ColumnGroup[] = [
   { id: "runs", label: "Runs", onPhone: false },
   { id: "rounds", label: "Points by round", onPhone: false },
-  { id: "totals", label: "Totals", onPhone: true },
+  { id: "totals", label: "Total", onPhone: true },
+  { id: "rates", label: "Rates", onPhone: false },
   { id: "result", label: "Result", onPhone: true },
 ];
 
@@ -156,7 +181,7 @@ export const RIDER_COLUMNS: readonly StatColumn<RiderRow>[] = [
     id: "pointsPerRun",
     label: "Pts/Run",
     title: "Points per run",
-    group: "totals",
+    group: "rates",
     numeric: true,
     firstDirection: "descending",
     sortValue: (row) => row.pointsPerRun,
@@ -166,7 +191,7 @@ export const RIDER_COLUMNS: readonly StatColumn<RiderRow>[] = [
     id: "carryRate",
     label: "Carry %",
     title: "Carry percentage",
-    group: "totals",
+    group: "rates",
     numeric: true,
     firstDirection: "descending",
     sortValue: (row) => row.carryRate,
@@ -176,7 +201,7 @@ export const RIDER_COLUMNS: readonly StatColumn<RiderRow>[] = [
     id: "hitRate",
     label: "Hit %",
     title: "Hit percentage",
-    group: "totals",
+    group: "rates",
     numeric: true,
     firstDirection: "descending",
     sortValue: (row) => row.hitRate,
@@ -221,7 +246,12 @@ export const TEAM_COLUMNS: readonly StatColumn<TeamRow>[] = [
       numeric: true,
       firstDirection: "descending",
       sortValue: (row) => row.stages[stage],
-      cell: (row) => stageCell(row.stages[stage], "ridden, total not recorded"),
+      cell: (row) => {
+        const status = row.statuses[stage];
+        return status
+          ? statusCell(status)
+          : stageCell(row.stages[stage], "ridden, total not recorded");
+      },
     })
   ),
   {

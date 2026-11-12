@@ -12,6 +12,7 @@ import {
   type SeasonStats,
   type SingleStage,
   type StatResult,
+  type StatRideStatus,
   type TeamStage,
 } from "./types.ts";
 
@@ -20,6 +21,7 @@ const SEASON_FILES: Record<number, unknown> = {
 };
 
 const RESULTS: readonly StatResult[] = ["carry", "strike", "miss", "unknown"];
+const RIDE_STATUSES: readonly StatRideStatus[] = ["scratched", "out"];
 
 const fail = (where: string, what: string): never => {
   throw new Error(`Season stats file: ${where} ${what}`);
@@ -98,6 +100,12 @@ export function parseSeason(raw: unknown): SeasonStats {
         (typeof points !== "number" || !Number.isInteger(points) || points < 0 || points > 16)
       ) {
         fail(`${where}.rides[${rideIndex}]`, "has points that are not a whole number from 0 to 16");
+      }
+      if (ride.status !== undefined) {
+        if (!RIDE_STATUSES.includes(ride.status as StatRideStatus)) {
+          fail(`${where}.rides[${rideIndex}]`, `has an unknown status "${String(ride.status)}"`);
+        }
+        if (points !== null) fail(`${where}.rides[${rideIndex}]`, "has a status and a total (a status needs points: null)");
       }
     });
   });

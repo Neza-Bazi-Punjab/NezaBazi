@@ -34,7 +34,14 @@ ride's total, and the placings. Everything else is worked out in
 - Points: carry 4, strike 2, miss 0. An `unknown` run counts as ridden, scores
   0, and is left out of both percentages.
 - A team ride with `points: null` counts as a ride and is left out of the
-  best ride and the full houses.
+  full houses. It may carry an optional `status` (only with `points: null`;
+  the loader rejects it otherwise): `scratched` = the ride was struck out and
+  scored nothing (the team set off before it was called, or left a rider
+  behind and rode on); `out` = the team was put out and no total was
+  announced. No status = the total was simply not recorded.
+- Locations are "District, State" (no country). The State filter offers only
+  real states or provinces: a location with one part has no state, and a
+  trailing country is dropped and never listed.
 - Teams were placed on each round's result, not on a running total, so the
   teams view has no total, average or best column (owner, 11 Nov 2026).
 
@@ -84,7 +91,7 @@ then name. Riders level on all of those share a rank number.
 
 | Column | Meaning |
 |---|---|
-| Round 1, Round 2, 3rd place, Final, Tie-break | the ride's total out of 16; blank if not ridden; a dash if ridden and not recorded |
+| Round 1, Round 2, 3rd place, Final, Tie-break | the ride's total out of 16; blank if not ridden; "Scratched" or "Out" (small, quiet; the full meaning in a title and for screen readers: "Scratched: this ride did not count" / "Out: no total was announced"); a dash if ridden and not recorded with no status |
 | Reached | the last stage the team rode |
 | Place | 1st, 2nd, 3rd where set |
 
@@ -93,7 +100,9 @@ name. There is no total-points tie-break (there was no running total), so
 teams level on points in their last round share a rank number.
 
 The Reached filter for teams reads "3rd place ride-off or the Final" for that
-step, because the ride-off and the Final were ridden side by side.
+step, because the ride-off and the Final were ridden side by side. The Reached
+filter has no option for the first round (everyone rode it, so it is the same
+as "Any round") or for the tie-break (the same teams as the Final).
 
 ## Page
 
@@ -106,14 +115,27 @@ season, and renders one client component that owns the interaction.
    so a link opens the same view; everything else is local state.
 2. **Provisional strip** when `season.provisional`: one calm line saying the
    results are still being checked.
-3. **Summary tiles**, four per view.
-   Riders: riders who rode, runs ridden, pegs carried, riders who reached the
-   Aarhi round. Teams: teams, rides, full houses (a 16), best ride.
+3. **Summary tiles**, four plain counts per view.
+   Riders: Riders, Runs ridden, Pegs carried ("4 points each"), Through
+   qualification ("Went on to the Aarhi rounds"). Teams: Teams, Rides,
+   Through Round 1 ("Went on to Round 2"), Full houses ("16 out of 16").
+   The Best ride tile was removed (third pass): with any full house it is
+   always 16, so it repeated Full houses.
 4. **Toolbar.** A search box (rider, horse or place; team or rider name in the
    team view); **Filters** (riders: Reached, State; teams: Reached); **Columns**
-   (switch column groups on and off); **Stats legend** (what C, S, M, Pts/Run,
-   Carry %, Hit % and the round headings mean, and how points work); "Showing 1–25 of N riders"; page
-   size 25 / 50 / 100.
+   (switch column groups on and off); **Stats legend**; "Showing 1–25 of N
+   riders"; page size 25 / 50 / 100.
+
+   The **legend** teaches the event to a first-time visitor, laid out like the
+   reference: short titled sections, each a list of a term and one plain line,
+   a header with a Close button, scrolling inside itself when tall, brought
+   into view on open. The words live in `src/lib/stats/legend.ts`. Sections,
+   in order, with only what applies to the view: "How points work" (carry 4,
+   strike 2, miss 0); riders: "How a rider goes through" (Qualification,
+   Aarhi round 1, Aarhi round 2, Placing ride); teams: "How a team goes
+   through" (a ride out of 16, full house, Round 1, Round 2, Final); "Reading
+   the table" (every column heading of the view, then what a dash, a blank
+   and, for teams, "Scratched" and "Out" mean). No em dashes; no group named.
 5. **Table.** A real `<table>` with a caption, two header rows (group, then
    column), `scope` on headers, sortable columns (click toggles descending /
    ascending, `aria-sort` set, a visible indicator), numbers right-aligned in
@@ -122,7 +144,9 @@ season, and renders one client component that owns the interaction.
 6. **Pagination.** Previous, numbered pages, Next. Changing search, filters,
    sort or page size goes back to page 1.
 7. **Notes.** `season.notes` under the table, then "Last updated <date>".
-8. **Empty states.** No rows after filtering: say so and offer "Clear filters".
+8. **Footnote** under the table for the marks on that page only: the dash,
+   and for teams "Scratched" and "Out".
+9. **Empty states.** No rows after filtering: say so and offer "Clear filters".
 
 ### Phones
 
@@ -130,8 +154,9 @@ season, and renders one client component that owns the interaction.
   standings; do not bring it back).
 - The table sits in its own horizontally scrollable region with the rank and
   name columns sticky on the left, and a visible hint that it scrolls.
-- Riders: fewer column groups are on by default below `sm` (Runs and Points by
-  round off); Columns turns them back on. Teams: both groups (Points by round,
+- Riders: the groups are Runs (Runs, C, S, M), Points by round, Total (Pts),
+  Rates (Pts/Run, Carry %, Hit %) and Result. Below `sm` only Total and
+  Result are on by default (who did what); Columns turns the rest back on. Teams: both groups (Points by round,
   Result) are on, because the round points are the team's whole record.
 - Popovers (Filters, Columns, Legend) must be usable by touch and keyboard and
   close on Escape and on outside click.

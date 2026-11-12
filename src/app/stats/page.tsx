@@ -41,27 +41,28 @@ export default async function StatsPage({
   const riders = view === "riders" ? riderRows(season) : null;
   const teams = view === "teams" ? teamRows(season) : null;
 
+  /* Four plain counts a visitor can read at a glance. */
   const tiles = riders
     ? (() => {
         const summary = riderSummary(riders);
         return [
-          { label: "Riders who rode", value: String(summary.riders) },
+          { label: "Riders", value: String(summary.riders) },
           { label: "Runs ridden", value: String(summary.runs) },
-          { label: "Pegs carried", value: String(summary.carries) },
-          { label: "Reached the Aarhi rounds", value: String(summary.reachedAarhi) },
+          { label: "Pegs carried", value: String(summary.carries), note: "4 points each" },
+          {
+            label: "Through qualification",
+            value: String(summary.throughQualification),
+            note: "Went on to the Aarhi rounds",
+          },
         ];
       })()
     : (() => {
         const summary = teamSummary(teams!);
         return [
           { label: "Teams", value: String(summary.teams) },
-          { label: "Rides", value: String(summary.rides) },
-          { label: "Full houses", value: String(summary.fullHouses), note: "A ride of 16 out of 16" },
-          {
-            label: "Best ride",
-            value: summary.best === null ? "–" : String(summary.best),
-            note: summary.best === null ? "No ride totals recorded yet" : "Out of 16",
-          },
+          { label: "Rides", value: String(summary.rides), note: "Four riders, one peg each" },
+          { label: "Through Round 1", value: String(summary.throughRound1), note: "Went on to Round 2" },
+          { label: "Full houses", value: String(summary.fullHouses), note: "16 out of 16" },
         ];
       })();
 

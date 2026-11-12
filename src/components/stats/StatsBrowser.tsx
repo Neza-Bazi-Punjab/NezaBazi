@@ -6,6 +6,7 @@ import {
   RIDER_GROUPS,
   TEAM_COLUMNS,
   TEAM_GROUPS,
+  RIDE_STATUS_TEXT,
   type Cell,
   type ColumnGroup,
   type StatColumn,
@@ -63,8 +64,8 @@ const riderConfig: ViewConfig<RiderRow> = {
   columns: RIDER_COLUMNS,
   groups: RIDER_GROUPS,
   searchFields: riderSearchFields,
+  /* Everyone rode qualification, so "Any round" already covers it. */
   stageOptions: [
-    { index: 0, label: SINGLE_STAGE_LABELS.qualification },
     { index: 1, label: `${SINGLE_STAGE_LABELS.aarhi1} or further` },
     { index: 2, label: `${SINGLE_STAGE_LABELS.aarhi2} or further` },
     { index: 3, label: SINGLE_STAGE_LABELS.final },
@@ -81,13 +82,13 @@ const teamConfig: ViewConfig<TeamRow> = {
   groups: TEAM_GROUPS,
   searchFields: teamSearchFields,
   /* The 3rd place ride-off and the Final were ridden side by side, so
-     "or further" from the ride-off also takes in the finalists. */
+     "or further" from the ride-off also takes in the finalists. Everyone
+     rode Round 1 ("Any round"), and the tie-break teams are the finalists,
+     so neither has an option of its own. */
   stageOptions: [
-    { index: 0, label: TEAM_STAGE_LABELS.round1 },
     { index: 1, label: `${TEAM_STAGE_LABELS.round2} or further` },
     { index: 2, label: `${TEAM_STAGE_LABELS.third} or the ${TEAM_STAGE_LABELS.final1}` },
     { index: 3, label: TEAM_STAGE_LABELS.final1 },
-    { index: 4, label: TEAM_STAGE_LABELS.final2 },
   ],
   subline: (row) => row.riders.map((rider) => rider.name).join(", "),
 };
@@ -249,7 +250,10 @@ function Browser<T extends { id: string; name: string; rank: number; reachedInde
         : `by ${lowerFirst(sortColumn?.title ?? sortColumn?.label ?? "rank")}, ${
             sort.direction === "descending" ? "highest first" : "lowest first"
           }`;
-  const anyDash = shown.some((row) => visibleColumns.some(({ column }) => column.cell(row).kind === "dash"));
+  /* The footnote explains only the marks on this page of the table. */
+  const shownCells = shown.flatMap((row) => visibleColumns.map(({ column }) => column.cell(row)));
+  const anyDash = shownCells.some((cell) => cell.kind === "dash");
+  const shownStatuses = new Set(shownCells.flatMap((cell) => (cell.kind === "status" ? [cell.text] : [])));
 
   const ariaSort = (key: SortKey) => (sort.key === key ? sort.direction : undefined);
 
@@ -367,7 +371,7 @@ function Browser<T extends { id: string; name: string; rank: number; reachedInde
             </fieldset>
           </Popover>
 
-          <Popover label="Stats legend" {...panelProps("legend")}>
+          <Popover label="Stats legend" title="Stats legend" wide {...panelProps("legend")}>
             <StatsLegend view={view} />
           </Popover>
         </div>
@@ -542,16 +546,27 @@ function Browser<T extends { id: string; name: string; rank: number; reachedInde
               </tbody>
             </table>
           </div>
-          {anyDash && (
-            <p className="mt-2 text-xs text-brown/70">
-              <span aria-hidden className="font-semibold">
-                –
-              </span>
-              <span className="sr-only">A dash</span>{" "}
-              {view === "teams"
-                ? "ridden, total not recorded. It counts as a ride and scores nothing."
-                : "ridden, result not recorded. It counts as a run and is left out of the percentages."}
-            </p>
+          {(anyDash || shownStatuses.size > 0) && (
+            <ul className="mt-2 space-y-0.5 text-xs text-brown/70">
+              {anyDash && (
+                <li>
+                  <span aria-hidden className="font-semibold">
+                    –
+                  </span>
+                  <span className="sr-only">A dash:</span>{" "}
+                  {view === "teams"
+                    ? "ridden, total not recorded."
+                    : "ridden, result not recorded. Left out of the % columns."}
+                </li>
+              )}
+              {Object.values(RIDE_STATUS_TEXT)
+                .filter(({ text }) => shownStatuses.has(text))
+                .map(({ text, meaning }) => (
+                  <li key={text}>
+                    <span className="font-semibold">{text}:</span> {meaning}.
+                  </li>
+                ))}
+            </ul>
           )}
           <Pagination page={current} count={pages} onPage={goToPage} />
         </>
@@ -567,6 +582,14 @@ const lowerFirst = (text: string) => (text ? text[0].toLowerCase() + text.slice(
 function CellView({ cell }: { cell: Cell }) {
   if (cell.kind === "value") return <>{cell.text}</>;
   if (cell.kind === "blank") return <span className="sr-only">{cell.reason}</span>;
+  if (cell.kind === "status") {
+    return (
+      <span title={cell.reason} className="text-xs font-normal normal-case text-brown/60">
+        <span aria-hidden>{cell.text}</span>
+        <span className="sr-only">{cell.reason}</span>
+      </span>
+    );
+  }
   return (
     <span title={cell.reason[0].toUpperCase() + cell.reason.slice(1)} className="text-brown/60">
       <span aria-hidden>–</span>

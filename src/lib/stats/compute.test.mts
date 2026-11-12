@@ -29,7 +29,7 @@ import {
   teamSummary,
 } from "./compute.ts";
 import { parseSeason } from "./seasons.ts";
-import type { SingleStage, StatResult, StatRider, StatTeam, TeamStage } from "./types.ts";
+import type { SingleStage, StatResult, StatRideStatus, StatRider, StatTeam, TeamStage } from "./types.ts";
 
 const rider = (
   id: string,
@@ -45,11 +45,15 @@ const rider = (
   ...extra,
 });
 
-const team = (id: string, rides: [TeamStage, number | null][], extra: Partial<StatTeam> = {}): StatTeam => ({
+const team = (
+  id: string,
+  rides: ([TeamStage, number | null] | [TeamStage, null, StatRideStatus])[],
+  extra: Partial<StatTeam> = {}
+): StatTeam => ({
   id,
   name: id,
   riders: [],
-  rides: rides.map(([stage, points]) => ({ stage, points })),
+  rides: rides.map(([stage, points, status]) => (status ? { stage, points, status } : { stage, points })),
   place: null,
   ...extra,
 });
@@ -173,7 +177,7 @@ test("carry rate breaks a tie on points, and riders level on everything share a 
   assert.equal(rows[5].reached, null);
 });
 
-test("a team ride with no recorded total counts as a ride, not toward the best", () => {
+test("a team ride with no recorded total counts as a ride, not toward the full houses", () => {
   const row = teamNumbers(
     team("t", [
       ["round1", 12],
@@ -182,16 +186,48 @@ test("a team ride with no recorded total counts as a ride, not toward the best",
     ])
   );
   assert.equal(row.rides, 3);
-  assert.equal(row.best, 16);
   assert.equal(row.fullHouses, 1);
+  assert.deepEqual(row.statuses, {});
   assert.deepEqual(row.stages, { round1: 12, round2: null, third: 16, final1: undefined, final2: undefined });
   assert.equal(row.reached, "third");
 
   const none = teamNumbers(team("n", [["round1", null]]));
   assert.equal(none.rides, 1);
-  assert.equal(none.best, null);
+  assert.equal(none.fullHouses, 0);
   const cell = column<(typeof TEAM_COLUMNS)[number]>(TEAM_COLUMNS, "stage-round1").cell({ ...none, rank: 1 });
   assert.equal(cell.kind, "dash");
+});
+
+test("team ride status: Scratched, Out, or a dash when no reason is given", () => {
+  const roundCell = (row: StatTeam, stage: TeamStage) =>
+    column<(typeof TEAM_COLUMNS)[number]>(TEAM_COLUMNS, `stage-${stage}`).cell({ ...teamNumbers(row), rank: 1 });
+
+  const scratched = team("s", [["round1", null, "scratched"]]);
+  assert.deepEqual(teamNumbers(scratched).statuses, { round1: "scratched" });
+  assert.deepEqual(roundCell(scratched, "round1"), {
+    kind: "status",
+    text: "Scratched",
+    reason: "Scratched: this ride did not count",
+  });
+
+  const out = team("o", [["round1", 8], ["round2", null, "out"]]);
+  assert.deepEqual(roundCell(out, "round1"), { kind: "value", text: "8" });
+  assert.deepEqual(roundCell(out, "round2"), { kind: "status", text: "Out", reason: "Out: no total was announced" });
+  assert.equal(teamNumbers(out).reached, "round2");
+  assert.equal(teamNumbers(out).rides, 2);
+
+  const unrecorded = team("u", [["round1", null]]);
+  assert.deepEqual(teamNumbers(unrecorded).statuses, {});
+  assert.deepEqual(roundCell(unrecorded, "round1"), { kind: "dash", reason: "ridden, total not recorded" });
+
+  // A status never hides a recorded total in the same stage.
+  const both = team("b", [["round1", null, "scratched"], ["round1", 12]]);
+  assert.deepEqual(roundCell(both, "round1"), { kind: "value", text: "12" });
+
+  // A status cell sorts with the blanks and dashes, last both ways.
+  const ranked = teamRows({ teams: [scratched, team("v", [["round1", 4]])] });
+  const sortValue = column<(typeof TEAM_COLUMNS)[number]>(TEAM_COLUMNS, "stage-round1").sortValue;
+  assert.deepEqual(sortRows(ranked, sortValue, "ascending").map((row) => row.id), ["v", "s"]);
 });
 
 test("the teams table has no running total: only round points and the result", () => {
@@ -281,13 +317,12 @@ test("summary tiles count the whole season", () => {
       rider("c", []),
     ],
   });
-  assert.deepEqual(riderSummary(riders), { riders: 2, runs: 4, carries: 2, reachedAarhi: 1 });
+  assert.deepEqual(riderSummary(riders), { riders: 2, runs: 4, carries: 2, throughQualification: 1 });
 
   const teams = teamRows({
     teams: [team("x", [["round1", 16], ["round2", 16]]), team("y", [["round1", null]])],
   });
-  assert.deepEqual(teamSummary(teams), { teams: 2, rides: 3, fullHouses: 2, best: 16 });
-  assert.equal(teamSummary(teamRows({ teams: [team("y", [["round1", null]])] })).best, null);
+  assert.deepEqual(teamSummary(teams), { teams: 2, rides: 3, throughRound1: 1, fullHouses: 2 });
 });
 
 test("sortRows keeps blanks and dashes last both ways and breaks ties by rank", () => {
@@ -320,9 +355,15 @@ test("search matches every word across name, horse and place, ignoring case", ()
   assert.equal(matchesSearch("x", [null, undefined]), false);
 });
 
-test("states come from the last part of the location", () => {
+test("states come from the last part of the location, never a single part or a country", () => {
   assert.equal(stateOf("Amritsar, Punjab"), "Punjab");
   assert.equal(stateOf("Surrey,  British Columbia "), "British Columbia");
+  assert.equal(stateOf("Amritsar, Punjab, India"), "Punjab");
+  assert.equal(stateOf("Brampton, Ontario, Canada"), "Ontario");
+  assert.equal(stateOf("Toronto, Canada"), null);
+  assert.equal(stateOf("Punjab"), null);
+  assert.equal(stateOf("Chandigarh"), null);
+  assert.equal(stateOf("India"), null);
   assert.equal(stateOf(null), null);
   assert.equal(stateOf(" , "), null);
   const rows = riderRows({
@@ -331,6 +372,8 @@ test("states come from the last part of the location", () => {
       rider("b", [], { location: "Y, Haryana" }),
       rider("c", [], { location: "Z, Punjab" }),
       rider("d", []),
+      rider("e", [], { location: "Punjab" }),
+      rider("f", [], { location: "Leeds, England" }),
     ],
   });
   assert.deepEqual(statesOf(rows), ["Haryana", "Punjab"]);
@@ -364,7 +407,7 @@ test("formatting: percentages, decimals, places and dates", () => {
   assert.equal(formatDate("soon"), "soon");
 });
 
-test("parseSeason rejects a file with an unknown result or a total over 16", () => {
+test("parseSeason rejects a file with an unknown result, a total over 16 or a bad ride status", () => {
   const good = {
     season: 2030,
     eventName: "E",
@@ -385,5 +428,12 @@ test("parseSeason rejects a file with an unknown result or a total over 16", () 
     /0 to 16/
   );
   assert.throws(() => parseSeason({ ...good, riders: [good.riders[0], good.riders[0]] }), /repeats the id/);
+
+  // A ride status is accepted only with points: null.
+  const withStatus = (ride: unknown) => ({ ...good, teams: [{ ...good.teams[0], rides: [ride] }] });
+  assert.equal(parseSeason(withStatus({ stage: "round1", points: null, status: "scratched" })).teams[0].rides[0].status, "scratched");
+  assert.equal(parseSeason(withStatus({ stage: "round1", points: null, status: "out" })).teams[0].rides[0].status, "out");
+  assert.throws(() => parseSeason(withStatus({ stage: "round1", points: 8, status: "out" })), /needs points: null/);
+  assert.throws(() => parseSeason(withStatus({ stage: "round1", points: null, status: "late" })), /unknown status/);
   assert.throws(() => parseSeason(null), /not an object/);
 });
