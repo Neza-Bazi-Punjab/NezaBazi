@@ -249,7 +249,8 @@ test("/live is taken down for now: it sends visitors to /stats, linked instead",
 
   const stats = read("../stats/page.tsx");
   assert.match(stats, /title: "Stats"/);
-  assert.match(stats, /Coming Soon/);
+  // /stats is the real Stats page now (src/app/stats/stats-page.test.mts).
+  assert.doesNotMatch(stats, /Coming Soon/);
   assert.doesNotMatch(stats, /robots/);
 
   assert.ok(footerQuickLinks.some((link) => link.href === "/stats" && link.label === "Stats"));
