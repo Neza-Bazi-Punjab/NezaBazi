@@ -17,6 +17,10 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=()" },
 ];
 
+/* Every year in SEASONS (src/lib/stats/seasons.ts), as a named group for the
+   old ?season= links. src/app/stats/stats-page.test.mts keeps the two in step. */
+const STATS_SEASON_PATTERN = "(?<season>2026)";
+
 const nextConfig: NextConfig = {
   // `npm run dev` only: let a phone on the same Wi-Fi open the dev server by
   // the computer's local address (e.g. http://192.168.1.20:3000) to try
@@ -26,6 +30,34 @@ const nextConfig: NextConfig = {
     return [
       // The About page became the Event page.
       { source: "/about", destination: "/event", permanent: true },
+      // Stats moved from ?season= and ?view= to paths, so each page can be
+      // built at deploy time (src/app/stats/StatsSeason.tsx). Old links land
+      // on the same table. STATS_SEASON_PATTERN lists the seasons with a page;
+      // any other ?season= falls back to the newest season, as it always did.
+      // First match wins, so the season-and-teams rule comes first. Not
+      // permanent: browsers would remember a permanent one for good, and these
+      // addresses are only days old.
+      {
+        source: "/stats",
+        has: [
+          { type: "query", key: "season", value: STATS_SEASON_PATTERN },
+          { type: "query", key: "view", value: "teams" },
+        ],
+        destination: "/stats/:season/teams",
+        permanent: false,
+      },
+      {
+        source: "/stats",
+        has: [{ type: "query", key: "season", value: STATS_SEASON_PATTERN }],
+        destination: "/stats/:season",
+        permanent: false,
+      },
+      {
+        source: "/stats",
+        has: [{ type: "query", key: "view", value: "teams" }],
+        destination: "/stats/teams",
+        permanent: false,
+      },
     ];
   },
   async headers() {
