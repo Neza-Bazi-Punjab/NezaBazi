@@ -18,7 +18,7 @@ import {
   type StageCell,
   type TeamRow,
 } from "./compute.ts";
-import { SINGLE_STAGES, TEAM_STAGES } from "./types.ts";
+import { SINGLE_STAGES, TEAM_STAGES, type SingleStage, type TeamStage } from "./types.ts";
 
 export type Cell =
   | { kind: "blank"; reason: string }
@@ -68,7 +68,22 @@ export const RIDER_GROUPS: readonly ColumnGroup[] = [
   { id: "result", label: "Result", onPhone: true },
 ];
 
-const SHORT_SINGLE: Record<string, string> = { qualification: "Qual" };
+/* Short headings where the full round name is too wide for the table. The
+   full name is still what a screen reader hears (the column title). */
+const SHORT_SINGLE: Record<SingleStage, string> = {
+  qualification: "Qual",
+  aarhi1: "Aarhi 1",
+  aarhi2: "Aarhi 2",
+  final: "Placing",
+};
+
+const SHORT_TEAM: Record<TeamStage, string> = {
+  round1: "Round 1",
+  round2: "Round 2",
+  third: "3rd place",
+  final1: "Final",
+  final2: "Tie-break",
+};
 
 const NO_KNOWN_RUN = "no run with a known result";
 
@@ -116,7 +131,7 @@ export const RIDER_COLUMNS: readonly StatColumn<RiderRow>[] = [
   ...SINGLE_STAGES.map(
     (stage): StatColumn<RiderRow> => ({
       id: `stage-${stage}`,
-      label: SHORT_SINGLE[stage] ?? SINGLE_STAGE_LABELS[stage],
+      label: SHORT_SINGLE[stage],
       title: `Points in ${SINGLE_STAGE_LABELS[stage]}`,
       group: "rounds",
       numeric: true,
@@ -191,8 +206,8 @@ export const RIDER_COLUMNS: readonly StatColumn<RiderRow>[] = [
 /* ---------- teams ---------- */
 
 export const TEAM_GROUPS: readonly ColumnGroup[] = [
-  { id: "rounds", label: "Points by round", onPhone: false },
-  { id: "totals", label: "Totals", onPhone: true },
+  // The round points are the team's whole record, so phones show them too.
+  { id: "rounds", label: "Points by round", onPhone: true },
   { id: "result", label: "Result", onPhone: true },
 ];
 
@@ -200,7 +215,7 @@ export const TEAM_COLUMNS: readonly StatColumn<TeamRow>[] = [
   ...TEAM_STAGES.map(
     (stage): StatColumn<TeamRow> => ({
       id: `stage-${stage}`,
-      label: TEAM_STAGE_LABELS[stage],
+      label: SHORT_TEAM[stage],
       title: `Points in ${TEAM_STAGE_LABELS[stage]}, out of 16`,
       group: "rounds",
       numeric: true,
@@ -209,46 +224,6 @@ export const TEAM_COLUMNS: readonly StatColumn<TeamRow>[] = [
       cell: (row) => stageCell(row.stages[stage], "ridden, total not recorded"),
     })
   ),
-  {
-    id: "rides",
-    label: "Rides",
-    title: "Rides ridden",
-    group: "totals",
-    numeric: true,
-    firstDirection: "descending",
-    sortValue: (row) => row.rides,
-    cell: (row) => value(row.rides),
-  },
-  {
-    id: "points",
-    label: "Pts",
-    title: "Points",
-    group: "totals",
-    numeric: true,
-    firstDirection: "descending",
-    sortValue: (row) => (row.recorded > 0 ? row.points : null),
-    cell: (row) => (row.recorded > 0 ? value(row.points) : { kind: "dash", reason: "no total recorded" }),
-  },
-  {
-    id: "average",
-    label: "Avg",
-    title: "Average points per ride",
-    group: "totals",
-    numeric: true,
-    firstDirection: "descending",
-    sortValue: (row) => row.average,
-    cell: (row) => orDash(formatDecimal(row.average, 1), "no total recorded"),
-  },
-  {
-    id: "best",
-    label: "Best",
-    title: "Best ride",
-    group: "totals",
-    numeric: true,
-    firstDirection: "descending",
-    sortValue: (row) => row.best,
-    cell: (row) => orDash(row.best === null ? null : String(row.best), "no total recorded"),
-  },
   {
     id: "reached",
     label: "Reached",

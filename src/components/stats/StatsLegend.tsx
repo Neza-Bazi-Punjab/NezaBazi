@@ -5,20 +5,23 @@ const riderTerms: [string, string][] = [
   ["C", "Carry: the peg is picked up and carried past the line. 4 points."],
   ["S", "Strike: the peg is hit but not carried. 2 points."],
   ["M", "Miss: the peg is not hit. 0 points."],
+  ["Qual", "Qualification: the points the rider scored in it."],
+  ["Aarhi 1, Aarhi 2", "Aarhi round 1 and Aarhi round 2: points in each knockout round."],
+  ["Placing", "Placing ride: one ride for first place or for third place, not a round everyone rode."],
   ["Pts", "Points: 4 for each carry and 2 for each strike."],
   ["Pts/Run", "Points divided by the runs that have a recorded result."],
   ["Carry %", "Carries out of the runs that have a recorded result."],
   ["Hit %", "Carries and strikes together, out of the runs that have a recorded result."],
   ["Reached", "The furthest round the rider rode in."],
-  ["Place", "1st, 2nd or 3rd in the final."],
+  ["Place", "1st, 2nd or 3rd overall."],
 ];
 
 const teamTerms: [string, string][] = [
-  ["Round points", "A team's total for one ride, out of 16: four riders, up to 4 points each."],
-  ["Rides", "Rides ridden, including any whose total was not recorded."],
-  ["Pts", "Points: all recorded ride totals added together."],
-  ["Avg", "Average points for each ride with a recorded total."],
-  ["Best", "The team's highest ride total. 16 is a full house."],
+  ["Round points", "A team's total for one ride, out of 16: four riders, up to 4 points each. 16 is a full house."],
+  ["Round 1, Round 2", "Teams were placed on each round's result, not on a running total."],
+  ["3rd place", "3rd place ride-off: the ride for third place."],
+  ["Final", "Final: the ride for first place."],
+  ["Tie-break", "Final tie-break: the final finished level, so both teams rode again."],
   ["Reached", "The furthest round the team rode in."],
   ["Place", "1st, 2nd or 3rd overall."],
 ];
@@ -44,8 +47,7 @@ export default function StatsLegend({ view }: { view: StatsView }) {
           –
         </span>
         <span className="sr-only">A dash</span> means it was ridden but the result was not recorded.
-        It still counts as {view === "teams" ? "a ride" : "a run"}, scores nothing, and is left out of
-        the {view === "teams" ? "average and best" : "percentages"}. A blank means not ridden.
+        It still counts as {view === "teams" ? "a ride and scores nothing" : "a run, scores nothing, and is left out of the percentages"}. A blank means not ridden.
       </p>
     </div>
   );

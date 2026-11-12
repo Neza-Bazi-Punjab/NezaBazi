@@ -116,11 +116,12 @@ test("phones: the table scrolls in its own region, rank and name stay put", () =
   assert.match(browser, /Scroll the table sideways/);
   assert.match(browser, /hidden sm:table-cell/);
 
-  // Runs and Points by round start off on phones; Columns turns them on.
+  // Riders: Runs and Points by round start off on phones; Columns turns them
+  // on. Teams: the round points are the whole record, so everything is on.
   const phoneOff = (groups: readonly { id: string; onPhone: boolean }[]) =>
     groups.filter((group) => !group.onPhone).map((group) => group.id);
   assert.deepEqual(phoneOff(RIDER_GROUPS), ["runs", "rounds"]);
-  assert.deepEqual(phoneOff(TEAM_GROUPS), ["rounds"]);
+  assert.deepEqual(phoneOff(TEAM_GROUPS), []);
 
   // Nothing on the page sets a fixed width wider than a phone.
   for (const { name, source } of statsSources()) {

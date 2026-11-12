@@ -25,7 +25,6 @@ import {
   type SortValue,
   type TeamRow,
 } from "@/lib/stats/compute";
-import { SINGLE_STAGES, TEAM_STAGES } from "@/lib/stats/types";
 import Pagination from "./Pagination";
 import Popover from "./Popover";
 import type { StatsView } from "./SeasonViewNav";
@@ -64,7 +63,12 @@ const riderConfig: ViewConfig<RiderRow> = {
   columns: RIDER_COLUMNS,
   groups: RIDER_GROUPS,
   searchFields: riderSearchFields,
-  stageOptions: SINGLE_STAGES.map((stage, index) => ({ index, label: SINGLE_STAGE_LABELS[stage] })),
+  stageOptions: [
+    { index: 0, label: SINGLE_STAGE_LABELS.qualification },
+    { index: 1, label: `${SINGLE_STAGE_LABELS.aarhi1} or further` },
+    { index: 2, label: `${SINGLE_STAGE_LABELS.aarhi2} or further` },
+    { index: 3, label: SINGLE_STAGE_LABELS.final },
+  ],
   subline: (row) => [row.horse, row.location].filter(Boolean).join(" · "),
 };
 
@@ -76,7 +80,15 @@ const teamConfig: ViewConfig<TeamRow> = {
   columns: TEAM_COLUMNS,
   groups: TEAM_GROUPS,
   searchFields: teamSearchFields,
-  stageOptions: TEAM_STAGES.map((stage, index) => ({ index, label: TEAM_STAGE_LABELS[stage] })),
+  /* The 3rd place ride-off and the Final were ridden side by side, so
+     "or further" from the ride-off also takes in the finalists. */
+  stageOptions: [
+    { index: 0, label: TEAM_STAGE_LABELS.round1 },
+    { index: 1, label: `${TEAM_STAGE_LABELS.round2} or further` },
+    { index: 2, label: `${TEAM_STAGE_LABELS.third} or the ${TEAM_STAGE_LABELS.final1}` },
+    { index: 3, label: TEAM_STAGE_LABELS.final1 },
+    { index: 4, label: TEAM_STAGE_LABELS.final2 },
+  ],
   subline: (row) => row.riders.map((rider) => rider.name).join(", "),
 };
 
@@ -234,7 +246,7 @@ function Browser<T extends { id: string; name: string; rank: number; reachedInde
         : "in reverse rank order"
       : sort.key === "name"
         ? `by name, ${sort.direction === "ascending" ? "A to Z" : "Z to A"}`
-        : `by ${(sortColumn?.title ?? sortColumn?.label ?? "rank").toLowerCase()}, ${
+        : `by ${lowerFirst(sortColumn?.title ?? sortColumn?.label ?? "rank")}, ${
             sort.direction === "descending" ? "highest first" : "lowest first"
           }`;
   const anyDash = shown.some((row) => visibleColumns.some(({ column }) => column.cell(row).kind === "dash"));
@@ -284,7 +296,7 @@ function Browser<T extends { id: string; name: string; rank: number; reachedInde
                   <option value={-1}>Any round</option>
                   {config.stageOptions.map((option) => (
                     <option key={option.index} value={option.index}>
-                      {option.index === 0 ? option.label : `${option.label} or further`}
+                      {option.label}
                     </option>
                   ))}
                 </select>
@@ -535,9 +547,10 @@ function Browser<T extends { id: string; name: string; rank: number; reachedInde
               <span aria-hidden className="font-semibold">
                 –
               </span>
-              <span className="sr-only">A dash</span> ridden, result not recorded. It counts as{" "}
-              {view === "teams" ? "a ride" : "a run"} and is left out of the{" "}
-              {view === "teams" ? "average and best" : "percentages"}.
+              <span className="sr-only">A dash</span>{" "}
+              {view === "teams"
+                ? "ridden, total not recorded. It counts as a ride and scores nothing."
+                : "ridden, result not recorded. It counts as a run and is left out of the percentages."}
             </p>
           )}
           <Pagination page={current} count={pages} onPage={goToPage} />
@@ -546,6 +559,10 @@ function Browser<T extends { id: string; name: string; rank: number; reachedInde
     </div>
   );
 }
+
+/* "Points in Aarhi round 1" -> "points in Aarhi round 1": round names keep
+   their capitals inside a sentence. "#" and short headings pass through. */
+const lowerFirst = (text: string) => (text ? text[0].toLowerCase() + text.slice(1) : text);
 
 function CellView({ cell }: { cell: Cell }) {
   if (cell.kind === "value") return <>{cell.text}</>;
@@ -577,7 +594,7 @@ function SortButton({
     <button
       type="button"
       onClick={onClick}
-      title={title ? `Sort by ${title.toLowerCase()}` : `Sort by ${label.toLowerCase()}`}
+      title={`Sort by ${lowerFirst(title ?? label)}`}
       className={`inline-flex min-h-8 items-center gap-1 rounded uppercase tracking-[0.12em] hover:text-bronze-dark ${
         align === "right" ? "flex-row-reverse" : ""
       } ${active ? "text-bronze-dark" : ""} ${focusRing}`}

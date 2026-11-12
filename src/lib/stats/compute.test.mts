@@ -1,12 +1,14 @@
 // The Stats page's arithmetic: points, rates with unrecorded runs, rank order
-// and shared ranks, team totals with an unrecorded ride, sorting, pages and
-// the cells each column shows. Fixtures are made up here; the real season
+// and shared ranks, team rides with an unrecorded total, round names,
+// sorting, pages and the cells each column shows. Fixtures are made up here; the real season
 // file is checked by src/app/stats/stats-page.test.mts.
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { RIDER_COLUMNS, TEAM_COLUMNS } from "./columns.ts";
+import { RIDER_COLUMNS, TEAM_COLUMNS, TEAM_GROUPS } from "./columns.ts";
 import {
+  SINGLE_STAGE_LABELS,
+  TEAM_STAGE_LABELS,
   clampPage,
   formatDate,
   formatDecimal,
@@ -171,7 +173,7 @@ test("carry rate breaks a tie on points, and riders level on everything share a 
   assert.equal(rows[5].reached, null);
 });
 
-test("team totals leave an unrecorded ride out of the total, average and best", () => {
+test("a team ride with no recorded total counts as a ride, not toward the best", () => {
   const row = teamNumbers(
     team("t", [
       ["round1", 12],
@@ -180,9 +182,6 @@ test("team totals leave an unrecorded ride out of the total, average and best", 
     ])
   );
   assert.equal(row.rides, 3);
-  assert.equal(row.recorded, 2);
-  assert.equal(row.points, 28);
-  assert.equal(row.average, 14);
   assert.equal(row.best, 16);
   assert.equal(row.fullHouses, 1);
   assert.deepEqual(row.stages, { round1: 12, round2: null, third: 16, final1: undefined, final2: undefined });
@@ -190,19 +189,64 @@ test("team totals leave an unrecorded ride out of the total, average and best", 
 
   const none = teamNumbers(team("n", [["round1", null]]));
   assert.equal(none.rides, 1);
-  assert.equal(none.average, null);
   assert.equal(none.best, null);
-  for (const id of ["points", "average", "best", "stage-round1"]) {
-    const cell = column<(typeof TEAM_COLUMNS)[number]>(TEAM_COLUMNS, id).cell({ ...none, rank: 1 });
-    assert.equal(cell.kind, "dash", `${id} is a dash`);
-  }
-  assert.equal(
-    column<(typeof TEAM_COLUMNS)[number]>(TEAM_COLUMNS, "rides").cell({ ...none, rank: 1 }).kind,
-    "value"
+  const cell = column<(typeof TEAM_COLUMNS)[number]>(TEAM_COLUMNS, "stage-round1").cell({ ...none, rank: 1 });
+  assert.equal(cell.kind, "dash");
+});
+
+test("the teams table has no running total: only round points and the result", () => {
+  assert.deepEqual(
+    TEAM_GROUPS.map((group) => group.id),
+    ["rounds", "result"]
+  );
+  assert.deepEqual(
+    TEAM_COLUMNS.map((candidate) => candidate.id),
+    ["stage-round1", "stage-round2", "stage-third", "stage-final1", "stage-final2", "reached", "place"]
   );
 });
 
-test("team rank: placed first, then furthest stage, stage points, total, name", () => {
+test("round names say what each round was; short headings keep the full name for screen readers", () => {
+  assert.deepEqual(SINGLE_STAGE_LABELS, {
+    qualification: "Qualification",
+    aarhi1: "Aarhi round 1",
+    aarhi2: "Aarhi round 2",
+    final: "Placing ride",
+  });
+  assert.deepEqual(TEAM_STAGE_LABELS, {
+    round1: "Round 1",
+    round2: "Round 2",
+    third: "3rd place ride-off",
+    final1: "Final",
+    final2: "Final tie-break",
+  });
+
+  const riderStages = RIDER_COLUMNS.filter((candidate) => candidate.id.startsWith("stage-"));
+  assert.deepEqual(
+    riderStages.map((candidate) => candidate.label),
+    ["Qual", "Aarhi 1", "Aarhi 2", "Placing"]
+  );
+  assert.equal(riderStages[3].title, "Points in Placing ride");
+  const teamStages = TEAM_COLUMNS.filter((candidate) => candidate.id.startsWith("stage-"));
+  assert.deepEqual(
+    teamStages.map((candidate) => candidate.label),
+    ["Round 1", "Round 2", "3rd place", "Final", "Tie-break"]
+  );
+  assert.equal(teamStages[4].title, "Points in Final tie-break, out of 16");
+
+  // The Reached column shows the full name.
+  const reached = column<(typeof RIDER_COLUMNS)[number]>(RIDER_COLUMNS, "reached").cell({
+    ...riderNumbers(rider("r", [["final", "carry"]])),
+    rank: 1,
+  });
+  assert.deepEqual(reached, { kind: "value", text: "Placing ride" });
+  const teamReached = column<(typeof TEAM_COLUMNS)[number]>(TEAM_COLUMNS, "reached").cell({
+    ...teamNumbers(team("t", [["final2", 12]])),
+    rank: 1,
+  });
+  assert.deepEqual(teamReached, { kind: "value", text: "Final tie-break" });
+});
+
+test("team rank: placed first, then furthest stage, points in that stage, then name (no running total)", () => {
   const rows = teamRows({
     teams: [
       team("out-early", [["round1", 16]]),
@@ -220,9 +264,10 @@ test("team rank: placed first, then furthest stage, stage points, total, name", 
       ["winner", 1],
       ["bronze", 2],
       ["round2-high", 3],
+      // Level on round 2 points: round 1 does not break the tie.
+      ["a-tied", 4],
+      ["b-tied", 4],
       ["round2-low", 4],
-      ["a-tied", 5],
-      ["b-tied", 5],
       ["out-early", 7],
     ]
   );

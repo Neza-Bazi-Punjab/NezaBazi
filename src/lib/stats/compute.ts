@@ -6,7 +6,8 @@
    - An "unknown" run counts as ridden, scores 0, and is left out of both
      percentages and of points per run.
    - A team ride with points: null counts as a ride and is left out of the
-     total, the average and the best. */
+     best ride and the full houses. Teams were placed on each round's result,
+     so there is no running team total. */
 
 import {
   RESULT_POINTS,
@@ -55,10 +56,7 @@ export interface TeamRow {
   name: string;
   riders: { name: string; horse: string | null }[];
   rides: number;
-  /* Rides whose total was recorded. */
-  recorded: number;
-  points: number;
-  average: number | null;
+  /* The highest recorded ride total, for the Best ride tile. */
   best: number | null;
   fullHouses: number;
   stages: Record<TeamStage, StageCell>;
@@ -72,17 +70,19 @@ export const FULL_HOUSE = 16;
 
 export const SINGLE_STAGE_LABELS: Record<SingleStage, string> = {
   qualification: "Qualification",
-  aarhi1: "Aarhi 1",
-  aarhi2: "Aarhi 2",
-  final: "Final",
+  aarhi1: "Aarhi round 1",
+  aarhi2: "Aarhi round 2",
+  // One ride for first place or for third place, not a round everyone rode.
+  final: "Placing ride",
 };
 
 export const TEAM_STAGE_LABELS: Record<TeamStage, string> = {
   round1: "Round 1",
   round2: "Round 2",
-  third: "3rd place",
-  final1: "Final 1",
-  final2: "Final 2",
+  third: "3rd place ride-off",
+  final1: "Final",
+  // The final finished level, so both teams rode again.
+  final2: "Final tie-break",
 };
 
 /* ---------- riders ---------- */
@@ -167,9 +167,10 @@ function riderRankParts(row: Omit<RiderRow, "rank">): number[] {
   ];
 }
 
+/* No running total here: teams were placed on each round's result. */
 function teamRankParts(row: Omit<TeamRow, "rank">): number[] {
   const reachedPoints = row.reached ? (row.stages[row.reached] ?? 0) : 0;
-  return [placeKey(row.place), -row.reachedIndex, -reachedPoints, -row.points];
+  return [placeKey(row.place), -row.reachedIndex, -reachedPoints];
 }
 
 const compareParts = (a: number[], b: number[]) => {
@@ -209,8 +210,6 @@ export function riderRows(season: Pick<SeasonStats, "riders">): RiderRow[] {
 /* ---------- teams ---------- */
 
 export function teamNumbers(team: StatTeam): Omit<TeamRow, "rank"> {
-  let points = 0;
-  let recorded = 0;
   let best: number | null = null;
   let fullHouses = 0;
   let reachedIndex = -1;
@@ -227,8 +226,6 @@ export function teamNumbers(team: StatTeam): Omit<TeamRow, "rank"> {
       continue;
     }
     stages[ride.stage] = (before ?? 0) + ride.points;
-    points += ride.points;
-    recorded += 1;
     best = best === null ? ride.points : Math.max(best, ride.points);
     if (ride.points === FULL_HOUSE) fullHouses += 1;
   }
@@ -238,9 +235,6 @@ export function teamNumbers(team: StatTeam): Omit<TeamRow, "rank"> {
     name: team.name,
     riders: team.riders,
     rides: team.rides.length,
-    recorded,
-    points,
-    average: recorded > 0 ? points / recorded : null,
     best,
     fullHouses,
     stages,

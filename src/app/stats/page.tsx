@@ -60,7 +60,7 @@ export default async function StatsPage({
           {
             label: "Best ride",
             value: summary.best === null ? "–" : String(summary.best),
-            note: summary.best === null ? "No totals recorded yet" : "Out of 16",
+            note: summary.best === null ? "No ride totals recorded yet" : "Out of 16",
           },
         ];
       })();
@@ -84,7 +84,7 @@ export default async function StatsPage({
           )}
 
           <SummaryTiles
-            label={view === "teams" ? "Team totals for the season" : "Rider totals for the season"}
+            label={view === "teams" ? "The teams' season in numbers" : "The riders' season in numbers"}
             tiles={tiles}
           />
 
