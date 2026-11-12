@@ -1,0 +1,2576 @@
+{
+  "season": 2026,
+  "eventName": "Neza Bazi Punjab Championship 2026",
+  "eventDate": "2026-11-11",
+  "updated": "2026-11-11",
+  "provisional": true,
+  "notes": [
+    "Compiled from the judges' scores and the live broadcast of the event.",
+    "A dash marks a run or a team ride whose result was not recorded. It counts as ridden and is left out of the percentages."
+  ],
+  "riders": [
+    {
+      "id": "bunty-singh-baaz",
+      "name": "Bunty Singh",
+      "horse": "Baaz",
+      "location": "Amritsar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi2",
+          "result": "carry"
+        },
+        {
+          "stage": "final",
+          "result": "carry"
+        }
+      ],
+      "place": 1
+    },
+    {
+      "id": "nishan-singh-pistol",
+      "name": "Nishan Singh",
+      "horse": "Pistol",
+      "location": "Amritsar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "shiva-singh-sultan",
+      "name": "Shiva Singh",
+      "horse": "Sultan",
+      "location": "Amritsar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "strike"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "rur-singh-nila",
+      "name": "Rur Singh",
+      "horse": "Nila",
+      "location": "Amritsar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "strike"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "gurmukh-singh-honey",
+      "name": "Gurmukh Singh",
+      "horse": "Honey",
+      "location": "Baba Bakala, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "himat-singh-sultaan",
+      "name": "Himat Singh",
+      "horse": "Sultaan",
+      "location": "Amritsar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "gurdev-singh-debu-lali",
+      "name": "Gurdev Singh Debu",
+      "horse": "Lali",
+      "location": "Amritsar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "unknown"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "tara-singh-didar",
+      "name": "Tara Singh",
+      "horse": "Didar",
+      "location": "Tarn Taran, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "strike"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "daljot-singh-nagveer-singh",
+      "name": "Daljot Singh",
+      "horse": "Nagveer Singh",
+      "location": "Amritsar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "alam-singh-sundar",
+      "name": "Alam Singh",
+      "horse": "Sundar",
+      "location": "Gurdaspur, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi2",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "gurpreet-singh-nilla-kabutar",
+      "name": "Gurpreet Singh",
+      "horse": "Nilla Kabutar",
+      "location": "Amritsar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "babha-singh-nila",
+      "name": "Babha Singh",
+      "horse": "Nila",
+      "location": "Tarn Taran, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "charhat-singh-bali",
+      "name": "Charhat Singh",
+      "horse": "Bali",
+      "location": "Amritsar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "baljeet-singh-dilbagh",
+      "name": "Baljeet Singh",
+      "horse": "Dilbagh",
+      "location": "Tarn Taran, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi2",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "ajaypal-vadda-mardana-lal-badshah",
+      "name": "Ajaypal(Vadda Mardana)",
+      "horse": "Lal Badshah",
+      "location": "Tarn Taran, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "strike"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "gurlabh-singh-lali",
+      "name": "Gurlabh Singh",
+      "horse": "Lali",
+      "location": "Tarn Taran, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi2",
+          "result": "strike"
+        },
+        {
+          "stage": "final",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "baljeet-singh-dilpreet",
+      "name": "Baljeet Singh",
+      "horse": "Dilpreet",
+      "location": "Tarn Taran, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "jarmanjeet-singh-aulakh-babr",
+      "name": "Jarmanjeet Singh Aulakh",
+      "horse": "Babr",
+      "location": "Tarn Taran, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "unknown"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "gurmanjot-singh-rustam",
+      "name": "Gurmanjot Singh",
+      "horse": "Rustam",
+      "location": "Tarn Taran, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "balraj-singh-faryad",
+      "name": "Balraj Singh",
+      "horse": "Faryad",
+      "location": "Tarn Taran, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "sarbjet-singh-rustam",
+      "name": "Sarbjet Singh",
+      "horse": "Rustam",
+      "location": "Amritsar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "sukhman-singh-neela",
+      "name": "Sukhman Singh",
+      "horse": "Neela",
+      "location": "Sri Muktsar Sahib, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "kulwinder-singh-dilbag",
+      "name": "Kulwinder Singh",
+      "horse": "Dilbag",
+      "location": "Bathinda, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi2",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "amandeep-singh-kabutar",
+      "name": "Amandeep Singh",
+      "horse": "Kabutar",
+      "location": "Tarn Taran, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "karan-singh-neela",
+      "name": "Karan Singh",
+      "horse": "Neela",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "unknown"
+        },
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "surinder-singh-kharaurhi",
+      "name": "Surinder Singh",
+      "horse": "Kharaurhi",
+      "location": "Faridkot, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "akali-singh-baaj-singh",
+      "name": "Akali Singh",
+      "horse": "Baaj Singh",
+      "location": "Jalandhar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "strike"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "balwinder-singh-babar",
+      "name": "Balwinder Singh",
+      "horse": "Babar",
+      "location": "Fatehabad, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "rajbir-singh-farangi",
+      "name": "Rajbir Singh",
+      "horse": "Farangi",
+      "location": "Patiala, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "tahel-singh-kabutar",
+      "name": "Tahel Singh",
+      "horse": "Kabutar",
+      "location": "Punjab, India",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "inspector-lakhwinder-singh-rembo",
+      "name": "Inspector Lakhwinder Singh",
+      "horse": "Rembo",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "asi-gurdeep-singh-sugar-candy",
+      "name": "Asi Gurdeep Singh",
+      "horse": "Sugar Candy",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "asi-manjeet-singh-afftab",
+      "name": "Asi Manjeet Singh",
+      "horse": "Afftab",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "hc-jagjit-singh-sultan",
+      "name": "Hc Jagjit Singh",
+      "horse": "Sultan",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "patel-sherry",
+      "name": "Patel",
+      "horse": "Sherry",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "balkar-singh-nawab",
+      "name": "Balkar Singh",
+      "horse": "Nawab",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "unknown"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "raman-kumar-shamsher",
+      "name": "Raman Kumar",
+      "horse": "Shamsher",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "saleem-mohammed-commando",
+      "name": "Saleem Mohammed",
+      "horse": "Commando",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "strike"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "babba-singh-baaj",
+      "name": "Babba Singh",
+      "horse": "Baaj",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "sukhpal-singh-gandi",
+      "name": "Sukhpal Singh",
+      "horse": "Gandi",
+      "location": "Gurdaspur, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "strike"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "badila-singh-neela",
+      "name": "Badila Singh",
+      "horse": "Neela",
+      "location": "Punjab, India",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "strike"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "komalpreet-singh-pawan",
+      "name": "Komalpreet Singh",
+      "horse": "Pawan",
+      "location": "Gurdaspur, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "strike"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "akashdeep-singh-arjan",
+      "name": "Akashdeep Singh",
+      "horse": "Arjan",
+      "location": "Tarn Taran, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "unknown"
+        },
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "gurbir-singh-pyare-lal",
+      "name": "Gurbir Singh",
+      "horse": "Pyare Lal",
+      "location": "Gurdaspur, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi2",
+          "result": "carry"
+        },
+        {
+          "stage": "final",
+          "result": "miss"
+        }
+      ],
+      "place": 2
+    },
+    {
+      "id": "lakhbir-singh-gurbaz-singh",
+      "name": "Lakhbir Singh",
+      "horse": "Gurbaz Singh",
+      "location": "Barnala, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "gurpreet-singh-aalam",
+      "name": "Gurpreet Singh",
+      "horse": "Aalam",
+      "location": "Mansa, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "akali-tejbir-singh-nilla",
+      "name": "Akali Tejbir Singh",
+      "horse": "Nilla",
+      "location": "Fatehgarh Sahib, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "strike"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "fateh-singh-sundar",
+      "name": "Fateh Singh",
+      "horse": "Sundar",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "taranjeet-singh-jungbaaz",
+      "name": "Taranjeet Singh",
+      "horse": "Jungbaaz",
+      "location": "Fatehgarh Sahib, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "gabar-singh-sundar",
+      "name": "Gabar Singh",
+      "horse": "Sundar",
+      "location": "Rupnagar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "bhinda-singh-arjan",
+      "name": "Bhinda Singh",
+      "horse": "Arjan",
+      "location": "Gurdaspur, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "qualification",
+          "result": "strike"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "sonu-singh-moor",
+      "name": "Sonu Singh",
+      "horse": "Moor",
+      "location": "Ludhiana, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "gursevak-singh-cheena",
+      "name": "Gursevak Singh",
+      "horse": "Cheena",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "bikram-singh-dilbaag",
+      "name": "Bikram Singh",
+      "horse": "Dilbaag",
+      "location": "Ludhiana, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "strike"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "hathoda-singh-chetak",
+      "name": "Hathoda Singh",
+      "horse": "Chetak",
+      "location": "Ludhiana, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "carry"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "ghaint-singh-pawan",
+      "name": "Ghaint Singh",
+      "horse": "Pawan",
+      "location": "Ludhiana, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "qualification",
+          "result": "carry"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "sonu-singh-rajisthania-daku",
+      "name": "Sonu Singh Rajisthania",
+      "horse": "Daku",
+      "location": "Ludhiana, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "jevan-singh-toovan",
+      "name": "Jevan Singh",
+      "horse": "Toovan",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "joban-singh-mmindha",
+      "name": "Joban Singh",
+      "horse": "Mmindha",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "unknown"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "simranpreet-singh-makhan",
+      "name": "Simranpreet Singh",
+      "horse": "Makhan",
+      "location": "Ludhiana, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "sarabjit-singh-arjan",
+      "name": "Sarabjit Singh",
+      "horse": "Arjan",
+      "location": "Gurdaspur, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi2",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "sahildeep-singh-taj",
+      "name": "Sahildeep Singh",
+      "horse": "Taj",
+      "location": "Gurdaspur, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "arshdeep-singh-jodha",
+      "name": "Arshdeep Singh",
+      "horse": "Jodha",
+      "location": "Amritsar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "sahibpreet-singh-gulbagh",
+      "name": "Sahibpreet Singh",
+      "horse": "Gulbagh",
+      "location": "Amritsar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "strike"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "gurpreet-singh-mouji",
+      "name": "Gurpreet Singh",
+      "horse": "Mouji",
+      "location": "Tarn Taran, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "gursimran-singh-lalli",
+      "name": "Gursimran Singh",
+      "horse": "Lalli",
+      "location": "Amritsar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "paga-arshdeep-singh-nilla",
+      "name": "Paga (Arshdeep Singh)",
+      "horse": "Nilla",
+      "location": "Muktsar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi2",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "makhan-singh-moti",
+      "name": "Makhan Singh",
+      "horse": "Moti",
+      "location": "Hoshiarpur, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "unknown"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "amandeep-singh-damdar",
+      "name": "Amandeep Singh",
+      "horse": "Damdar",
+      "location": "Ambala, Haryana",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "rohit-singh-datta",
+      "name": "Rohit Singh",
+      "horse": "Datta",
+      "location": "Patiala, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "mankaran-singh-shehezadi",
+      "name": "Mankaran Singh",
+      "horse": "Shehezadi",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "inderpal-singh-bhalwan",
+      "name": "Inderpal Singh",
+      "horse": "Bhalwan",
+      "location": "Salcombe Grove, West Midlands",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "amritpal-singh-naag",
+      "name": "Amritpal Singh",
+      "horse": "Naag",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "saroop-singh-makhan",
+      "name": "Saroop Singh",
+      "horse": "Makhan",
+      "location": "Moga, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "baaz-singh-gajjan-singh",
+      "name": "Baaz Singh",
+      "horse": "Gajjan Singh",
+      "location": "Amritsar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "laddi-singh-rustam",
+      "name": "Laddi Singh",
+      "horse": "Rustam",
+      "location": "Hoshiarpur, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi2",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "gurpreet-singh-ekam",
+      "name": "Gurpreet Singh",
+      "horse": "Ekam",
+      "location": "Hoshiarpur, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "unknown"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "rann-singh-lami-ton-wala",
+      "name": "Rann Singh",
+      "horse": "Lami Ton Wala",
+      "location": "Metro Vancouver Regional District, British Columbia",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "unknown"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "sewak-singh-goli",
+      "name": "Sewak Singh",
+      "horse": "Goli",
+      "location": "Barnala, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "gurmehak-singh-bagga",
+      "name": "Gurmehak Singh",
+      "horse": "Bagga",
+      "location": "Amritsar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "unknown"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "amarjit-singh-baaz",
+      "name": "Amarjit Singh",
+      "horse": "Baaz",
+      "location": "Amritsar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "jaskirat-singh-kartoos",
+      "name": "Jaskirat Singh",
+      "horse": "Kartoos",
+      "location": "Amritsar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "strike"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "gurpreet-singh-naag",
+      "name": "Gurpreet Singh",
+      "horse": "Naag",
+      "location": "Amritsar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "suraj-singh-ajaadi",
+      "name": "Suraj Singh",
+      "horse": "Ajaadi",
+      "location": "Amritsar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "strike"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "sonu-singh-dilbaag",
+      "name": "Sonu Singh",
+      "horse": "Dilbaag",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "qualification",
+          "result": "strike"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "tejpreet-singh-bagga",
+      "name": "Tejpreet Singh",
+      "horse": "Bagga",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "gollu-singh-neela",
+      "name": "Gollu Singh",
+      "horse": "Neela",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "strike"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "baba-jassa-singh-kero",
+      "name": "Baba Jassa Singh",
+      "horse": "Kero",
+      "location": "Fatehgarh Sahib, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi2",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "satish-singh-toredar-kartoos",
+      "name": "Satish Singh",
+      "horse": "Toredar Kartoos",
+      "location": "Fatehgarh Sahib, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "strike"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "veer-singh-naag",
+      "name": "Veer Singh",
+      "horse": "Naag",
+      "location": "Gurdaspur, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "jathedar-gurjeet-singh-baaj",
+      "name": "Jathedar Gurjeet Singh",
+      "horse": "Baaj",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "unknown"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "sarabjeet-singh-arjan",
+      "name": "Sarabjeet Singh",
+      "horse": "Arjan",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "khuspal-singh-yodha",
+      "name": "Khuspal Singh",
+      "horse": "Yodha",
+      "location": "Amritsar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "strike"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "muni-singh-badshah",
+      "name": "Muni Singh",
+      "horse": "Badshah",
+      "location": "Firozpur, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "unknown"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "sukha-singh-vasakha",
+      "name": "Sukha Singh",
+      "horse": "Vasakha",
+      "location": "Firozpur, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "amarjeet-singh-bagga-ghora",
+      "name": "Amarjeet Singh",
+      "horse": "Bagga Ghora",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "unknown"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "harpreet-singh-punjab",
+      "name": "Harpreet Singh",
+      "horse": "Punjab",
+      "location": "Bhamboi",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "unknown"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "rounak-singh-kathuriya-diler-singh",
+      "name": "Rounak Singh Kathuriya",
+      "horse": "Diler Singh",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "strike"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "sukhvinder-singh-kalyan-naag",
+      "name": "Sukhvinder Singh Kalyan",
+      "horse": "Naag",
+      "location": "Nanded, Maharashtra",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "sukhbir-singh-fouji-gurbaaz-singh",
+      "name": "Sukhbir Singh Fouji",
+      "horse": "Gurbaaz Singh",
+      "location": "Hazur Shaib Nanded, Maharashtra",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "mavi-nihang-baaz",
+      "name": "Mavi Nihang",
+      "horse": "Baaz",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "unknown"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "sajan-preet-singh-lalli",
+      "name": "Sajan Preet Singh",
+      "horse": "Lalli",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "gursevak-singh-bazz-singh",
+      "name": "Gursevak Singh",
+      "horse": "Bazz Singh",
+      "location": "Hoshiarpur, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "qualification",
+          "result": "unknown"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "jora-singh-akaali-n-a",
+      "name": "Jora Singh Akaali",
+      "horse": null,
+      "location": "Peel, Ontario",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi2",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "ajay-singh-baaj",
+      "name": "Ajay Singh",
+      "horse": "Baaj",
+      "location": "Montréal, Quebec",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "dilbag-singh-anmol",
+      "name": "Dilbag Singh",
+      "horse": "Anmol",
+      "location": "Amritsar, Punjab",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "qualification",
+          "result": "unknown"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "gurkirat-singh-nila-jahaaj",
+      "name": "Gurkirat Singh",
+      "horse": "Nila Jahaaj",
+      "location": "Montreal, Quebec",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "miss"
+        },
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "judge-singh-ankhi",
+      "name": "Judge Singh",
+      "horse": "Ankhi",
+      "location": "Toronto, Ontario",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi2",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "ranjodh-singh-naag",
+      "name": "Ranjodh Singh",
+      "horse": "Naag",
+      "location": "Chandigarh, India",
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "qualification",
+          "result": "miss"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "sabh-singh-naag-arjan",
+      "name": "Sabh Singh Naag",
+      "horse": "Arjan",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "strike"
+        },
+        {
+          "stage": "qualification",
+          "result": "unknown"
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "gurpreet-singh-chobbar",
+      "name": "Gurpreet Singh",
+      "horse": "Chobbar",
+      "location": null,
+      "runs": [
+        {
+          "stage": "qualification",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi1",
+          "result": "carry"
+        },
+        {
+          "stage": "aarhi2",
+          "result": "strike"
+        },
+        {
+          "stage": "final",
+          "result": "carry"
+        }
+      ],
+      "place": 3
+    }
+  ],
+  "teams": [
+    {
+      "id": "tarna-dal",
+      "name": "Tarna Dal",
+      "riders": [
+        {
+          "name": "Bunty Singh",
+          "horse": "Baaz"
+        },
+        {
+          "name": "Nishan Singh",
+          "horse": "Pistol"
+        },
+        {
+          "name": "Shiva Singh",
+          "horse": "Sultan"
+        },
+        {
+          "name": "Rur Singh",
+          "horse": "Nilaz"
+        }
+      ],
+      "rides": [
+        {
+          "stage": "round1",
+          "points": 16
+        },
+        {
+          "stage": "round2",
+          "points": 8
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "tarna-dal-2",
+      "name": "Tarna Dal 2",
+      "riders": [
+        {
+          "name": "Gurmukh Singh",
+          "horse": "Honey"
+        },
+        {
+          "name": "Himat Singh",
+          "horse": "Sultaan"
+        },
+        {
+          "name": "Gurdev Singh Debu",
+          "horse": "Lali"
+        },
+        {
+          "name": "Tara Singh",
+          "horse": "Didar"
+        }
+      ],
+      "rides": [
+        {
+          "stage": "round1",
+          "points": 2
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "tarna-dal-3",
+      "name": "Tarna Dal 3",
+      "riders": [
+        {
+          "name": "Alam Singh",
+          "horse": "Sundar"
+        },
+        {
+          "name": "Gurpreet Singh",
+          "horse": "Nilla Kabutar"
+        },
+        {
+          "name": "Charhat Singh",
+          "horse": "Bali"
+        },
+        {
+          "name": "Babha Singh",
+          "horse": "Nila"
+        }
+      ],
+      "rides": [
+        {
+          "stage": "round1",
+          "points": 10
+        },
+        {
+          "stage": "round2",
+          "points": 4
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "dal-baba-bidhi-chand-sahib-1",
+      "name": "Dal Baba Bidhi Chand Sahib 1",
+      "riders": [
+        {
+          "name": "Baljeet Singh",
+          "horse": "Dilbagh"
+        },
+        {
+          "name": "Ajaypal(Vadda Mardana)",
+          "horse": "Lal Badshah"
+        },
+        {
+          "name": "Gurlabh Singh",
+          "horse": "Lali"
+        },
+        {
+          "name": "Baljeet Singh",
+          "horse": "Dilpreet"
+        }
+      ],
+      "rides": [
+        {
+          "stage": "round1",
+          "points": 6
+        },
+        {
+          "stage": "round2",
+          "points": 12
+        },
+        {
+          "stage": "final1",
+          "points": 8
+        },
+        {
+          "stage": "final2",
+          "points": 12
+        }
+      ],
+      "place": 1
+    },
+    {
+      "id": "bidhi-chand-sahib-2",
+      "name": "Bidhi Chand Sahib 2",
+      "riders": [
+        {
+          "name": "Jarmanjeet Singh Aulakh",
+          "horse": "Babr"
+        },
+        {
+          "name": "Balraj Singh",
+          "horse": "Faryad"
+        },
+        {
+          "name": "Gurmanjot Singh",
+          "horse": "Rustam"
+        },
+        {
+          "name": "Sarabjit Singh",
+          "horse": "Arjan"
+        }
+      ],
+      "rides": [
+        {
+          "stage": "round1",
+          "points": null
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "bidhi-chand-sahib-ji-3",
+      "name": "Bidhi Chand Sahib Ji 3",
+      "riders": [
+        {
+          "name": "Sukhman Singh",
+          "horse": "Neela"
+        },
+        {
+          "name": "Amandeep Singh",
+          "horse": "Kabutar"
+        },
+        {
+          "name": "Kulwinder Singh",
+          "horse": "Dilbag"
+        },
+        {
+          "name": "Karan Singh",
+          "horse": "Neela"
+        }
+      ],
+      "rides": [
+        {
+          "stage": "round1",
+          "points": 12
+        },
+        {
+          "stage": "round2",
+          "points": 10
+        },
+        {
+          "stage": "third",
+          "points": 4
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "pap-1",
+      "name": "Pap 1",
+      "riders": [
+        {
+          "name": "Asi Gurdeep Singh",
+          "horse": "Sugar Candy"
+        },
+        {
+          "name": "Hc Jagjit Singh",
+          "horse": "Sultan"
+        },
+        {
+          "name": "Inspector Lakhwinder Singh",
+          "horse": "Rembo"
+        },
+        {
+          "name": "Asi Manjeet Singh",
+          "horse": "Afftab"
+        }
+      ],
+      "rides": [
+        {
+          "stage": "round1",
+          "points": 16
+        },
+        {
+          "stage": "round2",
+          "points": 16
+        },
+        {
+          "stage": "final1",
+          "points": 8
+        },
+        {
+          "stage": "final2",
+          "points": 8
+        }
+      ],
+      "place": 2
+    },
+    {
+      "id": "pap-2",
+      "name": "Pap 2",
+      "riders": [
+        {
+          "name": "Patel",
+          "horse": "Sherry"
+        },
+        {
+          "name": "Saleem Mohammed",
+          "horse": "Commando"
+        },
+        {
+          "name": "Raman Kumar",
+          "horse": "Shamsher"
+        },
+        {
+          "name": "Balkar Singh",
+          "horse": "Nawab"
+        }
+      ],
+      "rides": [
+        {
+          "stage": "round1",
+          "points": 8
+        },
+        {
+          "stage": "round2",
+          "points": 8
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "budha-dal-raqba",
+      "name": "Budha Dal Raqba",
+      "riders": [
+        {
+          "name": "Akali Tejbir Singh",
+          "horse": "Nilla"
+        },
+        {
+          "name": "Fateh Singh",
+          "horse": "Sundar"
+        },
+        {
+          "name": "Taranjeet Singh",
+          "horse": "Jungbaaz"
+        },
+        {
+          "name": "Gabar Singh",
+          "horse": "Sundar"
+        }
+      ],
+      "rides": [
+        {
+          "stage": "round1",
+          "points": null
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "virasati-khed-akhada",
+      "name": "Virasati Khed Akhada",
+      "riders": [
+        {
+          "name": "Makhan Singh",
+          "horse": "Moti"
+        },
+        {
+          "name": "Gurbaz Singh",
+          "horse": "Teer"
+        },
+        {
+          "name": "Rohit Singh",
+          "horse": "Datta"
+        },
+        {
+          "name": "Amandeep Singh",
+          "horse": "Damdar"
+        }
+      ],
+      "rides": [
+        {
+          "stage": "round1",
+          "points": 4
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "jangi-horse-club",
+      "name": "Jangi Horse Club",
+      "riders": [
+        {
+          "name": "Inderpal Singh",
+          "horse": "Bhalwan"
+        },
+        {
+          "name": "Mankaran Singh",
+          "horse": "Shehezadi"
+        },
+        {
+          "name": "Arshdeep Singh",
+          "horse": "Baaj"
+        },
+        {
+          "name": "Baba Jassa Singh",
+          "horse": "Kero"
+        }
+      ],
+      "rides": [
+        {
+          "stage": "round1",
+          "points": 12
+        },
+        {
+          "stage": "round2",
+          "points": 10
+        },
+        {
+          "stage": "third",
+          "points": null
+        }
+      ],
+      "place": 3
+    },
+    {
+      "id": "madian-wale",
+      "name": "Madian Wale",
+      "riders": [
+        {
+          "name": "Sukhpal Singh",
+          "horse": "Gandi"
+        },
+        {
+          "name": "Badila Singh",
+          "horse": "Neela"
+        },
+        {
+          "name": "Komalpreet Singh",
+          "horse": "Pawan"
+        },
+        {
+          "name": "Babha Singh",
+          "horse": "Baaj"
+        }
+      ],
+      "rides": [
+        {
+          "stage": "round1",
+          "points": 10
+        },
+        {
+          "stage": "round2",
+          "points": 8
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "tarna-dal-mehta-chowk-wale",
+      "name": "Tarna Dal Mehta Chowk Wale",
+      "riders": [
+        {
+          "name": "Sahibpreet Singh",
+          "horse": "Gulbagh"
+        },
+        {
+          "name": "Gursimran Singh",
+          "horse": "Lalli"
+        },
+        {
+          "name": "Paga (Arshdeep Singh)",
+          "horse": "Nilla"
+        },
+        {
+          "name": "Gurpreet Singh",
+          "horse": "Mouji"
+        }
+      ],
+      "rides": [
+        {
+          "stage": "round1",
+          "points": 2
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "tarna-dal-wala",
+      "name": "Tarna Dal Wala",
+      "riders": [
+        {
+          "name": "Jaskirat Singh",
+          "horse": "Kartoos"
+        },
+        {
+          "name": "Gurpreet Singh",
+          "horse": "Naag"
+        },
+        {
+          "name": "Sahib Singh",
+          "horse": "Kabutar"
+        },
+        {
+          "name": "Amarjit Singh",
+          "horse": "Baaz"
+        }
+      ],
+      "rides": [
+        {
+          "stage": "round1",
+          "points": null
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "tarna-dal-wala-2",
+      "name": "Tarna Dal Wala 2",
+      "riders": [
+        {
+          "name": "Suraj Singh",
+          "horse": "Ajaadi"
+        },
+        {
+          "name": "Tejpreet Singh",
+          "horse": "Bagga"
+        },
+        {
+          "name": "Sonu Singh",
+          "horse": "Dilbaag"
+        },
+        {
+          "name": "Gollu Singh",
+          "horse": "Neela"
+        }
+      ],
+      "rides": [
+        {
+          "stage": "round1",
+          "points": 8
+        },
+        {
+          "stage": "round2",
+          "points": null
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "misal-baba-bota-ji",
+      "name": "Misal Baba Bota Ji",
+      "riders": [
+        {
+          "name": "Sahildeep Singh",
+          "horse": "Taj"
+        },
+        {
+          "name": "Ravel Singh",
+          "horse": "Anmol"
+        },
+        {
+          "name": "Sarabjeet Singh",
+          "horse": "Arjan"
+        },
+        {
+          "name": "Arshdeep Singh",
+          "horse": "Jodha"
+        }
+      ],
+      "rides": [
+        {
+          "stage": "round1",
+          "points": null
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "team-canada",
+      "name": "Team Canada",
+      "riders": [
+        {
+          "name": "Gurkirat Singh",
+          "horse": "Nila Jahaaj"
+        },
+        {
+          "name": "Judge Singh",
+          "horse": "Ankhi"
+        },
+        {
+          "name": "Bhinda Singh",
+          "horse": "Arjan"
+        },
+        {
+          "name": "Ajay Singh",
+          "horse": "Baaj"
+        }
+      ],
+      "rides": [
+        {
+          "stage": "round1",
+          "points": null
+        }
+      ],
+      "place": null
+    },
+    {
+      "id": "misl-baba-nidan-singh",
+      "name": "Misl Baba Nidan Singh",
+      "riders": [
+        {
+          "name": "Dilbag Singh",
+          "horse": "Anmol"
+        },
+        {
+          "name": "Ranjodh Singh",
+          "horse": "Naag"
+        },
+        {
+          "name": "Billa Singh",
+          "horse": "Chobbar"
+        },
+        {
+          "name": "Khushdeep Singh",
+          "horse": "Yodha"
+        }
+      ],
+      "rides": [
+        {
+          "stage": "round1",
+          "points": 6
+        }
+      ],
+      "place": null
+    }
+  ]
+}
