@@ -17,7 +17,7 @@
 // only empties the photo columns).
 import { NextResponse } from "next/server";
 import { loadVmixPhotos, sampleVmixPhotos } from "@/lib/broadcast/public-photos";
-import { PRIVATE_NO_STORE, PUBLIC_LIVE_CACHE } from "@/lib/scoring/http";
+import { PRIVATE_NO_STORE, PUBLIC_LIVE_CACHE, publicLiveCacheFor } from "@/lib/scoring/http";
 import { buildPublicLiveSnapshot } from "@/lib/scoring/server";
 import {
   VMIX_LEADERBOARD_COLUMNS,
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
       VMIX_LEADERBOARD_COLUMNS,
       toVmixLeaderboardRows(state, query, false, photos),
       csv,
-      PUBLIC_LIVE_CACHE
+      publicLiveCacheFor(state)
     );
   } catch (error) {
     console.error("[scoring] vMix leaderboard failed", error);

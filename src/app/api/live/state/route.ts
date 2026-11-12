@@ -23,7 +23,7 @@
 // frozen sample (vmix-sample.ts, the ?sample=1 data) instead.
 // This route never reads a session or cookie.
 import { NextResponse } from "next/server";
-import { PUBLIC_LIVE_CACHE, unexpectedErrorResponse } from "@/lib/scoring/http";
+import { PUBLIC_LIVE_CACHE, publicLiveCacheFor, unexpectedErrorResponse } from "@/lib/scoring/http";
 import { isDemoRequest, isSampleRequest } from "@/lib/scoring/sample-mode";
 import {
   LOCAL_TRAINING_SESSION,
@@ -57,7 +57,7 @@ export async function GET(request: Request) {
     const state = await buildPublicLiveState();
 
     return NextResponse.json(state, {
-      headers: { "Cache-Control": PUBLIC_LIVE_CACHE },
+      headers: { "Cache-Control": publicLiveCacheFor(state) },
     });
   } catch (error) {
     return unexpectedErrorResponse(error, "public live state");

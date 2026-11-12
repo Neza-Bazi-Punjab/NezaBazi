@@ -702,11 +702,13 @@ test("routes: the photo index uses the admin lists' rule and never signs URLs", 
 
 /* The four public vMix routes, byte for byte (line endings aside): rounds as
    it was when the broadcast feeds were added beside them; current,
-   leaderboard and entrants since they gained the public photo columns. */
+   leaderboard and entrants since they gained the public photo columns;
+   current and leaderboard since they cache for longer once scoring is quiet
+   (publicLiveCacheFor). */
 const PUBLIC_VMIX_ROUTE_HASHES: Record<string, string> = {
-  current: "59b4b90cfbdbdee329c2cd2acb3f4cf47be4714653fe3bee80ebf72663f044fa",
+  current: "d18fcb0286598080ea754f68eeae2c0e7bce8e7793145d24b4aca5fca6bd7923",
   entrants: "6331d645f0ae27f683f3accd94576dfe0c5daa307606646af69ec06fddf41554",
-  leaderboard: "23e8930ea22d4d3d8ead55660b06bdd2e67ab2b0eaec2a191f432e25b81af1d5",
+  leaderboard: "4e3ddd4b0a72da5571507e7dec2a7ea8084b257aa4dc96ee33ffeaf915b6a179",
   rounds: "cec01f7e12d79c90c87556c8567116855fd2fd1783809f6de4ada2d5dcfc3933",
 };
 

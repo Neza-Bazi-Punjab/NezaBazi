@@ -15,7 +15,7 @@
 // switched on, vmix-sample-live.ts) and never reads the database.
 import { NextResponse } from "next/server";
 import { loadVmixPhotos, sampleVmixPhotos } from "@/lib/broadcast/public-photos";
-import { PRIVATE_NO_STORE, PUBLIC_LIVE_CACHE } from "@/lib/scoring/http";
+import { PRIVATE_NO_STORE, PUBLIC_LIVE_CACHE, publicLiveCacheFor } from "@/lib/scoring/http";
 import { buildPublicLiveSnapshot } from "@/lib/scoring/server";
 import {
   VMIX_CURRENT_COLUMNS,
@@ -59,7 +59,7 @@ export async function GET(request: Request) {
       VMIX_CURRENT_COLUMNS,
       [toVmixCurrentRow(state, runCount, false, photos)],
       csv,
-      PUBLIC_LIVE_CACHE
+      publicLiveCacheFor(state)
     );
   } catch (error) {
     // vMix keeps showing its last good data on an HTTP error, which is better
