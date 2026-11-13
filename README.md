@@ -99,10 +99,10 @@ src/
     api/account/profile/ Server-only account update and registration-sync route
     players/ rankings/  "Coming soon" pages, unlock in later phases
     sitemap.ts icon.svg
-  components/           Reusable UI (Navbar, Footer, Button, DissolvePhoto,
+  components/           Reusable UI (Navbar, Footer, Button,
                         Reveal, icons, LocationPicker, section building blocks, …)
     SiteChrome.tsx      Hides the navbar and footer on /judge, /commentary, /overlay
-    scoring/            Shared live-scoring UI: leaderboard table, rosters, badges
+    scoring/            Shared live-scoring UI: ledger panels, badges, formatting
   data/                 Vendored GeoNames reference data (countries.json,
                         states.json) for the location picker dropdowns
   lib/
@@ -218,9 +218,7 @@ On event day judges record every run from a phone, and a public scoreboard, a co
 
 ## Notes
 
-- Contextual photos live in [public/images](public/images/README.md) and use
-  the `DissolvePhoto` component, which masks their edges so they melt into the
-  parchment background, echoing the poster.
+- Contextual photos live in [public/images](public/images/README.md).
 - `/players` and `/rankings` are still placeholder pages that unlock in later phases. `/login`, `/signup`, `/forgot-password`, `/reset-password`, `/register`, `/register/solo`, `/register/paper`, `/register-team`, `/account`, `/admin`, `/admin/scoring`, `/admin/paper`, `/live`, `/judge`, `/commentary` and `/overlay` are all live in the code; the scoring pages show "not set up yet" until their migrations are applied.
 - The navbar links only Home, Live Scores, Event and Rulebook ([src/lib/site.ts](src/lib/site.ts)); the
   account, registration and admin pages are reached from the footer, the CTAs, or

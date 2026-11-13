@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 import { PROFILE_ROLES, isProfileRole } from "../lib/scoring/types.ts";
-import { navLinks, site } from "../lib/site.ts";
+import { navLinks } from "../lib/site.ts";
 
 const source = readFileSync(new URL("./Navbar.tsx", import.meta.url), "utf8");
 
