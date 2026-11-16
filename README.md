@@ -1,16 +1,14 @@
 # Neza Bazi Punjab Championship 2026
 
-![A rider at full gallop with a lance](public/images/hero-rider.webp)
-
 **The platform behind the 1st open tent-pegging championship in Punjab.**
 It ran on 11 November 2026 in Amritsar. It handled online registration, the
 check-in desk, live scoring by the judges, the public scoreboard and the
 graphics on the live stream.
 
-🌐 **Website:** [nezabazipunjab.com](https://www.nezabazipunjab.com)
-&nbsp;·&nbsp; 📺 **Watch the event:** [YouTube live stream](https://youtube.com/live/XuGGgWDIclw)
-&nbsp;·&nbsp; 📊 **Results:** [2026 stats](https://www.nezabazipunjab.com/stats)
-&nbsp;·&nbsp; 📸 [Instagram](https://www.instagram.com/nezabazipanjab/)
+**Website:** [nezabazipunjab.com](https://www.nezabazipunjab.com)
+&nbsp;·&nbsp; **Watch the event:** [YouTube live stream](https://youtube.com/live/XuGGgWDIclw)
+&nbsp;·&nbsp; **Results:** [2026 stats](https://www.nezabazipunjab.com/stats)
+&nbsp;·&nbsp; [Instagram](https://www.instagram.com/nezabazipanjab/)
 
 ---
 
@@ -64,11 +62,6 @@ Sahib (teams). Results are still provisional.
 </tr>
 </table>
 
-<p>
-  <img src="public/images/lancesunset.webp" alt="A rider lowering a lance at sunset" width="49%">
-  <img src="public/images/aboutsport.webp" alt="Tent pegging riders on the ground" width="49%">
-</p>
-
 ## How it's built
 
 - **Frontend:** Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4
@@ -85,26 +78,3 @@ Sahib (teams). Results are still provisional.
 | Code | ~58,000 lines of TypeScript, 36 database migrations |
 | History | 270 commits, 79 merged pull requests |
 | Pages | 46 pages and 50 API routes |
-
-## Team
-
-Built by **Mankirat Mann** and **Palbir Minhas**.
-
-## Run it locally
-
-```bash
-npm install
-npm run dev      # http://localhost:3000
-npm test
-```
-
-You need a `.env.local` with your own Supabase keys (see `.env.example`).
-
-## More detail
-
-- [Technical overview](docs/technical-overview.md): project structure,
-  database setup and how live scoring works
-- [Event-day runbook](docs/event-day-runbook.md)
-- [Live stream setup](docs/live-stream.md) and the [vMix data feed](docs/vmix-data-feed.md)
-- [Performance notes](docs/performance.md)
-- [Archive](docs/archive/): the plans and designs written while building it
