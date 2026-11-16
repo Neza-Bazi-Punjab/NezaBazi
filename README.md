@@ -24,9 +24,6 @@ graphics on the live stream.
 | **21** | teams of 4 |
 | **229** | runs scored live by the judges, across 9 rounds |
 
-**2026 champions:** Bunty Singh on *Baaz* (singles) and Dal Baba Bidhi Chand
-Sahib (teams). Results are still provisional.
-
 ## What the site does
 
 <table>
