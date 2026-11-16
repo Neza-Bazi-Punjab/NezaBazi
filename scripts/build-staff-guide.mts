@@ -8,7 +8,7 @@
 // Run with `npm run build:guide` (Node 24 runs this file directly); it builds
 // every guide, then commit the PDFs. The text is not in this file: each guide
 // is read from its own Markdown, in a small dialect described at the top of
-// docs/superpowers/plans/2026-10-25-staff-guide-outline.md (the additions the
+// docs/archive/plans/2026-10-25-staff-guide-outline.md (the additions the
 // vMix guide uses, `code` and a cover summary, at the top of
 // docs/vmix-data-feed.md), so the wording can be edited without touching code. The vMix guide's Markdown is the graphics
 // team's handout itself, docs/vmix-data-feed.md, so the handout and its PDF
@@ -71,7 +71,7 @@ type Guide = {
 
 const GUIDES: Guide[] = [
   {
-    source: join(ROOT, "docs", "superpowers", "plans", "2026-10-25-staff-guide-outline.md"),
+    source: join(ROOT, "docs", "archive", "plans", "2026-10-25-staff-guide-outline.md"),
     figureDir: join(ROOT, "scripts", "staff-guide"),
     output: join(ROOT, "public", "documents", "staff-guide.pdf"),
     kicker: "STAFF GUIDE · EVENT DAY",
@@ -93,7 +93,7 @@ const GUIDES: Guide[] = [
   {
     // The short version of the whole day, for the organisers; draws the staff
     // guide's diagrams and no pictures of its own.
-    source: join(ROOT, "docs", "superpowers", "plans", "2026-11-07-organisers-quick-guide-outline.md"),
+    source: join(ROOT, "docs", "archive", "plans", "2026-11-07-organisers-quick-guide-outline.md"),
     figureDir: join(ROOT, "scripts", "staff-guide"),
     output: join(ROOT, "public", "documents", "organisers-guide.pdf"),
     kicker: "ORGANISERS · THE DAY IN PLAIN WORDS",
@@ -103,7 +103,7 @@ const GUIDES: Guide[] = [
   },
   {
     // Reuses the staff guide's screenshots; it has none of its own.
-    source: join(ROOT, "docs", "superpowers", "plans", "2026-10-26-rehearsal-guide-outline.md"),
+    source: join(ROOT, "docs", "archive", "plans", "2026-10-26-rehearsal-guide-outline.md"),
     figureDir: join(ROOT, "scripts", "staff-guide"),
     output: join(ROOT, "public", "documents", "rehearsal-guide.pdf"),
     kicker: "STAFF GUIDE · REHEARSAL",

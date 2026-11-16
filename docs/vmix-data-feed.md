@@ -10,7 +10,7 @@ EDITING NOTES (not printed, and not shown on GitHub)
 This handout is also the source of public/documents/vmix-guide.pdf. After
 editing it, run `npm run build:guide` and commit both this file and the PDF.
 The formatting rules are the staff guide's, described at the top of
-docs/superpowers/plans/2026-10-25-staff-guide-outline.md. In short:
+docs/archive/plans/2026-10-25-staff-guide-outline.md. In short:
 
 - The paragraph before the first `#` heading is the summary on the PDF's cover.
 - `# Label — subtitle` starts a new page with a tab on the page edge and an

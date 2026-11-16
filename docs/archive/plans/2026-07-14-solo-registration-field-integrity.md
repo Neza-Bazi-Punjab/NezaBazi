@@ -283,7 +283,7 @@ Run:
 ```powershell
 git diff --check origin/Mani_Branch...HEAD
 git diff --name-status origin/Mani_Branch...HEAD
-git diff origin/Mani_Branch...HEAD -- . ':(exclude)docs/superpowers/**'
+git diff origin/Mani_Branch...HEAD -- . ':(exclude)docs/archive/**'
 ```
 
 Expected: no whitespace errors. Code changes are limited to the solo migration and two test files; no path or SQL statement references `score_attempts` or another scoring object.

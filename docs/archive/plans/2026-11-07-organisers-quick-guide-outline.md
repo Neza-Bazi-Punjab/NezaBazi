@@ -10,7 +10,7 @@ EDITING NOTES (not printed)
 This file is the source of public/documents/organisers-guide.pdf. After
 editing it, run `npm run build:guide` and commit both this file and the PDF.
 The formatting rules are the staff guide's, described at the top of
-docs/superpowers/plans/2026-10-25-staff-guide-outline.md. Plain English,
+docs/archive/plans/2026-10-25-staff-guide-outline.md. Plain English,
 short sentences, button names exactly as on screen. Never name any
 organisation, club or sponsor.
 -->

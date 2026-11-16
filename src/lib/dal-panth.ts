@@ -7,7 +7,7 @@
 // entry a rider holds under one confirmation code in step and writes the
 // audit record. It is never shown on a public page, a feed or the commentary
 // panel: the site names no organisation (see the spec,
-// docs/superpowers/specs/2026-11-10-dal-panth-and-excel-export.md).
+// docs/archive/specs/2026-11-10-dal-panth-and-excel-export.md).
 //
 // This file is the shared contract between the route, the cell and the
 // export. It imports nothing, so the browser, the server and the tests can

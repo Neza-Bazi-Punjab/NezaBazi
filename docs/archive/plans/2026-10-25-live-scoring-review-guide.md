@@ -1,6 +1,6 @@
 # Review guide: live scoring, staff panels, vMix feed, paper registration
 
-25–26 October 2026. For whoever reviews the pull request. The first four migrations (`20261025100000` to `20261025130000`) were applied to the live project on 26 October 2026 and a full signed-in rehearsal passed against it the same day (paper entry, draw, pools, call-up, scoring, undo, screens, feeds, cleanup); the fifth, `20261026100000_scoring_short_location`, is written and validated on a Postgres-in-WASM stand-in but not yet applied. Printed guides for staff, the graphics team and the rehearsal are in `public/documents/` (see README, "Printed guides"). Design: `docs/superpowers/specs/2026-10-25-live-scoring-design.md`. Setup and event-day steps: `docs/live-stream.md` and `docs/event-day-runbook.md`.
+25–26 October 2026. For whoever reviews the pull request. The first four migrations (`20261025100000` to `20261025130000`) were applied to the live project on 26 October 2026 and a full signed-in rehearsal passed against it the same day (paper entry, draw, pools, call-up, scoring, undo, screens, feeds, cleanup); the fifth, `20261026100000_scoring_short_location`, is written and validated on a Postgres-in-WASM stand-in but not yet applied. Printed guides for staff, the graphics team and the rehearsal are in `public/documents/` (see README, "Printed guides"). Design: `docs/archive/specs/2026-10-25-live-scoring-design.md`. Setup and event-day steps: `docs/live-stream.md` and `docs/event-day-runbook.md`.
 
 ## What was built
 

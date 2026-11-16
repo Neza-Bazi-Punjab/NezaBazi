@@ -13,7 +13,7 @@
 // the practice to be worth anything the panels must behave exactly as they
 // will on event day, so every rule here mirrors
 // supabase/migrations/20261025120000_live_scoring.sql (§4 and §5 of
-// docs/superpowers/specs/2026-10-25-live-scoring-design.md), including the
+// docs/archive/specs/2026-10-25-live-scoring-design.md), including the
 // refusal messages, word for word.
 //
 // Pure and dependency-free on purpose: only type imports (erased at runtime),

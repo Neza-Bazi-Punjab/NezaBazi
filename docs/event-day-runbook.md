@@ -269,4 +269,4 @@ Everyone else gets the same "Log in" or "Access denied" page as `/judge`. The pr
 
 **Same as the day, either way.** Two-tap scoring, the automatic skip after a qualifying carry, undo, change, skip, **Call Pool**, **Screens**, and the start list with **Find a rider** all behave exactly as on event day. Nothing is written to the scoring tables or the audit log, and the sample riders and their families are invented.
 
-**Dress rehearsal.** Before event day the whole team rehearses together once, on the real system with test riders only; the run sheet is `public/documents/rehearsal-guide.pdf` (served at `/documents/rehearsal-guide.pdf`), built by `npm run build:guide` from [2026-10-26-rehearsal-guide-outline.md](superpowers/plans/2026-10-26-rehearsal-guide-outline.md).
+**Dress rehearsal.** Before event day the whole team rehearses together once, on the real system with test riders only; the run sheet is `public/documents/rehearsal-guide.pdf` (served at `/documents/rehearsal-guide.pdf`), built by `npm run build:guide` from [2026-10-26-rehearsal-guide-outline.md](archive/plans/2026-10-26-rehearsal-guide-outline.md).

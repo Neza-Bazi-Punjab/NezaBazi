@@ -1,7 +1,7 @@
 /* Every number the Stats page shows, worked out from a season file's facts.
    Pure: no React, no I/O, so it is unit-tested directly (compute.test.mts).
 
-   The rules (see docs/superpowers/specs/2026-11-11-stats-page.md):
+   The rules (see docs/archive/specs/2026-11-11-stats-page.md):
    - Points: carry 4, strike 2, miss 0.
    - An "unknown" run counts as ridden, scores 0, and is left out of both
      percentages and of points per run.

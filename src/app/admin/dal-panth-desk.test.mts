@@ -1,7 +1,7 @@
 // Dal Panth at the check-in desk, on paper entry and on desk teams. The rule
 // these pin: a registration, a check-in lookup, a check-in or a desk team must
 // never fail, or report failure, because Dal Panth could not be read or saved
-// (docs/superpowers/specs/2026-11-10-dal-panth-and-excel-export.md, Part 4).
+// (docs/archive/specs/2026-11-10-dal-panth-and-excel-export.md, Part 4).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";

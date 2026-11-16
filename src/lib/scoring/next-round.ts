@@ -1,5 +1,5 @@
 // The auto engine's "Next step" for Single tent pegging (steps 1–3 of
-// docs/superpowers/plans/2026-11-10-auto-scoring-engine.md).
+// docs/archive/plans/2026-11-10-auto-scoring-engine.md).
 //
 // The database decides everything — who goes through, what comes next, and
 // whether it is allowed — in supabase/migrations/20261110130000_scoring_auto_next_round.sql
