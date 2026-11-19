@@ -5,6 +5,7 @@ import PageHeader from "@/components/PageHeader";
 import { isOwnRegistration } from "@/lib/registration-identity";
 import { createClient } from "@/lib/supabase/server";
 import { site } from "@/lib/site";
+import { requireAdminOrHome } from "@/lib/admin/require-admin-page";
 
 export const metadata: Metadata = {
   title: "Registration Received",
@@ -12,6 +13,9 @@ export const metadata: Metadata = {
 };
 
 export default async function RegisterSuccessPage() {
+  // Registration is for administrators only now; anyone else goes home.
+  await requireAdminOrHome();
+
   const supabase = await createClient();
   const {
     data: { user },

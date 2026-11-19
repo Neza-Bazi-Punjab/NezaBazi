@@ -44,6 +44,30 @@ export function LogoLockup({
   );
 }
 
+/* The navbar's logo (2026 redesign): the hexagon mark with the name in
+   Cinzel. One line on wide screens; stacked where the navbar is tighter.
+   The footer keeps the original lockup (Logo below). */
+export function NavLogo() {
+  return (
+    <Link
+      href="/"
+      aria-label="Neza Bazi Punjab — home"
+      className="flex shrink-0 items-center gap-2.5 font-cinzel font-bold text-cream"
+    >
+      <LogoMark className="h-9 w-auto sm:h-10" />
+      <span className="leading-none xl:hidden">
+        <span className="block text-[13px] tracking-[0.12em] sm:text-sm">NEZA BAZI</span>
+        <span className="mt-0.5 block text-[11px] tracking-[0.42em] text-navgold sm:text-xs">
+          PUNJAB
+        </span>
+      </span>
+      <span className="hidden text-xl tracking-[0.06em] xl:inline">
+        NEZA BAZI <span className="text-navgold">PUNJAB</span>
+      </span>
+    </Link>
+  );
+}
+
 export default function Logo({ invert = false }: { invert?: boolean }) {
   return (
     <Link href="/" aria-label="Neza Bazi Punjab — home">

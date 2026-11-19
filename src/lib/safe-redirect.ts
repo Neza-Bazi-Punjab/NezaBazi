@@ -18,7 +18,8 @@ export const getSafeRedirect = (value: string | null): string => {
   }
 };
 
-export const getPostSignupRedirect = (value: string | null): string => {
-  const redirect = getSafeRedirect(value);
-  return redirect === "/" ? "/register" : redirect;
-};
+/* Where a new account lands once signed up. Registration is for
+   administrators only after the 2026 championship, so with nowhere better to
+   go that is the home page (it used to be /register). */
+export const getPostSignupRedirect = (value: string | null): string =>
+  getSafeRedirect(value);

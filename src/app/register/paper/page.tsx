@@ -6,6 +6,7 @@ import PageHeader from "@/components/PageHeader";
 import SectionHeading from "@/components/SectionHeading";
 import { DocumentIcon, DownloadIcon, MailIcon } from "@/components/icons";
 import { site } from "@/lib/site";
+import { requireAdminOrHome } from "@/lib/admin/require-admin-page";
 
 export const metadata: Metadata = {
   title: "Paper Registration",
@@ -31,7 +32,10 @@ const forms = [
 const documentExists = (file: string) =>
   existsSync(join(process.cwd(), "public", "documents", file));
 
-export default function PaperRegistrationPage() {
+export default async function PaperRegistrationPage() {
+  // Registration is for administrators only now; anyone else goes home.
+  await requireAdminOrHome();
+
   const availableForms = forms
     .filter((form) => documentExists(form.file))
     .map((form) => ({ ...form, href: `/documents/${form.file}` }));

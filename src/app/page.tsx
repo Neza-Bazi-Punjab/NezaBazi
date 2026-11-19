@@ -1,109 +1,168 @@
 import Image from "next/image";
+import Link from "next/link";
 import AddToHomeScreen from "@/components/AddToHomeScreen";
-import BrushDivider from "@/components/BrushDivider";
-import ButtonLink from "@/components/Button";
-import FlagRow from "@/components/FlagRow";
-import {
-  CalendarIcon,
-  MapPinIcon,
-  PlayIcon,
-  TrophyIcon,
-  UsersIcon,
-} from "@/components/icons";
+import { SwirlBreak } from "@/components/redesign/Breaks";
+import PhotoStrip from "@/components/redesign/PhotoStrip";
+import ReplayPlayer from "@/components/redesign/ReplayPlayer";
+import s from "@/components/redesign/shared.module.css";
+import { SocialIcons } from "@/components/redesign/social";
+import { homeStrip, photos } from "@/lib/photos-2026";
 import { site } from "@/lib/site";
+import h from "./home.module.css";
 
+/* The flags of the riders' nations, as on the poster: the Nishan Sahib
+   pennant, then Canada, USA, UK, Italy, Australia and Spain. */
+const flags = [
+  { name: "Canada", src: "/flags/Canada.svg" },
+  { name: "United States", src: "/flags/UnitedStates.webp" },
+  { name: "United Kingdom", src: "/flags/UK.webp" },
+  { name: "Italy", src: "/flags/Italy.webp" },
+  { name: "Australia", src: "/flags/Australia.svg" },
+  { name: "Spain", src: "/flags/Spain.webp" },
+];
+
+/* Home page, after the 2026 championship (the agreed draft,
+   handoff/mock-home/home.html): the hero, the two champions, a sideways
+   photo strip, the full broadcast, and a closing thank-you photo, joined by
+   the brown and gold swirl breaks. */
 export default function Home() {
   return (
-    <>
-      {/* Hero: the page is intentionally hero-only — every key fact (what,
-          where, when, prize, field size, rewards, live broadcast) lives here,
-          with the rider photo as a shorter dissolving strip below the facts
-          on mobile and a page-bleed to the right on desktop. */}
-      <section className="dust-glow relative overflow-hidden">
-        <div className="mx-auto grid max-w-6xl items-center gap-5 px-6 pb-8 pt-8 sm:pt-12 lg:min-h-[640px] lg:grid-cols-[1.05fr_0.95fr] lg:gap-10 lg:pb-28 lg:pt-14">
-          <div className="hero-stagger relative z-10">
-            <FlagRow className="mb-5" />
-
-            <p className="font-display text-xs font-semibold uppercase tracking-[0.2em] text-brown/80 sm:text-sm sm:tracking-[0.3em]">
-              1st Open Tent-Pegging Championship
-            </p>
-
-            <h1 className="mt-3 font-display font-bold uppercase leading-[0.95] text-brown sm:mt-5">
-              <span className="block text-5xl tracking-tight sm:text-7xl lg:text-8xl">
-                Neza Bazi
-              </span>
-              <span className="block text-5xl italic tracking-tight text-bronze sm:text-7xl lg:text-8xl">
-                Punjab
-              </span>
-              <span className="mt-2 block text-xl font-semibold tracking-[0.3em] text-brown sm:mt-3 sm:text-3xl">
-                Championship 2026
-              </span>
+    <div className={`${s.page} ${h.home}`}>
+      {/* Hero */}
+      <section className={h.hero}>
+        <div className={h.fade}>
+          <Image
+            src={photos.hero.src}
+            alt={photos.hero.alt}
+            fill
+            priority
+            sizes="(max-width: 820px) 100vw, 66vw"
+          />
+        </div>
+        <div className={`${s.wrap} ${h.inner}`}>
+          <div className={h.text}>
+            <div className={h.flags}>
+              <Image
+                className={h.pennant}
+                src="/flags/nishan-sahib.webp"
+                alt="Nishan Sahib"
+                width={1672}
+                height={941}
+                unoptimized
+              />
+              {flags.map((flag) => (
+                <Image
+                  key={flag.name}
+                  src={flag.src}
+                  alt={flag.name}
+                  title={flag.name}
+                  width={40}
+                  height={26}
+                  unoptimized
+                />
+              ))}
+            </div>
+            <p className={s.kicker}>1st Open Tent-Pegging Championship</p>
+            <h1 className={h.title}>
+              <span className={h.l}>Neza Bazi</span>
+              <span className={`${h.l} ${h.p}`}>Punjab</span>
+              <span className={h.s}>Championship 2026</span>
             </h1>
-
-            <p className="mt-4 flex items-center gap-2 font-display text-lg font-medium uppercase tracking-[0.2em] text-bronze">
-              <MapPinIcon className="h-5 w-5 shrink-0" />
-              {site.venue}
+            <p className={h.desc}>
+              Punjab&apos;s first open tent-pegging championship came to Amritsar on 11 November
+              2026, bringing together riders from across the world. Thank you to every rider,
+              team and fan who helped keep the art of Neza Bazi alive.
             </p>
-
-            <div className="mt-4 space-y-2.5">
-              <p className="flex items-center gap-2.5 font-display text-base font-semibold uppercase tracking-[0.12em] text-ink">
-                <CalendarIcon className="h-6 w-6 shrink-0 text-bronze" />
-                {site.eventDate}
-              </p>
-              <p className="flex items-start gap-2.5 font-display text-base font-semibold uppercase tracking-[0.12em] text-ink">
-                <TrophyIcon className="mt-0.5 h-6 w-6 shrink-0 text-bronze" />
-                <span>
-                  <span className="text-bronze-dark">{site.prize}</span>
-                  {` Cash Prize`}
-                  <span className="mt-0.5 block text-xs font-semibold tracking-[0.2em] text-brown/80">
-                    {`${site.cupName} · 1st Place`}
-                  </span>
-                </span>
-              </p>
-              <p className="flex items-center gap-2.5 font-display text-base font-semibold uppercase tracking-[0.12em] text-ink">
-                <UsersIcon className="h-6 w-6 shrink-0 text-bronze" />
-                <span className="text-bronze-dark">{site.riders}</span>
-                {` Riders`}
-              </p>
-              <p className="flex items-center gap-2.5 font-display text-base font-semibold uppercase tracking-[0.12em] text-ink">
-                <PlayIcon className="h-6 w-6 shrink-0 text-bronze" />
-                Broadcast Live
-              </p>
-            </div>
-
-            {/* The Stats button carries no arrow, so it shares one row on a
-                phone and the hero still fits the first screen. */}
-            <div className="mt-6 flex flex-wrap gap-4">
-              <ButtonLink href="/stats" arrow={false}>
+            <div className={h.ctas}>
+              <a className={`${s.btn} ${s.primary}`} href="#replay">
+                Live Replay
+              </a>
+              <Link className={`${s.btn} ${s.outline}`} href="/gallery">
+                Gallery
+              </Link>
+              <Link className={`${s.btn} ${s.outline}`} href="/stats">
                 Stats
-              </ButtonLink>
-              <ButtonLink href="/event" variant="outline">
-                Event Details
-              </ButtonLink>
+              </Link>
+              <SocialIcons className={h.socials} />
             </div>
-
-          </div>
-
-          {/* Rider photo dissolves into the parchment at every viewport — no
-              card edge. Short strip on mobile so the facts own the first
-              screen; bleeds to the top-right of the page on desktop. */}
-          <div className="hero-photo-fade relative aspect-[3/2] w-full overflow-hidden sm:aspect-[16/9] lg:absolute lg:inset-y-0 lg:right-0 lg:aspect-auto lg:w-[clamp(32rem,calc(38vw+8rem),56rem)]">
-            <Image
-              src="/images/hero-rider.webp"
-              alt="A rider in blue lowers the lance at a full gallop during a Neza Bazi run"
-              fill
-              priority
-              sizes="(max-width: 1024px) 100vw, 52vw"
-              className="object-cover object-[50%_55%] sm:object-center lg:-translate-y-8 lg:scale-110 lg:object-[25%_92%]"
-            />
           </div>
         </div>
-        <BrushDivider className="text-bronze/80" />
+        <SwirlBreak n={1} className={h.heroBreak} />
+      </section>
+
+      {/* 1. Champions band */}
+      <section className={h.champs} id="champions">
+        <div className={`${s.wrap} ${h.champsGrid}`}>
+          <div>
+            <div className={h.trophy}>
+              <Image
+                src={photos.trophies.src}
+                alt={photos.trophies.alt}
+                fill
+                sizes="(max-width: 820px) 100vw, 480px"
+              />
+            </div>
+          </div>
+          <div>
+            <h2 className={s.h2}>The 2026 Champions</h2>
+            <div className={h.winners}>
+              <div className={h.win}>
+                <span className={h.role}>Solo champion</span>
+                <span className={h.who}>Bunty Singh</span>
+              </div>
+              <div className={h.win}>
+                <span className={h.role}>Team champions</span>
+                <span className={h.who}>Dal Baba Bidhi Chand Sahib</span>
+              </div>
+            </div>
+            <Link className={`${s.btn} ${s.outline}`} href="/champions">
+              See the full podium
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <SwirlBreak n={2} />
+
+      {/* 2. Photo strip */}
+      <section className={h.strip} id="photos">
+        <PhotoStrip photos={homeStrip} />
+      </section>
+
+      <SwirlBreak n={3} />
+
+      {/* 3. The full broadcast */}
+      <section className={h.replay} id="replay">
+        <div className={s.wrap}>
+          <div className={h.replayHead}>
+            <h2 className={s.h2}>Full broadcast</h2>
+            <p>
+              Available on{" "}
+              <a href={site.replayUrl} target="_blank" rel="noopener noreferrer">
+                YouTube
+              </a>
+            </p>
+          </div>
+          <ReplayPlayer poster={photos.replayPoster} />
+        </div>
+      </section>
+
+      {/* 4. Closing photo */}
+      <section className={h.closing}>
+        <div className={h.closingPhoto}>
+          <SwirlBreak n={4} className={h.closingBreak} />
+          <Image src={photos.groupPhoto.src} alt={photos.groupPhoto.alt} fill sizes="100vw" />
+        </div>
+        <div className={h.closingText}>
+          <h2 className={s.h2}>Thank you</h2>
+          <p>See you again soon.</p>
+          <SocialIcons className={h.closingSocials} />
+        </div>
       </section>
 
       {/* Floating round button, bottom right: phones only; draws nothing on
           desktop, in the installed app, or once tapped or hidden. */}
       <AddToHomeScreen />
-    </>
+    </div>
   );
 }

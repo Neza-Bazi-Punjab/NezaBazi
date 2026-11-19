@@ -13,7 +13,8 @@ const css = repoFile("src/app/globals.css");
 
 test("the home page has the Add to Home Screen button, floating round at the bottom right", () => {
   assert.match(home, /import AddToHomeScreen from "@\/components\/AddToHomeScreen";/);
-  assert.match(home, /<AddToHomeScreen \/>\s*<\/>\s*\);\s*\}\s*$/);
+  // Last thing on the page.
+  assert.match(home, /<AddToHomeScreen \/>\s*<\/div>\s*\);\s*\}\s*$/);
   assert.doesNotMatch(home, /<AddToHomeScreen className/);
   // Fixed bottom right, above the home bar; a round 56px bronze button.
   assert.match(button, /fixed right-4 bottom-\[calc\(1\.25rem\+env\(safe-area-inset-bottom\)\)\]/);

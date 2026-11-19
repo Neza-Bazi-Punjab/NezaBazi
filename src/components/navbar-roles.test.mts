@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 import { PROFILE_ROLES, isProfileRole } from "../lib/scoring/types.ts";
-import { navLinks, site } from "../lib/site.ts";
+import { navLinks } from "../lib/site.ts";
 
 const source = readFileSync(new URL("./Navbar.tsx", import.meta.url), "utf8");
 
@@ -112,16 +112,16 @@ test("desktop and mobile both list the staff links among the account items", () 
 
   // Desktop staff links use exactly the My Account styling.
   const classAfter = (text: string, marker: string) =>
-    text.slice(text.indexOf(marker)).match(/className="([^"]+)"/)?.[1];
+    text.slice(text.indexOf(marker)).match(/className=\{?"?([^"}]+)/)?.[1];
   const accountClass = classAfter(desktop, 'href="/account"');
-  assert.ok(accountClass);
+  assert.equal(accountClass, "accountClass");
   assert.equal(classAfter(desktop, "staffLinks.map("), accountClass);
 
   // An administrator's crowded row keeps their tabs close together.
   assert.match(source, /const crowded = staffLinks\.length > 1;/);
   assert.match(
     desktop,
-    /<ul className=\{`hidden items-center gap-5 lg:flex \$\{crowded \? "" : "xl:gap-7"\}`\}>/
+    /<ul className=\{`ml-auto hidden items-center gap-5 lg:flex \$\{crowded \? "" : "xl:gap-6"\}`\}>/
   );
 
   // Mobile: one equal-tap-area row per staff link, in the signed-in branch,
@@ -136,10 +136,10 @@ test("desktop and mobile both list the staff links among the account items", () 
   assert.match(row, /href=\{link\.href\}/);
   assert.match(row, /onClick=\{\(\) => setOpen\(false\)\}/);
   assert.match(row, /tabIndex=\{open \? undefined : -1\}/);
-  assert.match(row, /className=\{`\$\{mobileRowClass\} text-brown\/80`\}/);
+  assert.match(row, /className=\{`\$\{mobileRowClass\} text-cream\/80`\}/);
   assert.match(
     mobile,
-    /href="\/account"\s+onClick=\{\(\) => setOpen\(false\)\}\s+tabIndex=\{open \? undefined : -1\}\s+className=\{`\$\{mobileRowClass\} text-brown\/80`\}/
+    /href="\/account"\s+onClick=\{\(\) => setOpen\(false\)\}\s+tabIndex=\{open \? undefined : -1\}\s+className=\{`\$\{mobileRowClass\} text-cream\/80`\}/
   );
 
   // The rows after the staff links keep the stagger in order.
@@ -153,13 +153,14 @@ test("the public tabs are untouched: staff links are never tabs", () => {
     [
       { href: "/", label: "Home" },
       { href: "/stats", label: "Stats" },
+      { href: "/gallery", label: "Gallery" },
       { href: "/event", label: "Event" },
       { href: "/rules", label: "Rulebook" },
     ]
   );
 
   const desktopTabs = desktop.match(
-    /<ul className=\{`hidden items-center gap-5 lg:flex [^`]*`\}>([\s\S]*?)<\/ul>/
+    /<ul className=\{`ml-auto hidden items-center gap-5 lg:flex [^`]*`\}>([\s\S]*?)<\/ul>/
   );
   assert.ok(desktopTabs);
   assert.match(desktopTabs[1], /navLinks\.map\(/);
@@ -172,8 +173,16 @@ test("the public tabs are untouched: staff links are never tabs", () => {
 
 test("the Live Now button is taken down, on desktop and in the mobile menu", () => {
   assert.doesNotMatch(source, /liveStreamUrl|LiveDot|Live Now/);
-  assert.match(source, /import \{ navLinks \} from "@\/lib\/site";/);
+  assert.match(source, /import \{ championsLink, navLinks \} from "@\/lib\/site";/);
 
   // Registration is no longer a navbar button; it stays in the footer.
   assert.doesNotMatch(source, /\/register|Register Now/);
+});
+
+test("the gold 2026 Champions pill leads to /champions on every screen size", () => {
+  assert.match(source, /href=\{championsLink\.href\}/);
+  // Outside both the desktop-only rows and the mobile menu, so it always shows.
+  const pill = desktop.slice(desktop.indexOf("href={championsLink.href}") - 200);
+  assert.match(pill, /<Link\s+href=\{championsLink\.href\}[\s\S]*?className="nb-goldpill /);
+  assert.doesNotMatch(mobile, /championsLink/);
 });

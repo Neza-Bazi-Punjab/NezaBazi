@@ -12,6 +12,7 @@ import { escapeIlikePattern } from "@/lib/supabase/query";
 import { createClient } from "@/lib/supabase/server";
 import { site } from "@/lib/site";
 import TeamRegisterForm from "./TeamRegisterForm";
+import { requireAdminOrHome } from "@/lib/admin/require-admin-page";
 
 export const metadata: Metadata = {
   title: "Team Registration",
@@ -39,6 +40,9 @@ const getMetadataNumber = (value: number | string | undefined) => {
 };
 
 export default async function RegisterTeamPage() {
+  // Registration is for administrators only now; anyone else goes home.
+  await requireAdminOrHome();
+
   const supabase = await createClient();
   const {
     data: { user },

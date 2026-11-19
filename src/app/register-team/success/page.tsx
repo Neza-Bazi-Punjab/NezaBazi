@@ -4,6 +4,7 @@ import ConfirmationCode from "@/components/ConfirmationCode";
 import PageHeader from "@/components/PageHeader";
 import { createClient } from "@/lib/supabase/server";
 import { site } from "@/lib/site";
+import { requireAdminOrHome } from "@/lib/admin/require-admin-page";
 
 export const metadata: Metadata = {
   title: "Team Registration Received",
@@ -11,6 +12,9 @@ export const metadata: Metadata = {
 };
 
 export default async function RegisterTeamSuccessPage() {
+  // Registration is for administrators only now; anyone else goes home.
+  await requireAdminOrHome();
+
   const supabase = await createClient();
   const {
     data: { user },

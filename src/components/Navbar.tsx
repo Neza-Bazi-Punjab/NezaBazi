@@ -5,8 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { isProfileRole, type ProfileRole } from "@/lib/scoring/types";
 import { createClient } from "@/lib/supabase/client";
-import { navLinks } from "@/lib/site";
-import Logo from "./Logo";
+import { championsLink, navLinks } from "@/lib/site";
+import { NavLogo } from "./Logo";
 import { CloseIcon, MenuIcon } from "./icons";
 
 const getUserLabel = ({
@@ -19,7 +19,7 @@ const getUserLabel = ({
 
 /* The staff panels each role can open. They sit among the account items
    (beside My Account), never as tabs: the public tabs stay Home, Stats,
-   Event and Rulebook. Administrators can open every panel; players see nothing extra.
+   Gallery, Event and Rulebook. Administrators can open every panel; players see nothing extra.
    The panels check the role again server-side, so this is only a shortcut. */
 const staffLinksByRole: Record<ProfileRole, readonly { href: string; label: string }[]> = {
   player: [],
@@ -37,9 +37,12 @@ const staffLinksByRole: Record<ProfileRole, readonly { href: string; label: stri
    /commentary. Add them back here to show the links again. */
 const SHOWN_STAFF_LINKS: ReadonlySet<string> = new Set(["/admin"]);
 
-/* Sticky top navigation: animated hover/active underlines on desktop and a
-   mobile dropdown that smoothly expands and collapses (kept mounted so both
-   directions animate). */
+/* Sticky top navigation, in the 2026 redesign's look (dark brown, like the
+   footer; Cinzel logo, DM Sans tabs in cream, the active tab gold, the gold
+   "2026 Champions" pill), the same on every page. The account items (staff
+   links, My Account, Log Out or Log In) follow the pill on desktop; on
+   phones and tablets the tabs and account items sit in a dropdown that
+   smoothly expands and collapses (kept mounted so both directions animate). */
 export default function Navbar() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -56,14 +59,14 @@ export default function Navbar() {
   const staffLinks = userLabel
     ? staffLinksByRole[role].filter((link) => SHOWN_STAFF_LINKS.has(link.href))
     : [];
-  /* An administrator's three staff links, My Account and Log Out make a
-     crowded row beside the four tabs, so their tabs stay close together. */
+  /* An administrator's staff links, My Account and Log Out make a crowded
+     row beside the five tabs, so their tabs stay close together. */
   const crowded = staffLinks.length > 1;
 
   /* Shared styling for mobile menu rows so nav links, auth links and the
      user/logout rows all read as one consistent list with equal tap areas. */
   const mobileRowClass =
-    "block border-b border-bronze/10 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] transition-colors hover:text-bronze";
+    "block border-b border-cream/10 py-3 text-[15px] font-medium transition-colors hover:text-navgold";
   const mobileItemClass =
     "transition-[opacity,transform] duration-[var(--dur-base)] ease-[var(--ease-soft)] motion-reduce:transition-none";
   const mobileItemStyle = (index: number): React.CSSProperties => ({
@@ -161,15 +164,20 @@ export default function Navbar() {
     };
   }, [supabase]);
 
+  const onChampions = pathname === championsLink.href;
+  /* Account items on desktop: quiet small text after the gold pill. */
+  const accountClass =
+    "whitespace-nowrap text-[13px] font-medium text-cream/75 transition-colors hover:text-navgold";
+
   return (
-    <header className="sticky top-0 z-50 border-b border-bronze/15 bg-sand/90 pt-[env(safe-area-inset-top)] backdrop-blur">
+    <header className="sticky top-0 z-50 border-b border-black/30 bg-nav pt-[env(safe-area-inset-top)] font-dmsans">
       <nav
         aria-label="Main"
-        className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-6"
+        className="flex h-16 items-center gap-3 px-4 sm:gap-4 sm:px-6 xl:gap-7 xl:px-10"
       >
-        <Logo />
+        <NavLogo />
 
-        <ul className={`hidden items-center gap-5 lg:flex ${crowded ? "" : "xl:gap-7"}`}>
+        <ul className={`ml-auto hidden items-center gap-5 lg:flex ${crowded ? "" : "xl:gap-6"}`}>
           {navLinks.map((link) => {
             const active = pathname === link.href;
             return (
@@ -178,8 +186,8 @@ export default function Navbar() {
                   href={link.href}
                   data-active={active}
                   aria-current={active ? "page" : undefined}
-                  className={`nav-underline font-display text-sm font-semibold uppercase tracking-[0.15em] transition-colors hover:text-bronze ${
-                    active ? "text-bronze" : "text-ink"
+                  className={`whitespace-nowrap text-sm font-medium transition-colors hover:text-navgold ${
+                    active ? "text-navgold" : "text-cream"
                   }`}
                 >
                   {link.label}
@@ -189,7 +197,15 @@ export default function Navbar() {
           })}
         </ul>
 
-        <div className="hidden items-center gap-5 lg:flex">
+        <Link
+          href={championsLink.href}
+          aria-current={onChampions ? "page" : undefined}
+          className="nb-goldpill ml-auto shrink-0 lg:ml-0"
+        >
+          {championsLink.label}
+        </Link>
+
+        <div className="hidden items-center lg:flex">
           {!authLoading &&
             (userLabel ? (
               <div className="flex items-center gap-4">
@@ -197,14 +213,14 @@ export default function Navbar() {
                   <Link
                     key={link.href}
                     href={link.href}
-                    className="nav-underline font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70 transition-colors hover:text-bronze"
+                    className={accountClass}
                   >
                     {link.label}
                   </Link>
                 ))}
                 <Link
                   href="/account"
-                  className="nav-underline font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70 transition-colors hover:text-bronze"
+                  className={accountClass}
                 >
                   My Account
                 </Link>
@@ -212,26 +228,15 @@ export default function Navbar() {
                   type="button"
                   onClick={handleLogout}
                   disabled={loggingOut}
-                  className="nav-underline font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70 transition-colors hover:text-bronze disabled:opacity-60"
+                  className={`${accountClass} disabled:opacity-60`}
                 >
                   {loggingOut ? "Logging out..." : "Log Out"}
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-5">
-                <Link
-                  href="/login"
-                  className="nav-underline font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70 transition-colors hover:text-bronze"
-                >
-                  Log In
-                </Link>
-                <Link
-                  href="/signup"
-                  className="nav-underline font-display text-sm font-semibold uppercase tracking-[0.15em] text-brown/70 transition-colors hover:text-bronze"
-                >
-                  Sign Up
-                </Link>
-              </div>
+              <Link href="/login" className={accountClass}>
+                Log In
+              </Link>
             ))}
         </div>
 
@@ -241,12 +246,11 @@ export default function Navbar() {
           aria-expanded={open}
           aria-controls="mobile-menu"
           aria-label={open ? "Close menu" : "Open menu"}
-          className="-m-2 p-2 text-ink transition-colors hover:text-bronze lg:hidden"
+          className="-m-2 shrink-0 p-2 text-cream transition-colors hover:text-navgold lg:hidden"
         >
           {open ? <CloseIcon className="h-7 w-7" /> : <MenuIcon className="h-7 w-7" />}
         </button>
       </nav>
-
       {/* Mobile menu: grid-rows 0fr→1fr expands/collapses height smoothly.
           Kept mounted so both open and close animate. */}
       <div
@@ -257,7 +261,7 @@ export default function Navbar() {
       >
         <div className="min-h-0 overflow-hidden">
           <ul
-            className={`flex flex-col border-t border-bronze/15 bg-sand px-6 py-4 ${
+            className={`flex flex-col border-t border-cream/10 bg-nav px-6 py-4 ${
               open ? "" : "pointer-events-none"
             }`}
             aria-hidden={!open}
@@ -269,7 +273,7 @@ export default function Navbar() {
                   onClick={() => setOpen(false)}
                   tabIndex={open ? undefined : -1}
                   className={`${mobileRowClass} ${
-                    pathname === link.href ? "text-bronze" : "text-ink"
+                    pathname === link.href ? "text-navgold" : "text-cream"
                   }`}
                 >
                   {link.label}
@@ -289,7 +293,7 @@ export default function Navbar() {
                         href={link.href}
                         onClick={() => setOpen(false)}
                         tabIndex={open ? undefined : -1}
-                        className={`${mobileRowClass} text-brown/80`}
+                        className={`${mobileRowClass} text-cream/80`}
                       >
                         {link.label}
                       </Link>
@@ -303,7 +307,7 @@ export default function Navbar() {
                       href="/account"
                       onClick={() => setOpen(false)}
                       tabIndex={open ? undefined : -1}
-                      className={`${mobileRowClass} text-brown/80`}
+                      className={`${mobileRowClass} text-cream/80`}
                     >
                       My Account
                     </Link>
@@ -317,45 +321,28 @@ export default function Navbar() {
                       onClick={handleLogout}
                       disabled={loggingOut}
                       tabIndex={open ? undefined : -1}
-                      className={`${mobileRowClass} w-full text-left text-ink disabled:opacity-60`}
+                      className={`${mobileRowClass} w-full text-left text-cream disabled:opacity-60`}
                     >
                       {loggingOut ? "Logging out..." : "Log Out"}
                     </button>
                   </li>
                 </>
               ) : (
-                <>
-                  <li
-                    className={mobileItemClass}
-                    style={mobileItemStyle(accountRowIndex)}
+                <li
+                  className={mobileItemClass}
+                  style={mobileItemStyle(accountRowIndex)}
+                >
+                  <Link
+                    href="/login"
+                    onClick={() => setOpen(false)}
+                    tabIndex={open ? undefined : -1}
+                    className={`${mobileRowClass} ${
+                      pathname === "/login" ? "text-navgold" : "text-cream"
+                    }`}
                   >
-                    <Link
-                      href="/login"
-                      onClick={() => setOpen(false)}
-                      tabIndex={open ? undefined : -1}
-                      className={`${mobileRowClass} ${
-                        pathname === "/login" ? "text-bronze" : "text-ink"
-                      }`}
-                    >
-                      Log In
-                    </Link>
-                  </li>
-                  <li
-                    className={mobileItemClass}
-                    style={mobileItemStyle(accountRowIndex + 1)}
-                  >
-                    <Link
-                      href="/signup"
-                      onClick={() => setOpen(false)}
-                      tabIndex={open ? undefined : -1}
-                      className={`${mobileRowClass} ${
-                        pathname === "/signup" ? "text-bronze" : "text-ink"
-                      }`}
-                    >
-                      Sign Up
-                    </Link>
-                  </li>
-                </>
+                    Log In
+                  </Link>
+                </li>
               ))}
           </ul>
         </div>
