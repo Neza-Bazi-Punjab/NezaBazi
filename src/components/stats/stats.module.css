@@ -400,9 +400,15 @@
   color: #8a6a4c;
 }
 
-.table tbody tr:nth-child(even) td,
-.table tbody tr:nth-child(even) th {
+.table tbody tr.alt td,
+.table tbody tr.alt th {
   background: #f8efe2;
+}
+
+/* The run card under a tapped row, and the arrow that opens it: phones only */
+.more,
+.detail {
+  display: none;
 }
 
 .table tbody tr:hover td,
@@ -564,6 +570,72 @@
   .res .med {
     padding: 2px 6px;
     font-size: 10px;
+  }
+
+  .row {
+    cursor: pointer;
+  }
+
+  .more {
+    display: block;
+    float: right;
+    width: 28px;
+    height: 28px;
+    margin: -2px -4px 0 4px;
+    font-size: 13px;
+    color: var(--bronze-dark);
+    background: none;
+    border: 0;
+    cursor: pointer;
+  }
+
+  .more:focus-visible {
+    outline: 2px solid var(--bronze);
+  }
+
+  .detail {
+    display: table-row;
+  }
+
+  .table .detail td {
+    height: auto;
+    padding: 0;
+    text-align: left;
+    white-space: normal;
+    overflow: visible;
+  }
+
+  /* Held at the left edge, a screen wide, however far the table is swiped */
+  .card {
+    position: sticky;
+    left: 0;
+    width: min(310px, calc(100vw - 34px));
+    padding: 2px 14px 10px;
+    font-size: 13.5px;
+  }
+
+  .card > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 0;
+    border-top: 1px solid rgba(90, 53, 23, 0.12);
+  }
+
+  .card dt {
+    color: #3b2a1a;
+  }
+
+  .card dd {
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .card dd > span:first-child {
+    display: inline-block;
+    margin-right: 10px;
+    font-weight: 400;
+    color: #7a5a3c;
   }
 
   .swipe {

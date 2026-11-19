@@ -206,7 +206,7 @@ test("phones: the table scrolls in its own region, rank and name stay put", () =
   assert.match(css, /@media \(max-width: 820px\)[\s\S]*\.table \.resCol \{\s*display: none;/);
   // The horse and place line stays under the name on a phone too.
   assert.doesNotMatch(css, /\.nm small \{\s*display: none;/);
-  assert.match(browser, /Swipe the table sideways/);
+  assert.match(browser, /swipe the table sideways/);
   // No rate columns (points per run, carry %, hit %): owner, 19 Nov 2026.
   assert.deepEqual(RIDER_COLUMNS.map((column) => column.id).filter((id) => /rate|perRun/i.test(id)), []);
   // The name stays put while the numbers scroll under it.

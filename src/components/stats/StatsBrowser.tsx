@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Fragment, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import shared from "@/components/redesign/shared.module.css";
 import {
   RIDER_COLUMNS,
@@ -182,6 +182,8 @@ function Browser<
     direction: "ascending",
   });
   const [page, setPage] = useState(1);
+  /* Phones: the row whose run card is open (tap a row to open or close it). */
+  const [openId, setOpenId] = useState<string | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo(
@@ -340,7 +342,7 @@ function Browser<
             </select>
           </>
         )}
-        <span className={t.swipe}>Swipe the table sideways for every round.</span>
+        <span className={t.swipe}>Tap a {config.noun} for every round, or swipe the table sideways.</span>
       </div>
 
       <p className={t.how}>
@@ -435,14 +437,29 @@ function Browser<
             </tr>
           </thead>
           <tbody>
-            {shown.map((row) => {
+            {shown.map((row, rowIndex) => {
               const subline = config.subline(row);
+              const open = openId === row.id;
+              const striped = rowIndex % 2 === 1 ? t.alt : "";
               const reachedCell = reachedColumn?.cell(row);
               const reachedText = reachedCell?.kind === "value" ? reachedCell.text : "";
               return (
-                <tr key={row.id}>
+                <Fragment key={row.id}>
+                <tr className={`${t.row} ${striped}`} onClick={() => setOpenId(open ? null : row.id)}>
                   <td className={t.rk}>{row.rank}</td>
                   <th scope="row" className={t.nm}>
+                    <button
+                      type="button"
+                      aria-expanded={open}
+                      aria-label={`${open ? "Hide" : "Show"} every round for ${row.name}`}
+                      className={t.more}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setOpenId(open ? null : row.id);
+                      }}
+                    >
+                      <span aria-hidden>{open ? "▴" : "▾"}</span>
+                    </button>
                     <b>{row.name}</b>
                     <small>{subline}</small>
                     <span aria-hidden className={t.res}>
@@ -472,6 +489,31 @@ function Browser<
                     );
                   })}
                 </tr>
+                {open && (
+                  <tr className={`${t.detail} ${striped}`}>
+                    {/* Phones only, where the Result columns are left out. */}
+                    <td colSpan={2 + columns.filter(({ group }) => group.id !== "result").length}>
+                      <dl className={t.card}>
+                        {columns
+                          .filter(({ group }) => group.id === "rounds")
+                          .map(({ column }) => ({ column, cell: column.cell(row) }))
+                          .filter(({ cell }) => cell.kind !== "blank")
+                          .map(({ column, cell }) => (
+                            <div key={column.id}>
+                              <dt>{roundName(column.title ?? column.label)}</dt>
+                              <dd>
+                                {view === "riders" && cell.kind === "value" && column.id !== "stage-qualification" && (
+                                  <span>{RESULT_WORD[cell.text] ?? ""}</span>
+                                )}
+                                <CellView cell={cell} />
+                              </dd>
+                            </div>
+                          ))}
+                      </dl>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               );
             })}
             {total === 0 && (
@@ -514,6 +556,14 @@ function Browser<
     </div>
   );
 }
+
+/* A round column's title as the run card's label: "Points in Final, out of
+   16" -> "Final". */
+const roundName = (title: string) => title.replace(/^Points in /, "").replace(/, out of 16$/, "");
+
+/* One run's points as the word for it. Qualification is two tries added
+   together, so it shows the points alone. */
+const RESULT_WORD: Record<string, string> = { "4": "Carry", "2": "Strike", "0": "Miss" };
 
 /* "Points in Aarhi round 1" -> "points in Aarhi round 1": round names keep
    their capitals inside a sentence. "#" and short headings pass through. */
