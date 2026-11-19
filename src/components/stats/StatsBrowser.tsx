@@ -57,8 +57,8 @@ interface ViewConfig<T> {
   searchPlaceholder: string;
   columns: readonly StatColumn<T>[];
   groups: readonly ColumnGroup[];
-  /* Each column's width in px; the name column takes what is left, but
-     never less than nameMin. */
+  /* Each column's narrowest width in px, nameMin for the name column. Spare
+     width is shared across them all in proportion. */
   widths: Record<string, number>;
   nameMin: number;
   searchFields: (row: T) => (string | null | undefined)[];
@@ -78,24 +78,25 @@ const riderConfig: ViewConfig<RiderRow> = {
   searchPlaceholder: "Search a rider, horse or place",
   columns: RIDER_COLUMNS,
   groups: RIDER_GROUPS,
-  /* Sized so the whole table, Place included, still fits a 1440px laptop
-     with both deciding rides in it. "3rd place ride-off" takes two lines in
-     Reached; a few very long horse-and-place lines end in an ellipsis. */
+  /* The narrowest each column goes; together they fit a 1440px laptop. On a
+     wider screen the spare width is shared out across every column in
+     proportion, so the numbers spread over the table instead of the name
+     column taking it all. */
   widths: {
-    runs: 68,
-    carries: 42,
-    strikes: 42,
-    misses: 42,
-    "stage-qualification": 68,
-    "stage-aarhi1": 86,
-    "stage-aarhi2": 86,
-    "stage-third": 106,
-    "stage-final": 72,
-    points: 58,
-    reached: 104,
-    place: 76,
+    runs: 72,
+    carries: 48,
+    strikes: 48,
+    misses: 48,
+    "stage-qualification": 76,
+    "stage-aarhi1": 90,
+    "stage-aarhi2": 90,
+    "stage-third": 110,
+    "stage-final": 80,
+    points: 68,
+    reached: 150,
+    place: 84,
   },
-  nameMin: 184,
+  nameMin: 250,
   searchFields: riderSearchFields,
   /* Everyone rode qualification, so "Any round" already covers it. A rider
      rode the 3rd place ride-off or the Final, never both, so "or further"
@@ -237,6 +238,7 @@ function Browser<
   const tableStyle = {
     minWidth: tableMinWidth,
     "--phone-min": `${RANK_WIDTH + PHONE_NAME_WIDTH + columnsWidth - resultWidth}px`,
+    "--phone-name": `${PHONE_NAME_WIDTH}px`,
   } as CSSProperties;
 
   const filtersOn = reachedAtLeast >= 0 || state !== "" || search.trim() !== "";
@@ -377,7 +379,7 @@ function Browser<
           </caption>
           <colgroup>
             <col style={{ width: RANK_WIDTH }} />
-            <col />
+            <col className={t.nmCol} style={{ width: config.nameMin }} />
             {columns.map(({ column, group }) => (
               <col
                 key={column.id}

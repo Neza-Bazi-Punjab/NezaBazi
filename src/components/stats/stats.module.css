@@ -551,6 +551,10 @@
     display: none;
   }
 
+  .table col.nmCol {
+    width: var(--phone-name) !important;
+  }
+
   .table tbody th.nm {
     padding-top: 7px;
     padding-bottom: 7px;
