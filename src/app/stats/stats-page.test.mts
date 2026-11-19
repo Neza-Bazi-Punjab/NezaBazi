@@ -193,23 +193,34 @@ test("phones: the table scrolls in its own region, rank and name stay put", () =
   assert.match(browser, /role="region"[^>]*className=\{t\.scroll\}/);
   const css = read("../../components/stats/stats.module.css");
   assert.match(css, /\.scroll \{\s*position: relative;\s*overflow-x: auto;/);
-  // A phone shows the whole table, scrolled sideways under a narrow name cell:
-  // no short table and no switch (owner, 19 Nov 2026), nothing hidden.
-  assert.doesNotMatch(browser, /onPhone|phHide|allColumns|Summary/);
-  assert.doesNotMatch(css, /phHide|\.cols/);
-  assert.match(browser, /"--phone-min": `\$\{RANK_WIDTH \+ PHONE_NAME_WIDTH \+ columnsWidth - resultWidth\}px`/);
-  assert.match(css, /@media \(max-width: 820px\)[\s\S]*\.table \{\s*min-width: var\(--phone-min\) !important;/);
-  // The place and round reached ride in the name cell, held in place, so the
-  // result never scrolls out of view; the Result columns are left out there.
-  assert.match(browser, /<span aria-hidden className=\{t\.res\}>/);
-  assert.match(css, /\.res,\s*\.swipe \{\s*display: none;\s*\}/);
-  assert.match(css, /@media \(max-width: 820px\)[\s\S]*\.table \.resCol \{\s*display: none;/);
+  // A phone gets two short tables that each fit the screen, under a Result /
+  // Rounds switch, and a tap on a row slides up that row's card (owner, 19 Nov
+  // 2026). Nothing scrolls sideways and nothing is out of reach.
+  assert.doesNotMatch(browser, /onPhone|phHide|allColumns|swipe/i);
+  assert.match(browser, /role="group" aria-label="Table" className=\{t\.views\}/);
+  assert.match(browser, /aria-pressed=\{phoneView === "result"\} onClick=\{\(\) => setPhoneView\("result"\)\}>\s*Result/);
+  assert.match(browser, /aria-pressed=\{phoneView === "rounds"\} onClick=\{\(\) => setPhoneView\("rounds"\)\}>\s*Rounds/);
+  assert.match(browser, /\$\{phoneView === "rounds" \? t\.vRounds : t\.vResult\}/);
+  assert.match(css, /@media \(max-width: 820px\)[\s\S]*\.table \{\s*table-layout: auto;\s*min-width: 0 !important;/);
+  assert.match(css, /\.table\.vResult \[data-g="rounds"\],[\s\S]*\.table\.vRounds \[data-g="result"\] \{\s*display: none;/);
+  // The switch, the card's arrow and the short headings are for phones only.
+  assert.match(css, /\.views,\s*\.more,\s*\.lblShort \{\s*display: none;\s*\}/);
+  // Every round column has a short heading for the Rounds table.
+  for (const column of [...RIDER_COLUMNS, ...TEAM_COLUMNS].filter((candidate) => candidate.group === "rounds")) {
+    assert.ok(browser.includes(`"${column.id}": "`), `${column.id} has a phone heading`);
+  }
+  // The card is a real dialog, opened from a row by tap or by its own button.
+  assert.match(browser, /<dialog\s+ref=\{sheetRef\}/);
+  assert.match(browser, /sheet\.showModal\(\)/);
+  assert.match(browser, /aria-haspopup="dialog"/);
+  assert.match(browser, /aria-label="Close" className=\{t\.sheetClose\}/);
+  assert.match(browser, /window\.matchMedia\(PHONE_QUERY\)\.matches/);
+  assert.match(browser, /const PHONE_QUERY = "\(max-width: 820px\)";/);
   // The horse and place line stays under the name on a phone too.
   assert.doesNotMatch(css, /\.nm small \{\s*display: none;/);
-  assert.match(browser, /swipe the table sideways/);
   // No rate columns (points per run, carry %, hit %): owner, 19 Nov 2026.
   assert.deepEqual(RIDER_COLUMNS.map((column) => column.id).filter((id) => /rate|perRun/i.test(id)), []);
-  // The name stays put while the numbers scroll under it.
+  // On a narrow computer window the name stays put while the numbers scroll.
   assert.match(css, /\.table \.nm \{\s*position: sticky;\s*left: 0;/);
 
   // Nothing on the page sets a fixed width wider than a phone.

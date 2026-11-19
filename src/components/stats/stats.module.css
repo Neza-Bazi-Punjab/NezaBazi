@@ -169,10 +169,148 @@
   outline-offset: 2px;
 }
 
-/* The result line in the name cell and the swipe hint: phones only */
-.res,
-.swipe {
+/* Phones only: the Result / Rounds switch, the arrow that opens a card and
+   the short round headings */
+.views,
+.more,
+.lblShort {
   display: none;
+}
+
+/* The card that slides up from a tapped row (phones). A bottom sheet: the
+   table stays behind it, and a tap outside or on the cross puts it away. */
+.sheet {
+  position: fixed;
+  inset: auto 0 0 0;
+  width: 100%;
+  max-width: 520px;
+  max-height: 86vh;
+  margin: 0 auto;
+  padding: 0;
+  overflow-y: auto;
+  color: #3b2a1a;
+  background: #fffaf2;
+  border: 0;
+  border-radius: 18px 18px 0 0;
+}
+
+.sheet::backdrop {
+  background: rgba(43, 26, 10, 0.55);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sheet[open] {
+    animation: sheetUp 0.22s ease-out;
+  }
+}
+
+@keyframes sheetUp {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+}
+
+.sheetBody {
+  position: relative;
+  padding: 26px 20px 28px;
+  text-align: center;
+}
+
+.sheetBody h3 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 22px;
+  color: var(--brown);
+  padding: 0 36px;
+}
+
+.sheetClose {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 40px;
+  height: 40px;
+  font-size: 16px;
+  color: var(--brown);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.sheetSub {
+  margin-top: 4px;
+  font-size: 13.5px;
+  color: #8a6a4c;
+}
+
+.sheetRes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 8px;
+  margin-top: 10px;
+  font-size: 14px;
+  color: #6b4a2c;
+}
+
+/* Every round across, as on the computer's table */
+.strip {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 18px;
+  padding: 12px 8px;
+  background: #f6ecdd;
+  border-radius: 12px;
+}
+
+.strip > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.strip dt {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bronze-dark);
+}
+
+.strip dd {
+  margin-top: 4px;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--ink);
+}
+
+.card {
+  margin-top: 14px;
+  font-size: 14px;
+  text-align: left;
+}
+
+.card > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 2px;
+  border-top: 1px solid rgba(90, 53, 23, 0.12);
+}
+
+.card dd {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.card dd em {
+  margin-right: 10px;
+  font-style: normal;
+  font-weight: 400;
+  color: #7a5a3c;
 }
 
 /* How the places were decided: the first thing a newcomer asks of the table */
@@ -405,11 +543,6 @@
   background: #f8efe2;
 }
 
-/* The run card under a tapped row, and the arrow that opens it: phones only */
-.more,
-.detail {
-  display: none;
-}
 
 .table tbody tr:hover td,
 .table tbody tr:hover th {
@@ -538,42 +671,100 @@
     font-size: 30px;
   }
 
-  /* The computer's table with a narrower name column, scrolled sideways
-     under the name */
+  /* Two short tables that each fit the screen, under the Result / Rounds
+     switch. No group headings, and nothing scrolls sideways. */
   .table {
-    min-width: var(--phone-min) !important;
+    table-layout: auto;
+    min-width: 0 !important;
   }
 
-  /* The result stays with the name instead of scrolling away: the Result
-     columns go, and the name cell shows the place and round reached under
-     the horse and place line */
-  .table .resCol {
+  .table col {
+    width: auto !important;
+  }
+
+  .table thead tr.grp,
+  .table.vResult [data-g="runs"],
+  .table.vResult [data-g="rounds"],
+  .table.vRounds [data-g="runs"],
+  .table.vRounds [data-g="totals"],
+  .table.vRounds [data-g="result"] {
     display: none;
   }
 
-  .table col.nmCol {
-    width: var(--phone-name) !important;
+  .table .gs {
+    border-left-width: 1px;
+  }
+
+  .lblFull {
+    display: none;
+  }
+
+  /* Five round columns fit beside the name: no room kept for a sort arrow
+     that is not showing, and tighter cells */
+  .table.vRounds .ar.off {
+    display: none;
+  }
+
+  .table.vRounds .sort {
+    padding: 12px 4px;
+  }
+
+  .table.vRounds td {
+    padding: 0 5px;
+  }
+
+  .table.vRounds .nm {
+    min-width: 104px;
+  }
+
+  .lblShort {
+    display: inline;
+  }
+
+  .views {
+    display: flex;
+    flex-wrap: wrap;
+    flex-basis: 100%;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .views button {
+    height: 40px;
+    padding: 0 18px;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--brown);
+    background: none;
+    border: 1.5px solid var(--brown);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  .views button[aria-pressed="true"] {
+    background: var(--brown);
+    color: var(--cream);
+  }
+
+  .views button:focus-visible,
+  .more:focus-visible,
+  .sheetClose:focus-visible {
+    outline: 2px solid var(--bronze);
+    outline-offset: 2px;
+  }
+
+  .views span {
+    margin-left: auto;
+    font-size: 12.5px;
+    color: #7a5a3c;
   }
 
   .table tbody th.nm {
     padding-top: 7px;
     padding-bottom: 7px;
-  }
-
-  .res {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 4px 6px;
-    margin-top: 3px;
-    font-size: 12.5px;
-    line-height: 1.3;
-    color: #6b4a2c;
-  }
-
-  .res .med {
-    padding: 2px 6px;
-    font-size: 10px;
   }
 
   .row {
@@ -583,70 +774,15 @@
   .more {
     display: block;
     float: right;
-    width: 28px;
+    width: 24px;
     height: 28px;
-    margin: -2px -4px 0 4px;
-    font-size: 13px;
+    margin: -2px -4px 0 2px;
+    font-size: 18px;
+    line-height: 1;
     color: var(--bronze-dark);
     background: none;
     border: 0;
     cursor: pointer;
-  }
-
-  .more:focus-visible {
-    outline: 2px solid var(--bronze);
-  }
-
-  .detail {
-    display: table-row;
-  }
-
-  .table .detail td {
-    height: auto;
-    padding: 0;
-    text-align: left;
-    white-space: normal;
-    overflow: visible;
-  }
-
-  /* Held at the left edge, a screen wide, however far the table is swiped */
-  .card {
-    position: sticky;
-    left: 0;
-    width: min(310px, calc(100vw - 34px));
-    padding: 2px 14px 10px;
-    font-size: 13.5px;
-  }
-
-  .card > div {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 7px 0;
-    border-top: 1px solid rgba(90, 53, 23, 0.12);
-  }
-
-  .card dt {
-    color: #3b2a1a;
-  }
-
-  .card dd {
-    font-weight: 600;
-    color: var(--ink);
-  }
-
-  .card dd > span:first-child {
-    display: inline-block;
-    margin-right: 10px;
-    font-weight: 400;
-    color: #7a5a3c;
-  }
-
-  .swipe {
-    display: block;
-    flex-basis: 100%;
-    font-size: 12.5px;
-    color: #7a5a3c;
   }
 
   .how {

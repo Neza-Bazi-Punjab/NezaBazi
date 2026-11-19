@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useId, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import shared from "@/components/redesign/shared.module.css";
 import {
   RIDER_COLUMNS,
@@ -40,9 +40,9 @@ import t from "./stats.module.css";
    view. Every column has a fixed width and every row a fixed height, so
    sorting or paging never moves the table: only what is inside changes.
 
-   A phone shows the same table, scrolled sideways under a narrower name
-   cell that is held in place and carries the place and round reached, so
-   the result is always in view and nobody has to turn the phone. */
+   A phone gets two short tables that each fit the screen, under a Result /
+   Rounds switch, and a tap on a row slides up that rider's or team's card
+   with every round on it. Nothing scrolls sideways. */
 
 export const PAGE_SIZE = 25;
 
@@ -67,9 +67,20 @@ interface ViewConfig<T> {
 }
 
 const RANK_WIDTH = 44;
-/* The name column's width on a phone showing all columns: narrow, so the
-   numbers get most of the screen. */
-const PHONE_NAME_WIDTH = 148;
+/* Round headings short enough for five of them to fit a phone. */
+const PHONE_LABEL: Record<string, string> = {
+  "stage-qualification": "Qual",
+  "stage-aarhi1": "A1",
+  "stage-aarhi2": "A2",
+  "stage-third": "3rd",
+  "stage-final": "Final",
+  "stage-round1": "R1",
+  "stage-round2": "R2",
+  "stage-final1": "Final",
+  "stage-final2": "T-B",
+};
+/* The same break as stats.module.css. */
+const PHONE_QUERY = "(max-width: 820px)";
 
 const riderConfig: ViewConfig<RiderRow> = {
   noun: "rider",
@@ -183,8 +194,16 @@ function Browser<
     direction: "ascending",
   });
   const [page, setPage] = useState(1);
-  /* Phones: the row whose run card is open (tap a row to open or close it). */
+  /* Phones: which short table is showing, and whose card is up. */
+  const [phoneView, setPhoneView] = useState<"result" | "rounds">("result");
   const [openId, setOpenId] = useState<string | null>(null);
+  const sheetRef = useRef<HTMLDialogElement>(null);
+  const openRow = openId ? (rows.find((row) => row.id === openId) ?? null) : null;
+
+  useEffect(() => {
+    const sheet = sheetRef.current;
+    if (openRow && sheet && !sheet.open) sheet.showModal();
+  }, [openRow]);
   const boxRef = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo(
@@ -222,24 +241,20 @@ function Browser<
       .filter((column) => column.group === group.id)
       .map((column, index) => ({ column, group, startsGroup: index === 0 }))
   );
-  const cellClass = (group: ColumnGroup, startsGroup: boolean, ...more: (string | false | undefined)[]) =>
-    [startsGroup && t.gs, group.id === "result" && t.resCol, ...more]
-      .filter(Boolean)
-      .join(" ");
+  const cellClass = (startsGroup: boolean, ...more: (string | false | undefined)[]) =>
+    [startsGroup && t.gs, ...more].filter(Boolean).join(" ");
   const columnsWidth = columns.reduce((sum, { column }) => sum + (config.widths[column.id] ?? 80), 0);
-  /* On a phone the result (Reached and Place) rides in
-     the name cell, which is held in place, so it never scrolls out of view.
-     The Result group's own columns are left out there. */
-  const resultWidth = columns
-    .filter(({ group }) => group.id === "result")
-    .reduce((sum, { column }) => sum + (config.widths[column.id] ?? 80), 0);
-  const reachedColumn = config.columns.find((column) => column.id === "reached");
   const tableMinWidth = RANK_WIDTH + config.nameMin + columnsWidth;
-  const tableStyle = {
-    minWidth: tableMinWidth,
-    "--phone-min": `${RANK_WIDTH + PHONE_NAME_WIDTH + columnsWidth - resultWidth}px`,
-    "--phone-name": `${PHONE_NAME_WIDTH}px`,
-  } as CSSProperties;
+  const valueOf = (row: T, id: string) => {
+    const cell = config.columns.find((column) => column.id === id)?.cell(row);
+    return cell?.kind === "value" ? cell.text : "";
+  };
+  /* The rounds a row rode, for its card. */
+  const roundsOf = (row: T) =>
+    columns
+      .filter(({ group }) => group.id === "rounds")
+      .map(({ column }) => ({ column, cell: column.cell(row) }))
+      .filter(({ cell }) => cell.kind !== "blank");
 
   const filtersOn = reachedAtLeast >= 0 || state !== "" || search.trim() !== "";
 
@@ -344,7 +359,15 @@ function Browser<
             </select>
           </>
         )}
-        <span className={t.swipe}>Tap a {config.noun} for every round, or swipe the table sideways.</span>
+        <div role="group" aria-label="Table" className={t.views}>
+          <button type="button" aria-pressed={phoneView === "result"} onClick={() => setPhoneView("result")}>
+            Result
+          </button>
+          <button type="button" aria-pressed={phoneView === "rounds"} onClick={() => setPhoneView("rounds")}>
+            Rounds
+          </button>
+          <span>Tap a {config.noun} for more.</span>
+        </div>
       </div>
 
       <p className={t.how}>
@@ -373,19 +396,15 @@ function Browser<
 
       {/* ---------- table ---------- */}
       <div role="region" aria-labelledby={captionId} tabIndex={0} className={t.scroll}>
-        <table className={t.table} style={tableStyle}>
+        <table className={`${t.table} ${phoneView === "rounds" ? t.vRounds : t.vResult}`} style={{ minWidth: tableMinWidth }}>
           <caption id={captionId} className={t.srOnly}>
             {config.nameHeading} statistics, {season} season, {sortText}
           </caption>
           <colgroup>
             <col style={{ width: RANK_WIDTH }} />
-            <col className={t.nmCol} style={{ width: config.nameMin }} />
+            <col style={{ width: config.nameMin }} />
             {columns.map(({ column, group }) => (
-              <col
-                key={column.id}
-                className={group.id === "result" ? t.resCol : undefined}
-                style={{ width: config.widths[column.id] ?? 80 }}
-              />
+              <col key={column.id} data-g={group.id} style={{ width: config.widths[column.id] ?? 80 }} />
             ))}
           </colgroup>
           <thead>
@@ -396,7 +415,8 @@ function Browser<
                   key={group.id}
                   colSpan={config.columns.filter((column) => column.group === group.id).length}
                   scope="colgroup"
-                  className={cellClass(group, true)}
+                  data-g={group.id}
+                  className={cellClass(true)}
                 >
                   {group.label}
                 </th>
@@ -425,10 +445,12 @@ function Browser<
                   key={column.id}
                   scope="col"
                   aria-sort={ariaSort(column.id)}
-                  className={cellClass(group, startsGroup, !column.numeric && t.l)}
+                  data-g={group.id}
+                  className={cellClass(startsGroup, !column.numeric && t.l)}
                 >
                   <SortButton
                     label={column.label}
+                    short={PHONE_LABEL[column.id]}
                     title={column.title}
                     active={sort.key === column.id}
                     first={sort.direction === column.firstDirection}
@@ -441,41 +463,36 @@ function Browser<
           <tbody>
             {shown.map((row, rowIndex) => {
               const subline = config.subline(row);
-              const open = openId === row.id;
-              const striped = rowIndex % 2 === 1 ? t.alt : "";
-              const reachedCell = reachedColumn?.cell(row);
-              const reachedText = reachedCell?.kind === "value" ? reachedCell.text : "";
+              /* A tap opens the card on a phone only: a computer shows it all. */
+              const openCard = () => {
+                if (window.matchMedia(PHONE_QUERY).matches) setOpenId(row.id);
+              };
               return (
-                <Fragment key={row.id}>
-                <tr className={`${t.row} ${striped}`} onClick={() => setOpenId(open ? null : row.id)}>
+                <tr key={row.id} className={`${t.row} ${rowIndex % 2 === 1 ? t.alt : ""}`} onClick={openCard}>
                   <td className={t.rk}>{row.rank}</td>
                   <th scope="row" className={t.nm}>
                     <button
                       type="button"
-                      aria-expanded={open}
-                      aria-label={`${open ? "Hide" : "Show"} every round for ${row.name}`}
+                      aria-haspopup="dialog"
+                      aria-label={`Every round for ${row.name}`}
                       className={t.more}
                       onClick={(event) => {
                         event.stopPropagation();
-                        setOpenId(open ? null : row.id);
+                        setOpenId(row.id);
                       }}
                     >
-                      <span aria-hidden>{open ? "▴" : "▾"}</span>
+                      <span aria-hidden>›</span>
                     </button>
                     <b>{row.name}</b>
                     <small>{subline}</small>
-                    <span aria-hidden className={t.res}>
-                      {row.place && <span className={`${t.med} ${MEDAL[row.place]}`}>{formatPlace(row.place)}</span>}
-                      {reachedText}
-                    </span>
                   </th>
                   {columns.map(({ column, group, startsGroup }) => {
                     const cell = column.cell(row);
                     return (
                       <td
                         key={column.id}
+                        data-g={group.id}
                         className={cellClass(
-                          group,
                           startsGroup,
                           !column.numeric && t.l,
                           column.id === "points" && t.pts,
@@ -491,31 +508,6 @@ function Browser<
                     );
                   })}
                 </tr>
-                {open && (
-                  <tr className={`${t.detail} ${striped}`}>
-                    {/* Phones only, where the Result columns are left out. */}
-                    <td colSpan={2 + columns.filter(({ group }) => group.id !== "result").length}>
-                      <dl className={t.card}>
-                        {columns
-                          .filter(({ group }) => group.id === "rounds")
-                          .map(({ column }) => ({ column, cell: column.cell(row) }))
-                          .filter(({ cell }) => cell.kind !== "blank")
-                          .map(({ column, cell }) => (
-                            <div key={column.id}>
-                              <dt>{roundName(column.title ?? column.label)}</dt>
-                              <dd>
-                                {view === "riders" && cell.kind === "value" && column.id !== "stage-qualification" && (
-                                  <span>{RESULT_WORD[cell.text] ?? ""}</span>
-                                )}
-                                <CellView cell={cell} />
-                              </dd>
-                            </div>
-                          ))}
-                      </dl>
-                    </td>
-                  </tr>
-                )}
-                </Fragment>
               );
             })}
             {total === 0 && (
@@ -531,6 +523,66 @@ function Browser<
           </tbody>
         </table>
       </div>
+
+      {/* ---------- phones: the card that slides up from a tapped row ---------- */}
+      <dialog
+        ref={sheetRef}
+        aria-labelledby={`${uid}-sheet`}
+        className={t.sheet}
+        onClose={() => setOpenId(null)}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) event.currentTarget.close();
+        }}
+      >
+        {openRow && (
+          <div className={t.sheetBody}>
+            <button type="button" aria-label="Close" className={t.sheetClose} onClick={() => sheetRef.current?.close()}>
+              <span aria-hidden>✕</span>
+            </button>
+            <h3 id={`${uid}-sheet`}>{openRow.name}</h3>
+            <p className={t.sheetSub}>{config.subline(openRow)}</p>
+            <p className={t.sheetRes}>
+              {openRow.place && <span className={`${t.med} ${MEDAL[openRow.place]}`}>{formatPlace(openRow.place)}</span>}
+              {[valueOf(openRow, "reached"), valueOf(openRow, "points") && `${valueOf(openRow, "points")} points`]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+            <dl className={t.strip}>
+              {roundsOf(openRow).map(({ column, cell }) => (
+                <div key={column.id}>
+                  <dt>{PHONE_LABEL[column.id] ?? column.label}</dt>
+                  <dd>
+                    <CellView cell={cell} />
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <dl className={t.card}>
+              {roundsOf(openRow).map(({ column, cell }) => (
+                <div key={column.id}>
+                  <dt>{roundName(column.title ?? column.label)}</dt>
+                  <dd>
+                    {view === "riders" && cell.kind === "value" && column.id !== "stage-qualification" && (
+                      <em>{RESULT_WORD[cell.text] ?? ""}</em>
+                    )}
+                    <CellView cell={cell} />
+                  </dd>
+                </div>
+              ))}
+              {columns
+                .filter(({ group }) => group.id === "runs")
+                .map(({ column }) => (
+                  <div key={column.id}>
+                    <dt>{column.title ?? column.label}</dt>
+                    <dd>
+                      <CellView cell={column.cell(openRow)} />
+                    </dd>
+                  </div>
+                ))}
+            </dl>
+          </div>
+        )}
+      </dialog>
 
       {(anyDash || shownStatuses.size > 0) && (
         <ul className={t.marks}>
@@ -559,7 +611,7 @@ function Browser<
   );
 }
 
-/* A round column's title as the run card's label: "Points in Final, out of
+/* A round column's title as the card's label: "Points in Final, out of
    16" -> "Final". */
 const roundName = (title: string) => title.replace(/^Points in /, "").replace(/, out of 16$/, "");
 
@@ -595,12 +647,15 @@ function CellView({ cell }: { cell: Cell }) {
    once it is turned round. */
 function SortButton({
   label,
+  short,
   title,
   active,
   first,
   onClick,
 }: {
   label: string;
+  /* A shorter heading for phones, when the full one is too wide there. */
+  short?: string;
   title?: string;
   active: boolean;
   first: boolean;
@@ -615,7 +670,18 @@ function SortButton({
     >
       {title && title !== label ? (
         <>
-          <span aria-hidden>{label}</span>
+          {short && short !== label ? (
+            <>
+              <span aria-hidden className={t.lblFull}>
+                {label}
+              </span>
+              <span aria-hidden className={t.lblShort}>
+                {short}
+              </span>
+            </>
+          ) : (
+            <span aria-hidden>{label}</span>
+          )}
           <span className={t.srOnly}>{title}</span>
         </>
       ) : (
