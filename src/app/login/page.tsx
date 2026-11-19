@@ -2,10 +2,12 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
-import PageHeader from "@/components/PageHeader";
 import ResendConfirmation from "@/components/ResendConfirmation";
-import SectionHeading from "@/components/SectionHeading";
+import PageTop from "@/components/redesign/PageTop";
+import f from "@/components/redesign/forms.module.css";
+import s from "@/components/redesign/shared.module.css";
 import { getSafeRedirect } from "@/lib/safe-redirect";
 import PasswordField from "@/components/PasswordField";
 import { createClient } from "@/lib/supabase/client";
@@ -71,86 +73,79 @@ function LoginPageContent() {
   };
 
   return (
-    <>
-      <PageHeader
+    <div className={`${s.page} ${f.forms}`}>
+      <PageTop
+        small
         title="Player Login"
-        intro="Sign in to manage your profile, horses, and event entries."
+        lead="Sign in to manage your profile, horses, and event entries."
       />
 
-      <section className="bg-cream">
-        <div className="mx-auto max-w-xl px-6 py-16">
-          <SectionHeading>Sign In</SectionHeading>
-
-          {/* Google first: a rider who signed up that way has no password to
-              reach for, and one they signed up with an email still recognises
-              the form directly below. */}
-          <div className="mt-10">
-            <GoogleSignInButton redirectTo={redirectTo} />
-          </div>
-
-          <div className="mt-8 flex items-center gap-4">
-            <span className="h-px flex-1 bg-bronze/25" />
-            <span className="font-display text-xs font-semibold uppercase tracking-[0.18em] text-brown/70">
-              or
-            </span>
-            <span className="h-px flex-1 bg-bronze/25" />
-          </div>
-
-          <form onSubmit={handleSubmit} className="mt-8 space-y-6">
-            <div>
-              <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
-                Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
-              />
+      <section className={f.band}>
+        <div className={s.wrap}>
+          <div className={`${f.col} ${f.box}`}>
+            {/* Google first: a rider who signed up that way has no password to
+                reach for, and one they signed up with an email still recognises
+                the form directly below. */}
+            <div className={f.google}>
+              <GoogleSignInButton redirectTo={redirectTo} />
             </div>
 
-            <PasswordField
-              label="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+            <div className={f.or}>or</div>
 
-            <div className="text-right">
-              <a
-                href="/forgot-password"
-                className="text-sm font-semibold text-bronze-deep underline"
-              >
-                Forgot password?
-              </a>
-            </div>
-
-            {error && <p className="text-sm text-red-700">{error}</p>}
-
-            {needsConfirmation && (
-              <div className="rounded-lg border border-bronze/25 bg-sand p-5">
-                <ResendConfirmation />
+            <form onSubmit={handleSubmit} className={f.form}>
+              <div>
+                <label htmlFor="login-email">Email</label>
+                <input
+                  id="login-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                  className={f.input}
+                />
               </div>
-            )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-lg bg-bronze-deep px-6 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze disabled:opacity-60"
-            >
-              {loading ? "Logging in..." : "Log In"}
-            </button>
+              <PasswordField
+                label="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+              />
 
-            <p className="text-center text-sm text-brown/80">
-              New here?{" "}
-              <a href={signupHref} className="font-semibold text-bronze-deep underline">
-                Create an account
-              </a>
-            </p>
-          </form>
+              <div className={f.right}>
+                <Link href="/forgot-password" className={f.link}>
+                  Forgot password?
+                </Link>
+              </div>
+
+              {error && <p className={f.err}>{error}</p>}
+
+              {needsConfirmation && (
+                <div className={f.panel}>
+                  <ResendConfirmation />
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className={`${s.btn} ${s.primary} ${f.block} ${f.primaryHover}`}
+              >
+                {loading ? "Logging in..." : "Log In"}
+              </button>
+
+              <p className={f.small}>
+                New here?{" "}
+                <Link href={signupHref} className={f.link}>
+                  Create an account
+                </Link>
+              </p>
+            </form>
+          </div>
         </div>
       </section>
-    </>
+    </div>
   );
 }

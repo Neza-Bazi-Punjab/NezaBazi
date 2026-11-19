@@ -9,6 +9,7 @@ import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
 import { createClient } from "@/lib/supabase/server";
 import { site } from "@/lib/site";
 import RegisterForm from "./RegisterForm";
+import { requireAdminOrHome } from "@/lib/admin/require-admin-page";
 
 export const metadata: Metadata = {
   title: "Solo Registration",
@@ -39,6 +40,9 @@ const getMetadataNumber = (value: number | string | undefined) => {
 };
 
 export default async function SoloRegisterPage() {
+  // Registration is for administrators only now; anyone else goes home.
+  await requireAdminOrHome();
+
   const supabase = await createClient();
   const {
     data: { user },

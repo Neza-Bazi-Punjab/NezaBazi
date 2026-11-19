@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import PageHeader from "@/components/PageHeader";
-import SectionHeading from "@/components/SectionHeading";
+import Link from "next/link";
+import PageTop from "@/components/redesign/PageTop";
+import f from "@/components/redesign/forms.module.css";
+import s from "@/components/redesign/shared.module.css";
 import { createClient } from "@/lib/supabase/client";
 
 export default function ForgotPasswordPage() {
@@ -36,69 +38,65 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <>
-      <PageHeader
+    <div className={`${s.page} ${f.forms}`}>
+      <PageTop
+        small
         title="Reset Password"
-        intro="Enter your email and we'll send you a link to set a new password."
+        lead="Enter your email and we'll send you a link to set a new password."
       />
 
-      <section className="bg-cream">
-        <div className="mx-auto max-w-xl px-6 py-16">
-          {sent ? (
-            <>
-              <SectionHeading>Check Your Inbox</SectionHeading>
-              <div className="mt-10 space-y-6">
-                <p className="leading-7 text-brown/85">
-                  If an account exists for <span className="font-semibold">{email}</span>,
-                  a password reset link is on its way. Click it to choose a new
-                  password.
-                </p>
-                <a
-                  href="/login"
-                  className="block w-full rounded-lg bg-bronze-deep px-6 py-3 text-center font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze"
-                >
+      <section className={f.band}>
+        <div className={s.wrap}>
+          <div className={`${f.col} ${f.box}`}>
+            {sent ? (
+              <div className={f.stack}>
+                <h2 className={f.boxTitle}>Check Your Inbox</h2>
+                <div className={f.text}>
+                  <p>
+                    If an account exists for <b>{email}</b>, a password reset link
+                    is on its way. Click it to choose a new password.
+                  </p>
+                </div>
+                <Link href="/login" className={`${s.btn} ${s.primary} ${f.block} ${f.primaryHover}`}>
                   Back to Login
-                </a>
+                </Link>
               </div>
-            </>
-          ) : (
-            <>
-              <SectionHeading>Forgot Password</SectionHeading>
-              <form onSubmit={handleSubmit} className="mt-10 space-y-6">
+            ) : (
+              <form onSubmit={handleSubmit} className={f.form}>
                 <div>
-                  <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
-                    Email
-                  </label>
+                  <label htmlFor="forgot-email">Email</label>
                   <input
+                    id="forgot-email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none"
+                    autoComplete="email"
+                    className={f.input}
                   />
                 </div>
 
-                {error && <p className="text-sm text-red-700">{error}</p>}
+                {error && <p className={f.err}>{error}</p>}
 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full rounded-lg bg-bronze-deep px-6 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze disabled:opacity-60"
+                  className={`${s.btn} ${s.primary} ${f.block} ${f.primaryHover}`}
                 >
                   {loading ? "Sending..." : "Send Reset Link"}
                 </button>
 
-                <p className="text-center text-sm text-brown/80">
+                <p className={f.small}>
                   Remembered it?{" "}
-                  <a href="/login" className="font-semibold text-bronze-deep underline">
+                  <Link href="/login" className={f.link}>
                     Back to login
-                  </a>
+                  </Link>
                 </p>
               </form>
-            </>
-          )}
+            )}
+          </div>
         </div>
       </section>
-    </>
+    </div>
   );
 }

@@ -259,7 +259,7 @@ test("/live is taken down for now: it sends visitors to /stats, linked instead",
   assert.ok(navLinks.some((link) => link.href === "/stats" && link.label === "Stats"));
   assert.ok(!navLinks.some((link) => (link.href as string) === "/live"));
   assert.ok(!footerQuickLinks.some((link) => (link.href as string) === "/live"));
-  assert.equal(navLinks.length, 4, "four-tab navbar: Home, Stats, Event, Rulebook");
+  assert.equal(navLinks.length, 5, "five-tab navbar: Home, Gallery, Stats, Event, Rulebook");
 });
 
 test("the sitemap lists /stats and leaves out the staff panels and overlays", () => {
@@ -449,8 +449,11 @@ test("the judges' panel is score, Skip, Take out, Undo last and Call next pool",
   assert.match(route, /rpc\("scoring_take_out"/);
 });
 
-test("the paper registration page is in the sitemap", () => {
-  assert.match(read("../sitemap.ts"), /"\/register\/paper",/);
+test("the sitemap lists Champions and Gallery, and no registration pages", () => {
+  const sitemap = read("../sitemap.ts");
+  assert.match(sitemap, /"\/champions",/);
+  assert.match(sitemap, /"\/gallery",/);
+  assert.doesNotMatch(sitemap, /"\/register/);
 });
 
 test("the training pages: anyone on a SCORING_SAMPLE_MODE=1 laptop, signed-in staff elsewhere; noindex", () => {

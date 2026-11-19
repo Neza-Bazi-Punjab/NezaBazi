@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { LATEST_SEASON } from "@/lib/stats/seasons";
-import { focusRing } from "./styles";
+import t from "./stats.module.css";
 
 export type StatsView = "riders" | "teams";
 
@@ -13,15 +13,8 @@ export function statsHref(season: number, view: StatsView): string {
   return view === "teams" ? `${base}/teams` : base;
 }
 
-const pill = (active: boolean) =>
-  `inline-flex min-h-11 items-center rounded-lg border px-4 font-display text-sm font-semibold uppercase tracking-[0.12em] transition-colors ${focusRing} ${
-    active
-      ? "border-bronze-deep bg-bronze-deep text-cream"
-      : "border-brown/25 bg-cream text-brown hover:border-bronze"
-  }`;
-
-/* Season pills and the Riders / Teams switch. Both are links, so the page
-   they open can be shared or bookmarked. */
+/* Season and the Riders / Teams switch. Both are links, so the page they
+   open can be shared or bookmarked. */
 export default function SeasonViewNav({
   seasons,
   season,
@@ -32,20 +25,13 @@ export default function SeasonViewNav({
   view: StatsView;
 }) {
   return (
-    <div className="flex flex-wrap items-end gap-x-8 gap-y-4">
+    <div className={t.switches}>
       <nav aria-label="Season">
-        <p className="mb-2 font-display text-xs font-semibold uppercase tracking-[0.18em] text-brown/70">
-          Season
-        </p>
-        <ul className="flex flex-wrap gap-2">
+        <p className={t.lbl}>Season</p>
+        <ul className={t.seg}>
           {seasons.map((year) => (
             <li key={year}>
-              <Link
-                href={statsHref(year, view)}
-                scroll={false}
-                aria-current={year === season ? "page" : undefined}
-                className={pill(year === season)}
-              >
+              <Link href={statsHref(year, view)} scroll={false} aria-current={year === season ? "page" : undefined}>
                 {year}
               </Link>
             </li>
@@ -54,10 +40,8 @@ export default function SeasonViewNav({
       </nav>
 
       <nav aria-label="View">
-        <p className="mb-2 font-display text-xs font-semibold uppercase tracking-[0.18em] text-brown/70">
-          View
-        </p>
-        <ul className="flex flex-wrap gap-2">
+        <p className={t.lbl}>View</p>
+        <ul className={t.seg}>
           {(
             [
               ["riders", "Riders"],
@@ -65,12 +49,7 @@ export default function SeasonViewNav({
             ] as const
           ).map(([id, label]) => (
             <li key={id}>
-              <Link
-                href={statsHref(season, id)}
-                scroll={false}
-                aria-current={id === view ? "page" : undefined}
-                className={pill(id === view)}
-              >
+              <Link href={statsHref(season, id)} scroll={false} aria-current={id === view ? "page" : undefined}>
                 {label}
               </Link>
             </li>

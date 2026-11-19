@@ -27,10 +27,16 @@
   --color-bronze-dark: #8a3f0e;
   --color-bronze-deep: #6e300a;
   --color-brown: #5a3517;
+  /* Navbar and footer (2026 redesign): dark brown with a soft gold accent */
+  --color-nav: #3a2413;
+  --color-navgold: #e6c072;
   --color-ink: #2e1d0e;
 
   --font-sans: var(--font-inter);
   --font-display: var(--font-oswald);
+  /* 2026 redesign: navbar, home, Champions and Gallery only */
+  --font-cinzel: var(--font-cinzel-face), serif;
+  --font-dmsans: var(--font-dm-sans-face), sans-serif;
 }
 
 body {
@@ -147,6 +153,32 @@ body {
 .hero-stagger > *:nth-child(4) { animation-delay: 210ms; }
 .hero-stagger > *:nth-child(5) { animation-delay: 280ms; }
 .hero-stagger > *:nth-child(6) { animation-delay: 350ms; }
+
+/* The navbar's gold "2026 Champions" pill (2026 redesign) */
+.nb-goldpill {
+  font-family: var(--font-cinzel);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding: 7px 12px;
+  border-radius: 4px;
+  /* Matte gold: one flat colour, no shine, so it stands out without shouting */
+  color: var(--color-nav);
+  background: #c9a24d;
+  transition: background-color 0.2s;
+}
+.nb-goldpill:hover {
+  background: #d8b45e;
+}
+
+@media (min-width: 40rem) {
+  .nb-goldpill {
+    font-size: 12.5px;
+    padding: 8px 16px;
+  }
+}
 
 /* Animated nav underline: grows left-to-right on hover, stays put when active */
 .nav-underline {

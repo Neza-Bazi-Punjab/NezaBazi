@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Oswald } from "next/font/google";
+import { Cinzel, DM_Sans, Inter, Oswald } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
@@ -17,6 +17,21 @@ const oswald = Oswald({
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
+});
+
+/* The 2026 redesign's pair: Cinzel for headings, DM Sans for text. Used by
+   the navbar and the home, Champions and Gallery pages only; every other
+   page keeps Oswald and Inter. */
+const cinzel = Cinzel({
+  variable: "--font-cinzel-face",
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+});
+
+const dmSans = DM_Sans({
+  variable: "--font-dm-sans-face",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -55,7 +70,7 @@ export default function RootLayout({
       lang="en"
       // The splash script in AppSplash.tsx marks <html> before React loads.
       suppressHydrationWarning
-      className={`${oswald.variable} ${inter.variable} h-full antialiased`}
+      className={`${oswald.variable} ${inter.variable} ${cinzel.variable} ${dmSans.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
         {/* Installed app only: a brief logo screen as it opens. */}

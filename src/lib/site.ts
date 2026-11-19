@@ -21,17 +21,25 @@ export const site = {
   // The championship's YouTube live broadcast. The "Live Now" buttons that
   // opened it are taken down for now.
   liveStreamUrl: "https://youtube.com/live/XuGGgWDIclw",
-  // TODO: set to the rules explainer video (any YouTube URL). While empty,
-  // the Rulebook page shows a "video coming soon" note instead of the player.
+  // The full 2026 broadcast, as replayed on the home page (it plays in place
+  // from youtube-nocookie.com) and linked from the Champions page.
+  replayVideoId: "JoN0OqB5cBU",
+  replayUrl: "https://www.youtube.com/live/JoN0OqB5cBU",
+  // The rules explainer video (any YouTube URL). The Rulebook page leaves the
+  // video out for now (2026 redesign), so nothing reads this at the moment.
   rulesVideoUrl: "" as string,
 } as const;
 
 export const navLinks = [
   { href: "/", label: "Home" },
+  { href: "/gallery", label: "Gallery" },
   { href: "/stats", label: "Stats" },
   { href: "/event", label: "Event" },
   { href: "/rules", label: "Rulebook" },
 ] as const;
+
+/* The gold pill at the end of the navbar's tabs. */
+export const championsLink = { href: "/champions", label: "2026 Champions" } as const;
 
 export const footerQuickLinks = [
   { href: "/event", label: "Event" },

@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
-import PageHeader from "@/components/PageHeader";
-import SectionHeading from "@/components/SectionHeading";
+import PageTop from "@/components/redesign/PageTop";
+import f from "@/components/redesign/forms.module.css";
+import s from "@/components/redesign/shared.module.css";
 import { hasConfirmedEmail } from "@/lib/supabase/email-confirmation";
 import { escapeIlikePattern } from "@/lib/supabase/query";
 import { isOwnRegistration } from "@/lib/registration-identity";
@@ -47,31 +48,31 @@ export default async function AccountPage() {
 
   if (!user) {
     return (
-      <>
-        <PageHeader
+      <div className={`${s.page} ${f.forms}`}>
+        <PageTop
+          small
           title="My Account"
-          intro="Log in to manage your profile and view your active registrations."
+          lead="Log in to manage your profile and view your registrations."
         />
 
-        <section className="bg-cream">
-          <div className="mx-auto max-w-xl px-6 py-16">
-            <SectionHeading>Login Required</SectionHeading>
-
-            <div className="mt-10 space-y-6">
-              <p className="leading-7 text-brown/85">
-                You must be logged in to view your account.
-              </p>
+        <section className={f.band}>
+          <div className={s.wrap}>
+            <div className={`${f.col} ${f.box} ${f.stack}`}>
+              <h2 className={f.boxTitle}>Login Required</h2>
+              <div className={f.text}>
+                <p>You must be logged in to view your account.</p>
+              </div>
 
               <Link
                 href="/login?redirect=/account"
-                className="block w-full rounded-lg bg-bronze-deep px-6 py-3 text-center font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze"
+                className={`${s.btn} ${s.primary} ${f.block} ${f.primaryHover}`}
               >
                 Log In
               </Link>
             </div>
           </div>
         </section>
-      </>
+      </div>
     );
   }
 
@@ -188,37 +189,40 @@ export default async function AccountPage() {
   }
 
   return (
-    <>
-      <PageHeader
+    <div className={`${s.page} ${f.forms}`}>
+      <PageTop
+        small
         title="My Account"
-        intro="Manage your profile information and review your active registrations."
+        lead="Manage your profile information and review your registrations."
       />
 
-      <section className="bg-cream">
-        <div className="mx-auto max-w-4xl px-6 py-16">
-          <AccountPageClient
-            profile={
-              {
-                id: user.id,
-                full_name: authMetadata.full_name ?? "",
-                age: getMetadataNumber(authMetadata.age),
-                location: authMetadata.location ?? "",
-                phone: authMetadata.phone ?? "",
-                email: user.email ?? "",
-                headshot_path:
-                  typeof authMetadata.headshot_path === "string"
-                    ? authMetadata.headshot_path
-                    : null,
-              } as AccountProfile
-            }
-            soloRegistration={soloRegistration}
-            enteredRegistrations={enteredRegistrations}
-            team={(team ?? null) as AccountTeam | null}
-            teamMembers={(teamMembers ?? []) as AccountTeamMember[]}
-            memberships={memberships}
-          />
+      <section className={f.band}>
+        <div className={s.wrap}>
+          <div className={`${f.col} ${f.wide}`}>
+            <AccountPageClient
+              profile={
+                {
+                  id: user.id,
+                  full_name: authMetadata.full_name ?? "",
+                  age: getMetadataNumber(authMetadata.age),
+                  location: authMetadata.location ?? "",
+                  phone: authMetadata.phone ?? "",
+                  email: user.email ?? "",
+                  headshot_path:
+                    typeof authMetadata.headshot_path === "string"
+                      ? authMetadata.headshot_path
+                      : null,
+                } as AccountProfile
+              }
+              soloRegistration={soloRegistration}
+              enteredRegistrations={enteredRegistrations}
+              team={(team ?? null) as AccountTeam | null}
+              teamMembers={(teamMembers ?? []) as AccountTeamMember[]}
+              memberships={memberships}
+            />
+          </div>
         </div>
       </section>
-    </>
+    </div>
   );
 }

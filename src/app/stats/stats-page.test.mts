@@ -36,7 +36,9 @@ const statsSources = () => {
 test("/stats is no longer a coming-soon placeholder", () => {
   const page = read("./StatsSeason.tsx");
   assert.doesNotMatch(page, /coming soon/i);
-  assert.match(page, /<PageHeader/);
+  assert.match(page, /<PageTop title="Stats" lead=\{statsLead\(year\)\} \/>/);
+  assert.match(page, /Stats from the \$\{SEASON_PLACES\[year\]\} Championship \$\{year\}\./);
+  assert.match(page, /2026: "Amritsar"/);
   assert.match(page, /title: "Stats"/);
   // Each page's canonical address is the one its own links use; the newest
   // season's is the plain /stats (statsHref, below).
@@ -91,7 +93,8 @@ test("both views of every season are pages built at deploy time", () => {
   assert.match(page, /view="teams"/);
   assert.match(page, /season\.provisional/);
   assert.match(page, /season\.notes/);
-  assert.match(page, /Last updated/);
+  // The redesign shows no "Last updated" line.
+  assert.doesNotMatch(page, /Last updated/);
   // Every listed season, and nothing else, under its year.
   assert.match(page, /export const seasonParams = \(\) => SEASONS\.map\(\(year\) => \(\{ season: String\(year\) \}\)\);/);
   assert.match(page, /if \(!SEASONS\.includes\(year\)\) \{\s*throw new Error/);
@@ -152,15 +155,25 @@ test("the table is a real, sortable, accessible table", () => {
   assert.match(browser, /scope="col"/);
   assert.match(browser, /scope="row"/);
   assert.match(browser, /aria-sort=/);
-  assert.match(browser, /tabular-nums/);
+  assert.match(read("../../components/stats/stats.module.css"), /font-variant-numeric: tabular-nums;/);
   assert.match(browser, /Clear filters/);
-  assert.match(browser, /PAGE_SIZES = \[25, 50, 100\]/);
+  assert.match(browser, /PAGE_SIZE = 25;/);
   assert.match(browser, /<Pagination/);
+  // No column on/off controls in the redesign: every group is always there.
+  assert.doesNotMatch(browser, /Show these columns|groupSettings/);
+});
 
-  const popover = read("../../components/stats/Popover.tsx");
-  assert.match(popover, /aria-expanded/);
-  assert.match(popover, /"Escape"/);
-  assert.match(popover, /"pointerdown"/);
+test("fixed column widths and row heights: sorting and paging never move the table", () => {
+  const browser = read("../../components/stats/StatsBrowser.tsx");
+  const css = read("../../components/stats/stats.module.css");
+  assert.match(css, /table-layout: fixed;/);
+  assert.match(css, /height: 58px;/);
+  assert.match(browser, /<colgroup>/);
+  // Every column of both views has its own width.
+  for (const column of RIDER_COLUMNS) assert.ok(browser.includes(`${/^[a-z]+$/i.test(column.id) ? column.id : `"${column.id}"`}: `), column.id);
+  for (const column of TEAM_COLUMNS) assert.ok(browser.includes(`"${column.id}": `) || browser.includes(`${column.id}: `), column.id);
+  // The sort arrow's space is kept on every heading.
+  assert.match(css, /\.ar\.off \{\s*visibility: hidden;/);
 });
 
 test("phones: the table scrolls in its own region, rank and name stay put", () => {
@@ -168,14 +181,15 @@ test("phones: the table scrolls in its own region, rank and name stay put", () =
   assert.match(browser, /role="region"/);
   // `relative` keeps the screen-reader-only text in off-screen cells inside
   // the scroll region; without it the whole page scrolls sideways on phones.
-  assert.match(browser, /role="region"[\s\S]{0,200}className=\{`relative [^`]*overflow-x-auto/);
-  assert.match(browser, /sticky left-0/);
-  assert.match(browser, /sticky left-12/);
-  assert.match(browser, /Scroll the table sideways/);
-  assert.match(browser, /hidden sm:table-cell/);
+  assert.match(browser, /role="region"[^>]*className=\{t\.scroll\}/);
+  const css = read("../../components/stats/stats.module.css");
+  assert.match(css, /\.scroll \{\s*position: relative;\s*overflow-x: auto;/);
+  // Groups not meant for phones hide on narrow screens.
+  assert.match(browser, /!group\.onPhone && t\.phHide/);
+  assert.match(css, /@media \(max-width: 820px\)[\s\S]*\.phHide \{\s*display: none;/);
 
   // Riders: Runs, Points by round and Rates start off on phones; Columns
-  // turns them on. Teams: the round points are the whole record, so everything is on.
+  // are always there. Teams: the round points are the whole record, so everything is on.
   const phoneOff = (groups: readonly { id: string; onPhone: boolean }[]) =>
     groups.filter((group) => !group.onPhone).map((group) => group.id);
   assert.deepEqual(phoneOff(RIDER_GROUPS), ["runs", "rounds", "rates"]);
@@ -227,12 +241,6 @@ test("the legend teaches the rules, then the table, for the view on screen", () 
     }
   }
 
-  // The legend panel has a heading and a Close button, and scrolls if tall.
-  const browser = read("../../components/stats/StatsBrowser.tsx");
-  assert.match(browser, /<Popover label="Stats legend" title="Stats legend"/);
-  const popover = read("../../components/stats/Popover.tsx");
-  assert.match(popover, /overflow-y-auto/);
-  assert.match(popover, /Close/);
 });
 
 test("the State filter lists only real states, never a country or a single-part place", () => {

@@ -230,6 +230,25 @@ export async function POST(request: Request) {
     );
   }
 
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profileError) {
+    return NextResponse.json({ error: profileError.message }, { status: 400 });
+  }
+
+  // Registration is for administrators only now. (The rules below for
+  // non-admin accounts stay, for when registration opens again.)
+  if (profile?.role !== "admin") {
+    return NextResponse.json(
+      { error: "Registration is closed." },
+      { status: 403 }
+    );
+  }
+
   if (!hasConfirmedEmail(user)) {
     return NextResponse.json(
       { error: "Confirm your email address before registering a team." },
@@ -316,16 +335,6 @@ export async function POST(request: Request) {
         { status: 409 }
       );
     }
-  }
-
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (profileError) {
-    return NextResponse.json({ error: profileError.message }, { status: 400 });
   }
 
   const isAdmin = profile?.role === "admin";

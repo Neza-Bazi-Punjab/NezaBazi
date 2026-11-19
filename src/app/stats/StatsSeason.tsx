@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
-import PageHeader from "@/components/PageHeader";
+import PageTop from "@/components/redesign/PageTop";
+import shared from "@/components/redesign/shared.module.css";
 import SeasonViewNav, { statsHref, type StatsView } from "@/components/stats/SeasonViewNav";
 import StatsBrowser from "@/components/stats/StatsBrowser";
 import SummaryTiles from "@/components/stats/SummaryTiles";
+import t from "@/components/stats/stats.module.css";
 import {
-  formatDate,
   riderRows,
   riderSummary,
   statesOf,
@@ -29,6 +30,15 @@ export const statsMetadata = (year: number, view: StatsView): Metadata => ({
   description: `Rider and team statistics from the ${site.title}: runs, points, carry rates, rounds reached and placings.`,
   alternates: { canonical: statsHref(year, view) },
 });
+
+/* Where each season's championship was held, for the line under the title.
+   Add the place when a new season's file is added. */
+const SEASON_PLACES: Record<number, string> = { 2026: "Amritsar" };
+
+export const statsLead = (year: number) =>
+  SEASON_PLACES[year]
+    ? `Stats from the ${SEASON_PLACES[year]} Championship ${year}.`
+    : `Stats from the ${year} championship.`;
 
 /* The [season] segment's values: every listed season, so the newest has a
    page under its year too. */
@@ -83,20 +93,16 @@ export default function StatsSeason({ year, view }: { year: number; view: StatsV
       })();
 
   return (
-    <>
-      <PageHeader
-        title="Stats"
-        intro={`Results and statistics from the ${site.title}: every rider and team, round by round.`}
-      />
+    <div className={`${shared.page} ${t.stats}`}>
+      <PageTop title="Stats" lead={statsLead(year)} />
 
-      <section className="bg-cream">
-        <div className="mx-auto min-w-0 max-w-6xl space-y-6 px-4 py-10 sm:px-6 sm:py-14">
+      <div className={t.body}>
+        <div className={t.wide}>
           <SeasonViewNav seasons={SEASONS} season={year} view={view} />
 
           {season.provisional && (
-            <p className="rounded-lg border border-bronze/25 bg-parchment/60 px-4 py-3 text-sm leading-6 text-brown">
-              <span className="font-semibold">Provisional.</span> These results are still being
-              checked and may change.
+            <p className={t.prov}>
+              <b>Provisional.</b> These results are still being checked and may change.
             </p>
           )}
 
@@ -117,20 +123,15 @@ export default function StatsSeason({ year, view }: { year: number; view: StatsV
             <StatsBrowser key={`${year}-teams`} view="teams" season={year} rows={teams!} />
           )}
 
-          <div className="space-y-2 border-t border-bronze/15 pt-6 text-sm leading-6 text-brown/80">
-            {season.notes.length > 0 && (
-              <ul className="space-y-1">
-                {season.notes.map((note) => (
-                  <li key={note}>{note}</li>
-                ))}
-              </ul>
-            )}
-            <p className="text-brown/65">
-              Last updated <time dateTime={season.updated}>{formatDate(season.updated)}</time>
-            </p>
-          </div>
+          {season.notes.length > 0 && (
+            <ul className={t.notes}>
+              {season.notes.map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+            </ul>
+          )}
         </div>
-      </section>
-    </>
+      </div>
+    </div>
   );
 }

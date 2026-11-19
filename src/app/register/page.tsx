@@ -5,6 +5,7 @@ import BrushDivider from "@/components/BrushDivider";
 import ButtonLink from "@/components/Button";
 import Reveal from "@/components/Reveal";
 import { site } from "@/lib/site";
+import { requireAdminOrHome } from "@/lib/admin/require-admin-page";
 
 export const metadata: Metadata = {
   title: "Register",
@@ -15,7 +16,10 @@ export const metadata: Metadata = {
    forms — so everything that competed with that choice has been removed: the
    event fact panels (the Event page carries them) and the solo/team detail
    cards (the forms themselves explain their own format). */
-export default function RegisterPage() {
+export default async function RegisterPage() {
+  // Registration is for administrators only now; anyone else goes home.
+  await requireAdminOrHome();
+
   /* The section fills one screen exactly: the viewport less the sticky
      navbar. svh rather than vh so a phone's collapsing address bar cannot
      push the buttons below the fold. The brush divider sits inside that

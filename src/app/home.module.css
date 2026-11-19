@@ -1,0 +1,503 @@
+/* Home page (2026 redesign), copied from handoff/mock-home/home.html.
+   Tokens and shared pieces come from components/redesign/shared.module.css. */
+
+.home section {
+  position: relative;
+}
+
+/* ---------- Hero ---------- */
+.hero {
+  position: relative;
+  overflow: hidden;
+  min-height: calc(100vh - var(--nav-height));
+  background: radial-gradient(ellipse at 20% 40%, #fbf3e6, var(--sand) 60%);
+}
+
+.fade {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(66vw, 1080px);
+}
+
+.fade img {
+  object-fit: cover;
+  object-position: 60% 40%;
+  filter: sepia(0.28) saturate(1.15) contrast(1.03);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 28%);
+  mask-image: linear-gradient(90deg, transparent, #000 28%);
+}
+
+.inner {
+  position: relative;
+  z-index: 2;
+  min-height: calc(100vh - var(--nav-height));
+  display: flex;
+  align-items: center;
+  padding-top: 40px;
+  padding-bottom: 70px;
+}
+
+.text {
+  max-width: 660px;
+}
+
+.text > * + * {
+  margin-top: 22px;
+}
+
+.flags {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.flags img {
+  height: 26px;
+  width: 40px;
+  object-fit: cover;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.flags img.pennant {
+  height: 34px;
+  width: auto;
+  object-fit: contain;
+  box-shadow: none;
+}
+
+.title {
+  font-family: var(--display);
+  font-weight: 700;
+  text-transform: uppercase;
+  line-height: 0.98;
+  color: var(--brown);
+}
+
+.title .l {
+  display: block;
+  font-size: clamp(50px, 6.6vw, 98px);
+}
+
+.title .p {
+  font-style: italic;
+  color: var(--bronze);
+}
+
+.title .s {
+  display: block;
+  font-weight: 600;
+  font-size: clamp(17px, 1.9vw, 26px);
+  letter-spacing: 0.28em;
+  margin-top: 12px;
+}
+
+.desc {
+  font-size: 17px;
+  line-height: 1.6;
+  color: #4a2f18;
+  max-width: 520px;
+}
+
+.ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.socials {
+  display: flex;
+  gap: 10px;
+}
+
+/* The hero's break sits inside its bottom edge, light warm brown below the
+   line. */
+.hero > .heroBreak {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+}
+
+.hero > .heroBreak > img {
+  transform: translateY(-100%);
+}
+
+/* ---------- 1. Champions band ---------- */
+.champs {
+  background: var(--cream);
+  padding: 96px 0;
+}
+
+.champsGrid {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 64px;
+  align-items: center;
+}
+
+.trophy {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  aspect-ratio: 4 / 5;
+  box-shadow: 0 18px 50px rgba(46, 29, 14, 0.18);
+}
+
+.trophy img {
+  object-fit: cover;
+}
+
+/* Two winners only; the full podium lives on the Champions page */
+.winners {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 30px 0 32px;
+  max-width: 560px;
+}
+
+.win {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px 26px;
+  border-radius: 18px;
+  color: #3b2606;
+  background: linear-gradient(135deg, #f3d98b, #c8962e 45%, #e9c46a 70%, #a87a1f);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 6px 18px rgba(46, 29, 14, 0.14);
+}
+
+.role {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 12.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.who {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(22px, 2.4vw, 30px);
+  line-height: 1.2;
+}
+
+/* ---------- 2. Photo strip ---------- */
+.strip {
+  padding: 96px 0 80px;
+}
+
+.stripHead {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.arrows {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.arrows > a {
+  margin-right: 10px;
+}
+
+.arrows button {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(90, 53, 23, 0.35);
+  background: none;
+  color: var(--brown);
+  font-size: 22px;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    color 0.2s;
+}
+
+.arrows button:hover {
+  border-color: var(--bronze);
+  color: var(--bronze);
+}
+
+.rail {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: var(--pad);
+  padding: 32px var(--pad) 12px;
+  scrollbar-width: none;
+  cursor: grab;
+}
+
+.rail::-webkit-scrollbar {
+  display: none;
+}
+
+.rail.drag {
+  cursor: grabbing;
+  scroll-snap-type: none;
+}
+
+.rail figure {
+  position: relative;
+  flex: 0 0 auto;
+  height: 420px;
+  scroll-snap-align: start;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #e8dccb;
+}
+
+.rail figure img {
+  object-fit: cover;
+  pointer-events: none;
+  user-select: none;
+}
+
+.railPad {
+  flex: 0 0 calc(var(--pad) - 16px);
+}
+
+/* ---------- 3. Watch the replay ---------- */
+.replay {
+  background: var(--cream);
+  padding: 96px 0;
+}
+
+.replayHead {
+  text-align: center;
+}
+
+.replayHead p {
+  font-size: 17px;
+  color: #4a2f18;
+  margin-top: 12px;
+}
+
+.replayHead p a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.player {
+  position: relative;
+  display: block;
+  width: 100%;
+  margin: 36px auto 0;
+  max-width: 1080px;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  padding: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #111;
+  box-shadow: 0 18px 50px rgba(46, 29, 14, 0.2);
+  cursor: pointer;
+}
+
+.player > img {
+  object-fit: cover;
+  filter: sepia(0.15) brightness(0.8);
+}
+
+.play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.play > span {
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(253, 248, 239, 0.9);
+  background: rgba(46, 29, 14, 0.35);
+  color: #fdf8ef;
+  font-size: 40px;
+  display: grid;
+  place-items: center;
+  transition:
+    transform 0.2s,
+    background 0.2s;
+}
+
+.player:hover .play > span {
+  transform: scale(1.06);
+  background: rgba(46, 29, 14, 0.5);
+}
+
+.play svg {
+  margin-left: 4px;
+}
+
+.cap {
+  position: absolute;
+  left: 24px;
+  bottom: 20px;
+  color: #fff;
+  font-family: var(--display);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 13px;
+  text-align: left;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
+.player iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* ---------- 4. Closing photo ---------- */
+.closing {
+  background: var(--sand);
+  padding: 0 0 88px;
+}
+
+.closingPhoto {
+  position: relative;
+  height: min(84vh, 800px);
+}
+
+.closingPhoto > img {
+  object-fit: cover;
+  object-position: 50% 4%;
+}
+
+/* The photo's bottom edge fades into the "Thank you" below it. */
+.closingPhoto::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 48px;
+  background: linear-gradient(to bottom, rgba(247, 239, 228, 0), var(--sand));
+  pointer-events: none;
+}
+
+/* The break sits on the photo's top edge; the photo shows below the line. */
+.closingPhoto > .closingBreak {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -1px;
+}
+
+.closingPhoto > .closingBreak > img {
+  transform: none;
+}
+
+.closingText {
+  text-align: center;
+  padding: 36px 16px 0;
+  position: relative;
+}
+
+.closingText h2 {
+  font-size: clamp(34px, 4.6vw, 62px);
+  margin-top: 0;
+}
+
+.closingText p {
+  font-size: 18px;
+  margin-top: 8px;
+  color: #4a2f18;
+}
+
+.closingSocials {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 22px;
+}
+
+@media (max-width: 820px) {
+  .inner {
+    display: block;
+    min-height: 0;
+    padding-top: 24px;
+    padding-bottom: 0;
+  }
+
+  .fade {
+    position: relative;
+    width: 100%;
+    height: 56vh;
+  }
+
+  .fade img {
+    -webkit-mask-image: linear-gradient(180deg, transparent, #000 25%, #000 85%, transparent);
+    mask-image: linear-gradient(180deg, transparent, #000 25%, #000 85%, transparent);
+  }
+
+  .hero {
+    display: flex;
+    flex-direction: column-reverse;
+  }
+
+  .flags img {
+    height: 20px;
+    width: 30px;
+  }
+
+  .flags img.pennant {
+    height: 26px;
+  }
+
+  .champs,
+  .replay {
+    padding: 64px 0;
+  }
+
+  .champsGrid {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+
+  .trophy {
+    aspect-ratio: 4 / 3;
+  }
+
+  .strip {
+    padding: 64px 0 48px;
+  }
+
+  .rail figure {
+    height: 300px;
+  }
+
+  .arrows button {
+    display: none;
+  }
+
+  .arrows > a {
+    margin: 0;
+  }
+
+  .stripHead {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .closingPhoto {
+    height: 60vh;
+  }
+}
