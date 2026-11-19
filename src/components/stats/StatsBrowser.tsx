@@ -69,7 +69,7 @@ interface ViewConfig<T> {
 const RANK_WIDTH = 44;
 /* The name column's width on a phone showing all columns: narrow, so the
    numbers get most of the screen. */
-const PHONE_NAME_WIDTH = 132;
+const PHONE_NAME_WIDTH = 148;
 
 const riderConfig: ViewConfig<RiderRow> = {
   noun: "rider",

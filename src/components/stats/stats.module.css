@@ -539,11 +539,15 @@
   }
 
   /* The result stays with the name instead of scrolling away: the Result
-     columns go, and the name cell shows the place and round reached in
-     place of the horse line */
-  .table .resCol,
-  .table .nm small {
+     columns go, and the name cell shows the place and round reached under
+     the horse and place line */
+  .table .resCol {
     display: none;
+  }
+
+  .table tbody th.nm {
+    padding-top: 7px;
+    padding-bottom: 7px;
   }
 
   .res {

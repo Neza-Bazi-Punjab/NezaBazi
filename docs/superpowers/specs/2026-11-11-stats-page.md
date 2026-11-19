@@ -161,8 +161,8 @@ season, and renders one client component that owns the interaction.
 - The table sits in its own horizontally scrollable region with the rank and
   name columns sticky on the left, and a visible hint that it scrolls.
 - A phone (820px and under) shows the whole table, scrolled sideways under a
-  132px name cell that is held in place. The place and round reached show in
-  that name cell, so the result is always in view, and the Result columns are
+  148px name cell that is held in place. The place and round reached show in
+  that name cell under the horse and place line, so the result is always in view, and the Result columns are
   left out there. No short table and no switch (owner, 19 Nov 2026).
 - The Rates columns (Pts/Run, Carry %, Hit %) were removed on 19 Nov 2026
   (owner: not needed).
