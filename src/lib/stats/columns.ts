@@ -11,8 +11,6 @@
 import {
   SINGLE_STAGE_LABELS,
   TEAM_STAGE_LABELS,
-  formatDecimal,
-  formatPercent,
   formatPlace,
   type RiderRow,
   type SortDirection,
@@ -71,9 +69,6 @@ const value = (text: string | number): Cell => ({ kind: "value", text: String(te
 
 const NOT_RIDDEN: Cell = { kind: "blank", reason: "did not ride" };
 
-const orDash = (text: string | null, reason: string): Cell =>
-  text === null ? { kind: "dash", reason } : value(text);
-
 const stageCell = (cell: StageCell, missing: string): Cell =>
   cell === undefined ? NOT_RIDDEN : cell === null ? { kind: "dash", reason: missing } : value(cell);
 
@@ -83,13 +78,12 @@ const placeCell = (place: 1 | 2 | 3 | null): Cell =>
 /* ---------- riders ---------- */
 
 /* On a phone the table opens on who did what: total points, how far each
-   rider got and the place. The run counts, round points and rates are one
+   rider got and the place. The run counts and round points are one
    tap away: "All columns" (StatsBrowser). */
 export const RIDER_GROUPS: readonly ColumnGroup[] = [
   { id: "runs", label: "Runs", onPhone: false },
   { id: "rounds", label: "Points by round", onPhone: false },
   { id: "totals", label: "Total", onPhone: true },
-  { id: "rates", label: "Rates", onPhone: false },
   { id: "result", label: "Result", onPhone: true },
 ];
 
@@ -177,36 +171,6 @@ export const RIDER_COLUMNS: readonly StatColumn<RiderRow>[] = [
     sortValue: (row) => (row.known > 0 || row.runs === 0 ? row.points : null),
     cell: (row) =>
       row.known > 0 || row.runs === 0 ? value(row.points) : { kind: "dash", reason: NO_KNOWN_RUN },
-  },
-  {
-    id: "pointsPerRun",
-    label: "Pts/Run",
-    title: "Points per run",
-    group: "rates",
-    numeric: true,
-    firstDirection: "descending",
-    sortValue: (row) => row.pointsPerRun,
-    cell: (row) => orDash(formatDecimal(row.pointsPerRun, 2), NO_KNOWN_RUN),
-  },
-  {
-    id: "carryRate",
-    label: "Carry %",
-    title: "Carry percentage",
-    group: "rates",
-    numeric: true,
-    firstDirection: "descending",
-    sortValue: (row) => row.carryRate,
-    cell: (row) => orDash(formatPercent(row.carryRate), NO_KNOWN_RUN),
-  },
-  {
-    id: "hitRate",
-    label: "Hit %",
-    title: "Hit percentage",
-    group: "rates",
-    numeric: true,
-    firstDirection: "descending",
-    sortValue: (row) => row.hitRate,
-    cell: (row) => orDash(formatPercent(row.hitRate), NO_KNOWN_RUN),
   },
   {
     id: "reached",

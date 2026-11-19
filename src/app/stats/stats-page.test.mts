@@ -201,7 +201,9 @@ test("phones: the table scrolls in its own region, rank and name stay put", () =
   // view: riders keep Total and Result, teams keep Result.
   const phoneOff = (groups: readonly { id: string; onPhone: boolean }[]) =>
     groups.filter((group) => !group.onPhone).map((group) => group.id);
-  assert.deepEqual(phoneOff(RIDER_GROUPS), ["runs", "rounds", "rates"]);
+  assert.deepEqual(phoneOff(RIDER_GROUPS), ["runs", "rounds"]);
+  // No rate columns (points per run, carry %, hit %): owner, 19 Nov 2026.
+  assert.deepEqual(RIDER_COLUMNS.map((column) => column.id).filter((id) => /rate|perRun/i.test(id)), []);
   assert.deepEqual(phoneOff(TEAM_GROUPS), ["rounds"]);
 
   // Nothing is out of reach on a phone: "All columns" lays out the whole
@@ -210,7 +212,12 @@ test("phones: the table scrolls in its own region, rank and name stay put", () =
   assert.match(browser, /aria-pressed=\{!allColumns\} onClick=\{\(\) => setAllColumns\(false\)\}>\s*Summary/);
   assert.match(browser, /aria-pressed=\{allColumns\} onClick=\{\(\) => setAllColumns\(true\)\}>\s*All columns/);
   assert.match(browser, /\$\{allColumns \? t\.full : ""\}/);
-  assert.match(browser, /"--phone-min": `\$\{RANK_WIDTH \+ PHONE_NAME_WIDTH \+ columnsWidth\}px`/);
+  assert.match(browser, /"--phone-min": `\$\{RANK_WIDTH \+ PHONE_NAME_WIDTH \+ columnsWidth - resultWidth\}px`/);
+  // There the place and round reached ride in the name cell, held in place,
+  // so the result never scrolls out of view; the Result columns are left out.
+  assert.match(browser, /<span aria-hidden className=\{t\.res\}>/);
+  assert.match(css, /\.table\.full \.resCol,\s*\.table\.full \.nm small \{\s*display: none;/);
+  assert.match(css, /\.res \{\s*display: none;\s*\}/);
   assert.match(css, /@media \(max-width: 820px\)[\s\S]*\.table\.full \{\s*min-width: var\(--phone-min\) !important;/);
   // The switch is for narrow screens only.
   assert.match(css, /\.cols \{\s*display: none;\s*\}[\s\S]*@media \(max-width: 820px\)[\s\S]*\.cols \{\s*display: flex;/);

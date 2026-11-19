@@ -60,12 +60,9 @@ const RIDER_TABLE: LegendSection = {
     { term: "3rd place", meaning: "Points in the ride-off for third place." },
     { term: "Final", meaning: "Points in the ride for first and second place." },
     { term: "Pts", meaning: "Total points over every run. Places are not decided on it." },
-    { term: "Pts/Run", meaning: "Average points for each run." },
-    { term: "Carry %", meaning: "How often the rider carried the peg." },
-    { term: "Hit %", meaning: "How often the rider carried or struck the peg." },
     { term: "Reached", meaning: "The furthest round the rider rode in." },
     { term: "Place", meaning: "1st, 2nd or 3rd." },
-    { term: "–", meaning: "Ridden, but the result was not recorded. Left out of the % columns." },
+    { term: "–", meaning: "Ridden, but the result was not recorded." },
     { term: "Blank", meaning: "Did not ride that round." },
   ],
 };

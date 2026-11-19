@@ -164,7 +164,11 @@ season, and renders one client component that owns the interaction.
   with the place in view: riders show Total and Result, teams show Result.
   A "Summary / All columns" switch (phones only) lays out the whole table with
   a 132px name column, scrolled sideways with the name held in place, so
-  nothing needs the phone turned (18 Nov 2026).
+  nothing needs the phone turned (18 Nov 2026). In that mode the place and
+  round reached show in the name cell, so the result stays in view while the
+  numbers scroll, and the Result columns are left out (owner, 19 Nov 2026).
+- The Rates columns (Pts/Run, Carry %, Hit %) were removed on 19 Nov 2026
+  (owner: not needed).
 - Popovers (Filters, Columns, Legend) must be usable by touch and keyboard and
   close on Escape and on outside click.
 

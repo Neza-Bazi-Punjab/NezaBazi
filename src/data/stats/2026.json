@@ -2,11 +2,11 @@
   "season": 2026,
   "eventName": "Neza Bazi Punjab Championship 2026",
   "eventDate": "2026-11-11",
-  "updated": "2026-11-18",
+  "updated": "2026-11-19",
   "provisional": true,
   "notes": [
     "Compiled from the judges' scores and the live broadcast of the event.",
-    "A dash marks a run or a team ride whose result was not recorded. It counts as ridden and is left out of the percentages."
+    "A dash marks a run or a team ride whose result was not recorded. It counts as ridden and scores nothing."
   ],
   "riders": [
     {

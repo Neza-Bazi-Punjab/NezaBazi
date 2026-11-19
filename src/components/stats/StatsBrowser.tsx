@@ -17,6 +17,7 @@ import {
   SINGLE_STAGE_LABELS,
   TEAM_STAGE_LABELS,
   clampPage,
+  formatPlace,
   matchesSearch,
   pageCount,
   riderSearchFields,
@@ -91,9 +92,6 @@ const riderConfig: ViewConfig<RiderRow> = {
     "stage-third": 106,
     "stage-final": 72,
     points: 58,
-    pointsPerRun: 92,
-    carryRate: 92,
-    hitRate: 70,
     reached: 104,
     place: 76,
   },
@@ -224,14 +222,23 @@ function Browser<
       .map((column, index) => ({ column, group, startsGroup: index === 0 }))
   );
   const cellClass = (group: ColumnGroup, startsGroup: boolean, ...more: (string | false | undefined)[]) =>
-    [startsGroup && t.gs, !group.onPhone && t.phHide, ...more].filter(Boolean).join(" ");
+    [startsGroup && t.gs, !group.onPhone && t.phHide, group.id === "result" && t.resCol, ...more]
+      .filter(Boolean)
+      .join(" ");
   const columnsWidth = columns.reduce((sum, { column }) => sum + (config.widths[column.id] ?? 80), 0);
+  /* On a phone showing all columns the result (Reached and Place) rides in
+     the name cell, which is held in place, so it never scrolls out of view.
+     The Result group's own columns are left out there. */
+  const resultWidth = columns
+    .filter(({ group }) => group.id === "result")
+    .reduce((sum, { column }) => sum + (config.widths[column.id] ?? 80), 0);
+  const reachedColumn = config.columns.find((column) => column.id === "reached");
   const tableMinWidth = RANK_WIDTH + config.nameMin + columnsWidth;
   /* A view with nothing hidden on phones needs no switch. */
   const phoneSwitch = config.groups.some((group) => !group.onPhone);
   const tableStyle = {
     minWidth: tableMinWidth,
-    "--phone-min": `${RANK_WIDTH + PHONE_NAME_WIDTH + columnsWidth}px`,
+    "--phone-min": `${RANK_WIDTH + PHONE_NAME_WIDTH + columnsWidth - resultWidth}px`,
   } as CSSProperties;
 
   const filtersOn = reachedAtLeast >= 0 || state !== "" || search.trim() !== "";
@@ -383,8 +390,12 @@ function Browser<
           <colgroup>
             <col style={{ width: RANK_WIDTH }} />
             <col />
-            {columns.map(({ column }) => (
-              <col key={column.id} style={{ width: config.widths[column.id] ?? 80 }} />
+            {columns.map(({ column, group }) => (
+              <col
+                key={column.id}
+                className={group.id === "result" ? t.resCol : undefined}
+                style={{ width: config.widths[column.id] ?? 80 }}
+              />
             ))}
           </colgroup>
           <thead>
@@ -440,12 +451,18 @@ function Browser<
           <tbody>
             {shown.map((row) => {
               const subline = config.subline(row);
+              const reachedCell = reachedColumn?.cell(row);
+              const reachedText = reachedCell?.kind === "value" ? reachedCell.text : "";
               return (
                 <tr key={row.id}>
                   <td className={t.rk}>{row.rank}</td>
                   <th scope="row" className={t.nm}>
                     <b>{row.name}</b>
                     <small>{subline}</small>
+                    <span aria-hidden className={t.res}>
+                      {row.place && <span className={`${t.med} ${MEDAL[row.place]}`}>{formatPlace(row.place)}</span>}
+                      {reachedText}
+                    </span>
                   </th>
                   {columns.map(({ column, group, startsGroup }) => {
                     const cell = column.cell(row);
@@ -491,7 +508,7 @@ function Browser<
             <li>
               <b aria-hidden>–</b>
               <span className={t.srOnly}>A dash:</span>{" "}
-              {view === "teams" ? "ridden, total not recorded." : "ridden, result not recorded. Left out of the % columns."}
+              {view === "teams" ? "ridden, total not recorded." : "ridden, result not recorded."}
             </li>
           )}
           {Object.values(RIDE_STATUS_TEXT)

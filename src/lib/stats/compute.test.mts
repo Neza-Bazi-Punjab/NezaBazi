@@ -113,7 +113,7 @@ test("a rider with no known result has no rates, shown as dashes not zeros", () 
   assert.equal(row.pointsPerRun, null);
   assert.equal(row.carryRate, null);
   assert.equal(row.hitRate, null);
-  for (const id of ["points", "pointsPerRun", "carryRate", "hitRate", "stage-qualification"]) {
+  for (const id of ["points", "stage-qualification"]) {
     const cell = column<(typeof RIDER_COLUMNS)[number]>(RIDER_COLUMNS, id).cell({ ...row, rank: 1 });
     assert.equal(cell.kind, "dash", `${id} is a dash`);
   }
