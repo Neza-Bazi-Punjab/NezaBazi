@@ -686,12 +686,21 @@
   /* One short table that fits the screen: rank, name and each round's
      points. No group headings, and nothing scrolls sideways. */
   .table {
-    table-layout: auto;
     min-width: 0 !important;
   }
 
+  /* Every round column the same width, with the name taking what is left,
+     so the last heading is never squeezed against the edge */
   .table col {
     width: auto !important;
+  }
+
+  .table col:first-child {
+    width: 28px !important;
+  }
+
+  .table col[data-g="rounds"] {
+    width: 40px !important;
   }
 
   .table thead tr.grp,
@@ -720,19 +729,19 @@
   }
 
   .table .sort {
-    padding: 12px 4px;
+    padding: 12px 2px;
   }
 
   .table thead th:not(.l):not(:first-child) .sort {
-    padding-left: 4px;
+    padding-left: 2px;
+  }
+
+  .table thead th.nm .sort {
+    padding-left: 6px;
   }
 
   .table td {
     padding: 0 5px;
-  }
-
-  .table .nm {
-    min-width: 100px;
   }
 
   .table td {
@@ -740,7 +749,12 @@
   }
 
   .status {
-    font-size: 11px;
+    font-size: 9px;
+    letter-spacing: -0.02em;
+  }
+
+  .table td:has(.status) {
+    padding: 0;
   }
 
   /* Who won: the medal sits right under the name */

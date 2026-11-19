@@ -198,7 +198,8 @@ test("phones: the table scrolls in its own region, rank and name stay put", () =
   // No switch (owner, 19 Nov 2026); a tap on a row slides up that row's card.
   // Nothing scrolls sideways and nothing is out of reach.
   assert.doesNotMatch(browser, /onPhone|phHide|allColumns|phoneView|swipe/i);
-  assert.match(css, /@media \(max-width: 820px\)[\s\S]*\.table \{\s*table-layout: auto;\s*min-width: 0 !important;/);
+  assert.match(css, /@media \(max-width: 820px\)[\s\S]*\.table \{\s*min-width: 0 !important;/);
+  assert.match(css, /\.table col\[data-g="rounds"\] \{\s*width: 40px !important;/);
   assert.match(css, /\.table \[data-g="runs"\],\s*\.table \[data-g="totals"\],\s*\.table \[data-g="result"\] \{\s*display: none;/);
   assert.match(browser, /<span aria-hidden className=\{t\.won\}>/);
   // The hint, the medal, the card's arrow and the short headings are for phones only.
