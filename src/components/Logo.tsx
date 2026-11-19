@@ -45,14 +45,14 @@ export function LogoLockup({
 }
 
 /* The navbar's logo (2026 redesign): the hexagon mark with the name in
-   Cinzel, always stacked: NEZA BAZI over a spaced-out gold PUNJAB.
+   Oswald, always stacked: NEZA BAZI over a spaced-out gold PUNJAB.
    The footer keeps the original lockup (Logo below). */
 export function NavLogo() {
   return (
     <Link
       href="/"
       aria-label="Neza Bazi Punjab — home"
-      className="flex shrink-0 items-center gap-2.5 font-cinzel font-bold text-cream"
+      className="flex shrink-0 items-center gap-2.5 font-display font-bold text-cream"
     >
       <LogoMark className="h-9 w-auto sm:h-10" />
       <span className="leading-none">
