@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import test from "node:test";
 
-import { RIDER_COLUMNS, RIDER_GROUPS, TEAM_COLUMNS, TEAM_GROUPS } from "../../lib/stats/columns.ts";
+import { RIDER_COLUMNS, TEAM_COLUMNS } from "../../lib/stats/columns.ts";
 import { riderRows, statesOf, teamRows } from "../../lib/stats/compute.ts";
 import { legendSections } from "../../lib/stats/legend.ts";
 import { LATEST_SEASON, SEASONS, loadSeason, resolveSeason } from "../../lib/stats/seasons.ts";
@@ -166,7 +166,7 @@ test("the table is a real, sortable, accessible table", () => {
   assert.match(browser, /PAGE_SIZE = 25;/);
   assert.match(browser, /<Pagination/);
   // No per-group on/off controls in the redesign: on a computer every group
-  // is always there (phones have one Summary / All columns switch, below).
+  // is always there, on a phone too.
   assert.doesNotMatch(browser, /Show these columns|groupSettings/);
   // How the places were decided is said in words, above the table.
   assert.match(browser, /<p className=\{t\.how\}>\s*<b>\{PLACES_DECIDED\[view\]\.lead\}<\/b> \{PLACES_DECIDED\[view\]\.detail\}/);
@@ -193,34 +193,20 @@ test("phones: the table scrolls in its own region, rank and name stay put", () =
   assert.match(browser, /role="region"[^>]*className=\{t\.scroll\}/);
   const css = read("../../components/stats/stats.module.css");
   assert.match(css, /\.scroll \{\s*position: relative;\s*overflow-x: auto;/);
-  // Groups not meant for phones hide on narrow screens, in the short table.
-  assert.match(browser, /!group\.onPhone && t\.phHide/);
-  assert.match(css, /@media \(max-width: 820px\)[\s\S]*\.table:not\(\.full\) \.phHide \{\s*display: none;/);
-
-  // A phone opens on the short table, which fits the screen with the place in
-  // view: riders keep Total and Result, teams keep Result.
-  const phoneOff = (groups: readonly { id: string; onPhone: boolean }[]) =>
-    groups.filter((group) => !group.onPhone).map((group) => group.id);
-  assert.deepEqual(phoneOff(RIDER_GROUPS), ["runs", "rounds"]);
+  // A phone shows the whole table, scrolled sideways under a narrow name cell:
+  // no short table and no switch (owner, 19 Nov 2026), nothing hidden.
+  assert.doesNotMatch(browser, /onPhone|phHide|allColumns|Summary/);
+  assert.doesNotMatch(css, /phHide|\.cols/);
+  assert.match(browser, /"--phone-min": `\$\{RANK_WIDTH \+ PHONE_NAME_WIDTH \+ columnsWidth - resultWidth\}px`/);
+  assert.match(css, /@media \(max-width: 820px\)[\s\S]*\.table \{\s*min-width: var\(--phone-min\) !important;/);
+  // The place and round reached ride in the name cell, held in place, so the
+  // result never scrolls out of view; the Result columns are left out there.
+  assert.match(browser, /<span aria-hidden className=\{t\.res\}>/);
+  assert.match(css, /\.res,\s*\.swipe \{\s*display: none;\s*\}/);
+  assert.match(css, /@media \(max-width: 820px\)[\s\S]*\.table \.resCol,\s*\.table \.nm small \{\s*display: none;/);
+  assert.match(browser, /Swipe the table sideways/);
   // No rate columns (points per run, carry %, hit %): owner, 19 Nov 2026.
   assert.deepEqual(RIDER_COLUMNS.map((column) => column.id).filter((id) => /rate|perRun/i.test(id)), []);
-  assert.deepEqual(phoneOff(TEAM_GROUPS), ["rounds"]);
-
-  // Nothing is out of reach on a phone: "All columns" lays out the whole
-  // table, scrolled sideways under the name, without turning the phone.
-  assert.match(browser, /role="group" aria-label="Columns" className=\{t\.cols\}/);
-  assert.match(browser, /aria-pressed=\{!allColumns\} onClick=\{\(\) => setAllColumns\(false\)\}>\s*Summary/);
-  assert.match(browser, /aria-pressed=\{allColumns\} onClick=\{\(\) => setAllColumns\(true\)\}>\s*All columns/);
-  assert.match(browser, /\$\{allColumns \? t\.full : ""\}/);
-  assert.match(browser, /"--phone-min": `\$\{RANK_WIDTH \+ PHONE_NAME_WIDTH \+ columnsWidth - resultWidth\}px`/);
-  // There the place and round reached ride in the name cell, held in place,
-  // so the result never scrolls out of view; the Result columns are left out.
-  assert.match(browser, /<span aria-hidden className=\{t\.res\}>/);
-  assert.match(css, /\.table\.full \.resCol,\s*\.table\.full \.nm small \{\s*display: none;/);
-  assert.match(css, /\.res \{\s*display: none;\s*\}/);
-  assert.match(css, /@media \(max-width: 820px\)[\s\S]*\.table\.full \{\s*min-width: var\(--phone-min\) !important;/);
-  // The switch is for narrow screens only.
-  assert.match(css, /\.cols \{\s*display: none;\s*\}[\s\S]*@media \(max-width: 820px\)[\s\S]*\.cols \{\s*display: flex;/);
   // The name stays put while the numbers scroll under it.
   assert.match(css, /\.table \.nm \{\s*position: sticky;\s*left: 0;/);
 

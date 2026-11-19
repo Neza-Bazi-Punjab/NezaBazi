@@ -40,9 +40,9 @@ import t from "./stats.module.css";
    view. Every column has a fixed width and every row a fixed height, so
    sorting or paging never moves the table: only what is inside changes.
 
-   A phone opens on the short table (the groups marked onPhone). Its
-   "All columns" switch lays the whole table out as on a computer, scrolled
-   sideways with the name held in place, so nobody has to turn the phone. */
+   A phone shows the same table, scrolled sideways under a narrower name
+   cell that is held in place and carries the place and round reached, so
+   the result is always in view and nobody has to turn the phone. */
 
 export const PAGE_SIZE = 25;
 
@@ -182,8 +182,6 @@ function Browser<
     direction: "ascending",
   });
   const [page, setPage] = useState(1);
-  /* Phones only: the short table, or every column scrolled sideways. */
-  const [allColumns, setAllColumns] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo(
@@ -215,18 +213,18 @@ function Browser<
   const shown = sorted.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
 
   /* Each column with its group; the first column of a group carries the
-     divider line, and groups not meant for phones hide on narrow screens. */
+     divider line. */
   const columns = config.groups.flatMap((group) =>
     config.columns
       .filter((column) => column.group === group.id)
       .map((column, index) => ({ column, group, startsGroup: index === 0 }))
   );
   const cellClass = (group: ColumnGroup, startsGroup: boolean, ...more: (string | false | undefined)[]) =>
-    [startsGroup && t.gs, !group.onPhone && t.phHide, group.id === "result" && t.resCol, ...more]
+    [startsGroup && t.gs, group.id === "result" && t.resCol, ...more]
       .filter(Boolean)
       .join(" ");
   const columnsWidth = columns.reduce((sum, { column }) => sum + (config.widths[column.id] ?? 80), 0);
-  /* On a phone showing all columns the result (Reached and Place) rides in
+  /* On a phone the result (Reached and Place) rides in
      the name cell, which is held in place, so it never scrolls out of view.
      The Result group's own columns are left out there. */
   const resultWidth = columns
@@ -234,8 +232,6 @@ function Browser<
     .reduce((sum, { column }) => sum + (config.widths[column.id] ?? 80), 0);
   const reachedColumn = config.columns.find((column) => column.id === "reached");
   const tableMinWidth = RANK_WIDTH + config.nameMin + columnsWidth;
-  /* A view with nothing hidden on phones needs no switch. */
-  const phoneSwitch = config.groups.some((group) => !group.onPhone);
   const tableStyle = {
     minWidth: tableMinWidth,
     "--phone-min": `${RANK_WIDTH + PHONE_NAME_WIDTH + columnsWidth - resultWidth}px`,
@@ -344,17 +340,7 @@ function Browser<
             </select>
           </>
         )}
-        {phoneSwitch && (
-          <div role="group" aria-label="Columns" className={t.cols}>
-            <button type="button" aria-pressed={!allColumns} onClick={() => setAllColumns(false)}>
-              Summary
-            </button>
-            <button type="button" aria-pressed={allColumns} onClick={() => setAllColumns(true)}>
-              All columns
-            </button>
-            {allColumns && <span className={t.swipe}>Swipe the table sideways.</span>}
-          </div>
-        )}
+        <span className={t.swipe}>Swipe the table sideways for every round.</span>
       </div>
 
       <p className={t.how}>
@@ -383,7 +369,7 @@ function Browser<
 
       {/* ---------- table ---------- */}
       <div role="region" aria-labelledby={captionId} tabIndex={0} className={t.scroll}>
-        <table className={`${t.table} ${allColumns ? t.full : ""}`} style={tableStyle}>
+        <table className={t.table} style={tableStyle}>
           <caption id={captionId} className={t.srOnly}>
             {config.nameHeading} statistics, {season} season, {sortText}
           </caption>

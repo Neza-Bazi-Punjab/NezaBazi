@@ -160,13 +160,10 @@ season, and renders one client component that owns the interaction.
   standings; do not bring it back).
 - The table sits in its own horizontally scrollable region with the rank and
   name columns sticky on the left, and a visible hint that it scrolls.
-- A phone (820px and under) opens on the short table, which fits the screen
-  with the place in view: riders show Total and Result, teams show Result.
-  A "Summary / All columns" switch (phones only) lays out the whole table with
-  a 132px name column, scrolled sideways with the name held in place, so
-  nothing needs the phone turned (18 Nov 2026). In that mode the place and
-  round reached show in the name cell, so the result stays in view while the
-  numbers scroll, and the Result columns are left out (owner, 19 Nov 2026).
+- A phone (820px and under) shows the whole table, scrolled sideways under a
+  132px name cell that is held in place. The place and round reached show in
+  that name cell, so the result is always in view, and the Result columns are
+  left out there. No short table and no switch (owner, 19 Nov 2026).
 - The Rates columns (Pts/Run, Carry %, Hit %) were removed on 19 Nov 2026
   (owner: not needed).
 - Popovers (Filters, Columns, Legend) must be usable by touch and keyboard and

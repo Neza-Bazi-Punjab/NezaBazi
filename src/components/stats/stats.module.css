@@ -163,21 +163,15 @@
 .scroll:focus-visible,
 .sort:focus-visible,
 .pager button:focus-visible,
-.cols button:focus-visible,
 .clear:focus-visible,
 .seg a:focus-visible {
   outline: 2px solid var(--bronze);
   outline-offset: 2px;
 }
 
-/* Phones only (shown in the narrow-screen rules below): the short table or
-   every column. */
-.cols {
-  display: none;
-}
-
-/* The result line in the name cell: only on a phone showing all columns */
-.res {
+/* The result line in the name cell and the swipe hint: phones only */
+.res,
+.swipe {
   display: none;
 }
 
@@ -538,35 +532,21 @@
     font-size: 30px;
   }
 
-  /* The short table: only the groups meant for phones, fitted to the screen */
-  .table:not(.full) .phHide {
-    display: none;
-  }
-
-  .table:not(.full) {
-    table-layout: auto;
-    min-width: 0 !important;
-  }
-
-  .table:not(.full) col {
-    width: auto !important;
-  }
-
-  /* All columns: the computer's table with a narrower name column, scrolled
-     sideways under the name */
-  .table.full {
+  /* The computer's table with a narrower name column, scrolled sideways
+     under the name */
+  .table {
     min-width: var(--phone-min) !important;
   }
 
-  /* There the result stays with the name instead of scrolling away: the
-     Result columns go, and the name cell shows the place and round reached
-     in place of the horse line */
-  .table.full .resCol,
-  .table.full .nm small {
+  /* The result stays with the name instead of scrolling away: the Result
+     columns go, and the name cell shows the place and round reached in
+     place of the horse line */
+  .table .resCol,
+  .table .nm small {
     display: none;
   }
 
-  .table.full .res {
+  .res {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -577,40 +557,14 @@
     color: #6b4a2c;
   }
 
-  .table.full .res .med {
+  .res .med {
     padding: 2px 6px;
     font-size: 10px;
   }
 
-  .cols {
-    display: flex;
-    flex-wrap: wrap;
-    flex-basis: 100%;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .cols button {
-    height: 40px;
-    padding: 0 14px;
-    font-family: var(--display);
-    font-weight: 700;
-    font-size: 12px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--brown);
-    background: none;
-    border: 1.5px solid var(--brown);
-    border-radius: 6px;
-    cursor: pointer;
-  }
-
-  .cols button[aria-pressed="true"] {
-    background: var(--brown);
-    color: var(--cream);
-  }
-
   .swipe {
+    display: block;
+    flex-basis: 100%;
     font-size: 12.5px;
     color: #7a5a3c;
   }

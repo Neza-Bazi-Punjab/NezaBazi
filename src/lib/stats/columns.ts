@@ -47,8 +47,6 @@ const statusCell = (status: StatRideStatus): Cell => {
 export interface ColumnGroup {
   id: string;
   label: string;
-  /* Shown by default on narrow screens (below the `sm` breakpoint). */
-  onPhone: boolean;
 }
 
 export interface StatColumn<T> {
@@ -77,14 +75,11 @@ const placeCell = (place: 1 | 2 | 3 | null): Cell =>
 
 /* ---------- riders ---------- */
 
-/* On a phone the table opens on who did what: total points, how far each
-   rider got and the place. The run counts and round points are one
-   tap away: "All columns" (StatsBrowser). */
 export const RIDER_GROUPS: readonly ColumnGroup[] = [
-  { id: "runs", label: "Runs", onPhone: false },
-  { id: "rounds", label: "Points by round", onPhone: false },
-  { id: "totals", label: "Total", onPhone: true },
-  { id: "result", label: "Result", onPhone: true },
+  { id: "runs", label: "Runs" },
+  { id: "rounds", label: "Points by round" },
+  { id: "totals", label: "Total" },
+  { id: "result", label: "Result" },
 ];
 
 /* Short headings where the full round name is too wide for the table. The
@@ -195,12 +190,9 @@ export const RIDER_COLUMNS: readonly StatColumn<RiderRow>[] = [
 
 /* ---------- teams ---------- */
 
-/* A phone opens on how far each team got and its place, which fits the
-   screen. The five round totals are under "All columns", as for riders: left
-   in, they pushed Reached and Place off the side of the screen. */
 export const TEAM_GROUPS: readonly ColumnGroup[] = [
-  { id: "rounds", label: "Points by round", onPhone: false },
-  { id: "result", label: "Result", onPhone: true },
+  { id: "rounds", label: "Points by round" },
+  { id: "result", label: "Result" },
 ];
 
 export const TEAM_COLUMNS: readonly StatColumn<TeamRow>[] = [
