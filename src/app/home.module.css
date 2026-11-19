@@ -7,6 +7,9 @@
 
 /* ---------- Hero ---------- */
 .hero {
+  /* The plain heading font, as before the redesign: the title reads more
+     simply than in the carved capitals used elsewhere */
+  --display: var(--font-oswald), sans-serif;
   position: relative;
   overflow: hidden;
   min-height: calc(100vh - var(--nav-height));
