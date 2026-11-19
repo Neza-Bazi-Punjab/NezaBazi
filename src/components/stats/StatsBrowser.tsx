@@ -554,12 +554,15 @@ function Browser<
                 </div>
               ))}
             </dl>
+            {/* Riders: each run in words, then the run counts. A team's rounds
+                are all in the strip above, so it has no list to repeat them. */}
+            {view === "riders" && (
             <dl className={t.card}>
               {roundsOf(openRow).map(({ column, cell }) => (
                 <div key={column.id}>
                   <dt>{roundName(column.title ?? column.label)}</dt>
                   <dd>
-                    {view === "riders" && cell.kind === "value" && column.id !== "stage-qualification" && (
+                    {cell.kind === "value" && column.id !== "stage-qualification" && (
                       <em>{RESULT_WORD[cell.text] ?? ""}</em>
                     )}
                     <CellView cell={cell} />
@@ -577,6 +580,7 @@ function Browser<
                   </div>
                 ))}
             </dl>
+            )}
           </div>
         )}
       </dialog>

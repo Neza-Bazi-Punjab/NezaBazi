@@ -685,8 +685,10 @@
 
   /* One short table that fits the screen: rank, name and each round's
      points. No group headings, and nothing scrolls sideways. */
+  /* Never narrower than leaves the name about 110px; a very small phone
+     scrolls the last few pixels instead of crushing the name */
   .table {
-    min-width: 0 !important;
+    min-width: 342px !important;
   }
 
   /* Every round column the same width, with the name taking what is left,
@@ -696,7 +698,15 @@
   }
 
   .table col:first-child {
-    width: 28px !important;
+    width: 32px !important;
+  }
+
+  /* Room for a three-figure rank */
+  .table td.rk {
+    padding: 0 2px;
+    font-size: 13px;
+    text-align: center;
+    text-overflow: clip;
   }
 
   .table col[data-g="rounds"] {
@@ -704,10 +714,18 @@
   }
 
   .table thead tr.grp,
-  .table [data-g="runs"],
-  .table [data-g="totals"],
-  .table [data-g="result"] {
+  .table [data-g="runs"] {
     display: none;
+  }
+
+  /* A phone on its side or a small tablet has room for the total and the
+     result too (hidden again on an upright phone, below) */
+  .table col[data-g="totals"] {
+    width: 52px !important;
+  }
+
+  .table col[data-g="result"] {
+    width: 100px !important;
   }
 
   .table .gs {
@@ -855,5 +873,31 @@
 
   .tools select {
     flex: 1;
+  }
+}
+
+/* An upright phone: the rounds only. The medal under the name says who won. */
+@media (max-width: 559px) {
+  .table [data-g="totals"],
+  .table [data-g="result"] {
+    display: none;
+  }
+}
+
+/* Wider than that, Place is a column again, so the medal is not repeated */
+@media (min-width: 560px) {
+  .won {
+    display: none !important;
+  }
+}
+
+/* Small phones: slimmer round columns, so the name keeps its room */
+@media (max-width: 360px) {
+  .table {
+    min-width: 307px !important;
+  }
+
+  .table col[data-g="rounds"] {
+    width: 35px !important;
   }
 }

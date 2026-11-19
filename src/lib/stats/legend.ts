@@ -56,8 +56,8 @@ const RIDER_TABLE: LegendSection = {
   terms: [
     { term: "Runs", meaning: "Runs ridden." },
     { term: "C / S / M", meaning: "Carries, strikes and misses." },
-    { term: "Qual, Aarhi 1, Aarhi 2", meaning: "Points in each round." },
-    { term: "3rd place", meaning: "Points in the ride-off for third place." },
+    { term: "Qual, Aarhi 1, Aarhi 2", meaning: "Points in each round. A phone shows A1 and A2." },
+    { term: "3rd place", meaning: "Points in the ride-off for third place. A phone shows 3rd." },
     { term: "Final", meaning: "Points in the ride for first and second place." },
     { term: "Pts", meaning: "Total points over every run. Places are not decided on it." },
     { term: "Reached", meaning: "The furthest round the rider rode in." },
@@ -70,9 +70,9 @@ const RIDER_TABLE: LegendSection = {
 const TEAM_TABLE: LegendSection = {
   title: "Reading the table",
   terms: [
-    { term: "Round 1, Round 2", meaning: "The team's total in that round, out of 16." },
-    { term: "3rd place", meaning: "The ride-off for third place." },
-    { term: "Final, Tie-break", meaning: "The ride for first place, and the ride after it finished level." },
+    { term: "Round 1, Round 2", meaning: "The team's total in that round, out of 16. A phone shows R1 and R2." },
+    { term: "3rd place", meaning: "The ride-off for third place. A phone shows 3rd." },
+    { term: "Final, Tie-break", meaning: "The ride for first place, and the ride after it finished level (T-B)." },
     { term: "Reached", meaning: "The furthest round the team rode in." },
     { term: "Place", meaning: "1st, 2nd or 3rd." },
     { term: "–", meaning: "Ridden, but the total was not recorded." },
