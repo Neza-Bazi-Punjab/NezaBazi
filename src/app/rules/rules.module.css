@@ -33,6 +33,7 @@
 
 .bookhead h2 {
   font-family: var(--display);
+  text-transform: uppercase;
   font-weight: 700;
   color: #fdf8ef;
   font-size: clamp(26px, 2.6vw, 34px);

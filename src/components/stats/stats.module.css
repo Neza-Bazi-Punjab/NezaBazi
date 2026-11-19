@@ -96,6 +96,7 @@
 .tile .v {
   order: 1;
   font-family: var(--display);
+  text-transform: uppercase;
   font-weight: 700;
   font-size: 40px;
   color: var(--brown);
@@ -220,6 +221,7 @@
 
 .sheetBody h3 {
   font-family: var(--display);
+  text-transform: uppercase;
   font-weight: 700;
   font-size: 22px;
   color: var(--brown);
@@ -564,6 +566,7 @@
 .med {
   display: inline-block;
   font-family: var(--display);
+  text-transform: uppercase;
   font-weight: 700;
   font-size: 11px;
   letter-spacing: 0.1em;

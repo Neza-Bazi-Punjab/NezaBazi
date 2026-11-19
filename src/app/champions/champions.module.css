@@ -71,6 +71,7 @@
 
 .name {
   font-family: var(--display);
+  text-transform: uppercase;
   font-weight: 700;
   font-size: clamp(18px, 2vw, 24px);
   margin-top: 6px;
@@ -158,6 +159,7 @@
 
 .tname {
   font-family: var(--display);
+  text-transform: uppercase;
   font-weight: 700;
   color: var(--brown);
   font-size: clamp(26px, 3vw, 40px);
