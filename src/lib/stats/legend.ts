@@ -64,6 +64,7 @@ const RIDER_TABLE: LegendSection = {
     { term: "Place", meaning: "1st, 2nd or 3rd." },
     { term: "–", meaning: "Ridden, but the result was not recorded." },
     { term: "Blank", meaning: "Did not ride that round." },
+    { term: "On a phone", meaning: "The table shows the rounds. Tap a rider for the runs, total and round reached." },
   ],
 };
 
@@ -72,13 +73,14 @@ const TEAM_TABLE: LegendSection = {
   terms: [
     { term: "Round 1, Round 2", meaning: "The team's total in that round, out of 16. A phone shows R1 and R2." },
     { term: "3rd place", meaning: "The ride-off for third place. A phone shows 3rd." },
-    { term: "Final, Tie-break", meaning: "The ride for first place, and the ride after it finished level (T-B)." },
+    { term: "Final, Tie-break", meaning: "The ride for 1st and 2nd, and the ride after it finished level (T-B)." },
     { term: "Reached", meaning: "The furthest round the team rode in." },
     { term: "Place", meaning: "1st, 2nd or 3rd." },
     { term: "–", meaning: "Ridden, but the total was not recorded." },
     { term: "Scratched", meaning: "This ride did not count. It scored nothing." },
     { term: "Out", meaning: "The team was put out. No total was announced." },
     { term: "Blank", meaning: "Did not ride that round." },
+    { term: "On a phone", meaning: "The table shows the rounds. Tap a team for its riders and round reached." },
   ],
 };
 
