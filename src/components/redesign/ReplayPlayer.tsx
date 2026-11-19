@@ -5,6 +5,7 @@ import { useState } from "react";
 import h from "@/app/home.module.css";
 import type { Photo } from "@/lib/photos-2026";
 import { site } from "@/lib/site";
+import { PlayMark } from "./marks";
 
 /* The full broadcast on the home page: a poster with a play button that
    swaps itself for the YouTube player (youtube-nocookie.com, so nothing from
@@ -35,9 +36,7 @@ export default function ReplayPlayer({ poster }: { poster: Photo }) {
       <Image src={poster.src} alt="" fill sizes="(max-width: 1120px) 100vw, 1080px" />
       <span className={h.play}>
         <span>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M8 5v14l11-7z" />
-          </svg>
+          <PlayMark />
         </span>
       </span>
       <span className={h.cap}>Neza Bazi Punjab Championship 2026 · Live replay</span>

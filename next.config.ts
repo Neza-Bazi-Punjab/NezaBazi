@@ -30,6 +30,11 @@ const nextConfig: NextConfig = {
     return [
       // The About page became the Event page.
       { source: "/about", destination: "/event", permanent: true },
+      // The Players and Rankings "coming soon" pages were removed (2026
+      // redesign); Stats has every rider and team. Not permanent, so either
+      // page can come back without browsers remembering the redirect.
+      { source: "/players", destination: "/stats", permanent: false },
+      { source: "/rankings", destination: "/stats", permanent: false },
       // Stats moved from ?season= and ?view= to paths, so each page can be
       // built at deploy time (src/app/stats/StatsSeason.tsx). Old links land
       // on the same table. STATS_SEASON_PATTERN lists the seasons with a page;

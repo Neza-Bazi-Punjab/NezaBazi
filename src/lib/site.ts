@@ -25,8 +25,8 @@ export const site = {
   // from youtube-nocookie.com) and linked from the Champions page.
   replayVideoId: "JoN0OqB5cBU",
   replayUrl: "https://www.youtube.com/live/JoN0OqB5cBU",
-  // TODO: set to the rules explainer video (any YouTube URL). While empty,
-  // the Rulebook page shows a "video coming soon" note instead of the player.
+  // The rules explainer video (any YouTube URL). The Rulebook page leaves the
+  // video out for now (2026 redesign), so nothing reads this at the moment.
   rulesVideoUrl: "" as string,
 } as const;
 

@@ -2,7 +2,8 @@ import Link from "next/link";
 import { ArrowRightIcon } from "./icons";
 
 /* Primary call-to-action link. Three poster-matched variants, plus a subtle
-   hover lift and arrow nudge (disabled under prefers-reduced-motion). */
+   hover lift. The → arrow is off unless asked for (arrow): the 2026 redesign
+   dropped the stock arrow from buttons. */
 type ButtonLinkProps = {
   href: string;
   children: React.ReactNode;
@@ -24,7 +25,7 @@ export default function ButtonLink({
   href,
   children,
   variant = "solid",
-  arrow = true,
+  arrow = false,
   className = "",
 }: ButtonLinkProps) {
   const classes = `group inline-flex items-center gap-2.5 rounded-lg px-6 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] transition-[background-color,border-color,color,transform,box-shadow] duration-[var(--dur-base)] ease-[var(--ease-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:hover:-translate-y-0.5 motion-safe:hover:shadow-md ${variants[variant]} ${className}`;

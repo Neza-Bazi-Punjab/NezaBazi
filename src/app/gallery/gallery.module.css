@@ -150,14 +150,21 @@
 
 .viewer button {
   position: absolute;
-  border: 0;
-  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(0, 0, 0, 0.2);
   color: #fff;
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  font-size: 22px;
+  font-size: 26px;
+  display: grid;
+  place-items: center;
   cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.viewer button:hover {
+  border-color: #fff;
 }
 
 .viewer .x {

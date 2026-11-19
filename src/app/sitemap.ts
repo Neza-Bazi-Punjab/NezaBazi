@@ -12,8 +12,6 @@ const routes = [
   "/gallery",
   "/stats",
   "/login",
-  "/players",
-  "/rankings",
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {

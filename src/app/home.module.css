@@ -213,11 +213,21 @@
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  border: 1.5px solid rgba(90, 53, 23, 0.35);
+  border: 1px solid rgba(90, 53, 23, 0.35);
   background: none;
   color: var(--brown);
-  font-size: 18px;
+  font-size: 22px;
+  display: inline-grid;
+  place-items: center;
   cursor: pointer;
+  transition:
+    border-color 0.2s,
+    color 0.2s;
+}
+
+.arrows button:hover {
+  border-color: var(--bronze);
+  color: var(--bronze);
 }
 
 .rail {
@@ -313,22 +323,24 @@
   width: 92px;
   height: 92px;
   border-radius: 50%;
-  background: rgba(253, 248, 239, 0.95);
+  border: 1.5px solid rgba(253, 248, 239, 0.9);
+  background: rgba(46, 29, 14, 0.35);
+  color: #fdf8ef;
+  font-size: 40px;
   display: grid;
   place-items: center;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
-  transition: transform 0.2s;
+  transition:
+    transform 0.2s,
+    background 0.2s;
 }
 
 .player:hover .play > span {
   transform: scale(1.06);
+  background: rgba(46, 29, 14, 0.5);
 }
 
 .play svg {
-  width: 34px;
-  height: 34px;
-  fill: var(--bronze);
-  margin-left: 5px;
+  margin-left: 4px;
 }
 
 .cap {
@@ -367,6 +379,18 @@
 .closingPhoto > img {
   object-fit: cover;
   object-position: 50% 4%;
+}
+
+/* The photo's bottom edge fades into the "Thank you" below it. */
+.closingPhoto::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 120px;
+  background: linear-gradient(to bottom, rgba(247, 239, 228, 0), var(--sand));
+  pointer-events: none;
 }
 
 /* The break sits on the photo's top edge; the photo shows below the line. */

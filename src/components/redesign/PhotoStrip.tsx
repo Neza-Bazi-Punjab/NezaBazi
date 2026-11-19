@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import h from "@/app/home.module.css";
 import type { Photo } from "@/lib/photos-2026";
+import { ChevronMark } from "./marks";
 import s from "./shared.module.css";
 
 /* The home page's sideways photo strip: a heading with "View the gallery"
@@ -60,10 +61,10 @@ export default function PhotoStrip({ photos }: { photos: Photo[] }) {
             View the gallery
           </Link>
           <button type="button" aria-label="Previous" onClick={() => scrollBy(-1)}>
-            ←
+            <ChevronMark dir="left" />
           </button>
           <button type="button" aria-label="Next" onClick={() => scrollBy(1)}>
-            →
+            <ChevronMark dir="right" />
           </button>
         </div>
       </div>

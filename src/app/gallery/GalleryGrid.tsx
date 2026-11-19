@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronMark, CloseMark } from "@/components/redesign/marks";
 import { galleryEvener, type Photo } from "@/lib/photos-2026";
 import g from "./gallery.module.css";
 
@@ -127,10 +128,10 @@ export default function GalleryGrid({ photos }: { photos: Photo[] }) {
           }}
         >
           <button type="button" className={g.x} aria-label="Close" onClick={() => setOpen(null)}>
-            ×
+            <CloseMark />
           </button>
           <button type="button" className={g.prev} aria-label="Previous" onClick={() => step(-1)}>
-            ←
+            <ChevronMark dir="left" />
           </button>
           <Image
             key={current.src}
@@ -148,7 +149,7 @@ export default function GalleryGrid({ photos }: { photos: Photo[] }) {
           />
           <p />
           <button type="button" className={g.next} aria-label="Next" onClick={() => step(1)}>
-            →
+            <ChevronMark dir="right" />
           </button>
         </div>
       )}

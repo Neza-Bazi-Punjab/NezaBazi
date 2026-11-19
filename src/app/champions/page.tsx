@@ -157,7 +157,7 @@ export default function ChampionsPage() {
               target="_blank"
               rel="noopener noreferrer"
             >
-              ▶ Watch live replay
+              Watch live replay
             </a>
             <a
               className={`${s.btn} ${s.outline}`}
