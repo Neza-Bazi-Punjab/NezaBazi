@@ -11,7 +11,9 @@
   --brown: #5a3517;
   --ink: #2e1d0e;
   /* The plain heading font (Oswald), not the carved capitals of the first
-     redesign: asked for as "the simple one", 19 Nov 2026 */
+     redesign: asked for as "the simple one", 19 Nov 2026. That font drew
+     every heading in capitals, so each rule that uses --display also sets
+     text-transform: uppercase to keep them reading the same. */
   --display: var(--font-oswald), sans-serif;
   --body: var(--font-dmsans);
   --pad: 40px;
@@ -40,6 +42,7 @@
 
 .h1 {
   font-family: var(--display);
+  text-transform: uppercase;
   font-weight: 700;
   color: var(--brown);
   font-size: clamp(42px, 6vw, 84px);
@@ -49,6 +52,7 @@
 
 .h2 {
   font-family: var(--display);
+  text-transform: uppercase;
   font-weight: 700;
   color: var(--brown);
   font-size: clamp(30px, 3.6vw, 46px);

@@ -20,6 +20,7 @@
 
 .h2 {
   font-family: var(--display);
+  text-transform: uppercase;
   font-weight: 700;
   font-size: clamp(26px, 3vw, 34px);
   line-height: 1.1;
@@ -89,6 +90,7 @@
 
 .regHead h3 {
   font-family: var(--display);
+  text-transform: uppercase;
   font-weight: 700;
   font-size: 22px;
   color: var(--brown);
@@ -196,6 +198,7 @@
 
 .member h4 {
   font-family: var(--display);
+  text-transform: uppercase;
   font-weight: 700;
   font-size: 18px;
   color: var(--brown);

@@ -307,6 +307,7 @@
    Your Inbox" after sending); the page title already names the page. */
 .boxTitle {
   font-family: var(--display);
+  text-transform: uppercase;
   font-weight: 700;
   font-size: 26px;
   line-height: 1.2;

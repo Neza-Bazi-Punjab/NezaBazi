@@ -44,6 +44,7 @@
 
 .card h3 {
   font-family: var(--display);
+  text-transform: uppercase;
   font-weight: 700;
   font-size: 22px;
   color: var(--brown);
@@ -59,6 +60,7 @@
 
 .num {
   font-family: var(--display);
+  text-transform: uppercase;
   font-weight: 700;
   font-size: 44px;
   line-height: 1;
