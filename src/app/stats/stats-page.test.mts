@@ -74,6 +74,12 @@ test("every listed season file loads and passes its checks, newest first", () =>
       assert.ok(riders.filter((row) => row.place === place).length <= 1, `at most one rider placed ${place}`);
       assert.ok(teams.filter((row) => row.place === place).length <= 1, `at most one team placed ${place}`);
     }
+    // A placed rider's last ride is the one that decided the place: the Final
+    // for 1st and 2nd, the ride-off for 3rd. Reached says which, so second
+    // place having fewer points than third reads right.
+    for (const row of riders.filter((candidate) => candidate.place !== null)) {
+      assert.equal(row.reached, row.place === 3 ? "third" : "final", `${row.name}, placed ${row.place}`);
+    }
   }
 
   assert.equal(loadSeason(1999), null);
@@ -159,8 +165,11 @@ test("the table is a real, sortable, accessible table", () => {
   assert.match(browser, /Clear filters/);
   assert.match(browser, /PAGE_SIZE = 25;/);
   assert.match(browser, /<Pagination/);
-  // No column on/off controls in the redesign: every group is always there.
+  // No per-group on/off controls in the redesign: on a computer every group
+  // is always there (phones have one Summary / All columns switch, below).
   assert.doesNotMatch(browser, /Show these columns|groupSettings/);
+  // How the places were decided is said in words, above the table.
+  assert.match(browser, /<p className=\{t\.how\}>\s*<b>\{PLACES_DECIDED\[view\]\.lead\}<\/b> \{PLACES_DECIDED\[view\]\.detail\}/);
 });
 
 test("fixed column widths and row heights: sorting and paging never move the table", () => {
@@ -184,16 +193,29 @@ test("phones: the table scrolls in its own region, rank and name stay put", () =
   assert.match(browser, /role="region"[^>]*className=\{t\.scroll\}/);
   const css = read("../../components/stats/stats.module.css");
   assert.match(css, /\.scroll \{\s*position: relative;\s*overflow-x: auto;/);
-  // Groups not meant for phones hide on narrow screens.
+  // Groups not meant for phones hide on narrow screens, in the short table.
   assert.match(browser, /!group\.onPhone && t\.phHide/);
-  assert.match(css, /@media \(max-width: 820px\)[\s\S]*\.phHide \{\s*display: none;/);
+  assert.match(css, /@media \(max-width: 820px\)[\s\S]*\.table:not\(\.full\) \.phHide \{\s*display: none;/);
 
-  // Riders: Runs, Points by round and Rates start off on phones; Columns
-  // are always there. Teams: the round points are the whole record, so everything is on.
+  // A phone opens on the short table, which fits the screen with the place in
+  // view: riders keep Total and Result, teams keep Result.
   const phoneOff = (groups: readonly { id: string; onPhone: boolean }[]) =>
     groups.filter((group) => !group.onPhone).map((group) => group.id);
   assert.deepEqual(phoneOff(RIDER_GROUPS), ["runs", "rounds", "rates"]);
-  assert.deepEqual(phoneOff(TEAM_GROUPS), []);
+  assert.deepEqual(phoneOff(TEAM_GROUPS), ["rounds"]);
+
+  // Nothing is out of reach on a phone: "All columns" lays out the whole
+  // table, scrolled sideways under the name, without turning the phone.
+  assert.match(browser, /role="group" aria-label="Columns" className=\{t\.cols\}/);
+  assert.match(browser, /aria-pressed=\{!allColumns\} onClick=\{\(\) => setAllColumns\(false\)\}>\s*Summary/);
+  assert.match(browser, /aria-pressed=\{allColumns\} onClick=\{\(\) => setAllColumns\(true\)\}>\s*All columns/);
+  assert.match(browser, /\$\{allColumns \? t\.full : ""\}/);
+  assert.match(browser, /"--phone-min": `\$\{RANK_WIDTH \+ PHONE_NAME_WIDTH \+ columnsWidth\}px`/);
+  assert.match(css, /@media \(max-width: 820px\)[\s\S]*\.table\.full \{\s*min-width: var\(--phone-min\) !important;/);
+  // The switch is for narrow screens only.
+  assert.match(css, /\.cols \{\s*display: none;\s*\}[\s\S]*@media \(max-width: 820px\)[\s\S]*\.cols \{\s*display: flex;/);
+  // The name stays put while the numbers scroll under it.
+  assert.match(css, /\.table \.nm \{\s*position: sticky;\s*left: 0;/);
 
   // Nothing on the page sets a fixed width wider than a phone.
   for (const { name, source } of statsSources()) {
@@ -225,6 +247,10 @@ test("the legend teaches the rules, then the table, for the view on screen", () 
   for (const heading of TEAM_COLUMNS.map((column) => column.label)) {
     assert.ok(tableTerms("teams").includes(heading), `teams legend explains ${heading}`);
   }
+  // The key is on the page, closed until asked for.
+  const browser = read("../../components/stats/StatsBrowser.tsx");
+  assert.match(browser, /<details className=\{t\.key\}>\s*<summary>Key: /);
+  assert.match(browser, /legendSections\(view\)\.map/);
   // Scratched and Out are team marks only; both views explain the dash and a blank.
   assert.match(tableTerms("teams"), /Scratched/);
   assert.match(tableTerms("teams"), /\bOut\b/);

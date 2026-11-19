@@ -73,8 +73,11 @@ export const SINGLE_STAGE_LABELS: Record<SingleStage, string> = {
   qualification: "Qualification",
   aarhi1: "Aarhi round 1",
   aarhi2: "Aarhi round 2",
-  // One ride for first place or for third place, not a round everyone rode.
-  final: "Placing ride",
+  // The two rides that decide the places, named as the team ones are. A
+  // rider rode one or the other: the ride-off for third, or the Final for
+  // first and second.
+  third: "3rd place ride-off",
+  final: "Final",
 };
 
 export const TEAM_STAGE_LABELS: Record<TeamStage, string> = {
@@ -84,6 +87,20 @@ export const TEAM_STAGE_LABELS: Record<TeamStage, string> = {
   final1: "Final",
   // The final finished level, so both teams rode again.
   final2: "Final tie-break",
+};
+
+/* The line above each table. A place is won in the last ride, so a rider can
+   finish above another who scored more points over the day: in 2026 second
+   place missed in the Final and third place carried in the ride-off. */
+export const PLACES_DECIDED: Record<"riders" | "teams", { lead: string; detail: string }> = {
+  riders: {
+    lead: "Places are won in the last ride, not on total points.",
+    detail: `The ${SINGLE_STAGE_LABELS.final} decides 1st and 2nd. The ${SINGLE_STAGE_LABELS.third} decides 3rd.`,
+  },
+  teams: {
+    lead: "Places are won in the last ride, not by adding up the rounds.",
+    detail: `The ${TEAM_STAGE_LABELS.final1} decides 1st and 2nd. The ${TEAM_STAGE_LABELS.third} decides 3rd.`,
+  },
 };
 
 /* ---------- riders ---------- */

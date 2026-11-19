@@ -84,7 +84,7 @@ const placeCell = (place: 1 | 2 | 3 | null): Cell =>
 
 /* On a phone the table opens on who did what: total points, how far each
    rider got and the place. The run counts, round points and rates are one
-   tap away under Columns. */
+   tap away: "All columns" (StatsBrowser). */
 export const RIDER_GROUPS: readonly ColumnGroup[] = [
   { id: "runs", label: "Runs", onPhone: false },
   { id: "rounds", label: "Points by round", onPhone: false },
@@ -99,7 +99,8 @@ const SHORT_SINGLE: Record<SingleStage, string> = {
   qualification: "Qual",
   aarhi1: "Aarhi 1",
   aarhi2: "Aarhi 2",
-  final: "Placing",
+  third: "3rd place",
+  final: "Final",
 };
 
 const SHORT_TEAM: Record<TeamStage, string> = {
@@ -230,9 +231,11 @@ export const RIDER_COLUMNS: readonly StatColumn<RiderRow>[] = [
 
 /* ---------- teams ---------- */
 
+/* A phone opens on how far each team got and its place, which fits the
+   screen. The five round totals are under "All columns", as for riders: left
+   in, they pushed Reached and Place off the side of the screen. */
 export const TEAM_GROUPS: readonly ColumnGroup[] = [
-  // The round points are the team's whole record, so phones show them too.
-  { id: "rounds", label: "Points by round", onPhone: true },
+  { id: "rounds", label: "Points by round", onPhone: false },
   { id: "result", label: "Result", onPhone: true },
 ];
 

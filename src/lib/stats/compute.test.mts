@@ -7,6 +7,7 @@ import test from "node:test";
 
 import { RIDER_COLUMNS, TEAM_COLUMNS, TEAM_GROUPS } from "./columns.ts";
 import {
+  PLACES_DECIDED,
   SINGLE_STAGE_LABELS,
   TEAM_STAGE_LABELS,
   clampPage,
@@ -80,7 +81,13 @@ test("points: carry 4, strike 2, miss 0, unknown 0", () => {
   assert.equal(row.unknown, 1);
   assert.equal(row.known, 3);
   assert.equal(row.points, 6);
-  assert.deepEqual(row.stages, { qualification: 2, aarhi1: 4, aarhi2: null, final: undefined });
+  assert.deepEqual(row.stages, {
+    qualification: 2,
+    aarhi1: 4,
+    aarhi2: null,
+    third: undefined,
+    final: undefined,
+  });
   assert.equal(row.reached, "aarhi2");
 });
 
@@ -128,7 +135,7 @@ test("rider rank: placed first, then furthest stage, stage points, total, carry 
   const rows = riderRows({
     riders: [
       rider("zed", [["qualification", "miss"]]),
-      rider("third", [["qualification", "carry"], ["final", "carry"]], { place: 3 }),
+      rider("third", [["qualification", "carry"], ["third", "carry"]], { place: 3 }),
       rider("first", [["qualification", "carry"], ["final", "miss"]], { place: 1 }),
       rider("aarhi-carry", [["qualification", "carry"], ["aarhi1", "carry"]]),
       rider("aarhi-strike", [["qualification", "carry"], ["aarhi1", "strike"]]),
@@ -149,6 +156,44 @@ test("rider rank: placed first, then furthest stage, stage points, total, carry 
       ["zed", 7],
     ]
   );
+});
+
+test("second place can have fewer points than third: the Final and the ride-off are separate rides", () => {
+  // The 2026 podium. Second missed in the Final (12 points over the day);
+  // third carried in the ride-off (14). The table must say which ride each
+  // rode, or the points look wrong.
+  const rows = riderRows({
+    riders: [
+      rider("lost-ride-off", [["qualification", "carry"], ["aarhi1", "carry"], ["aarhi2", "strike"], ["third", "miss"]]),
+      rider("third", [["qualification", "carry"], ["aarhi1", "carry"], ["aarhi2", "strike"], ["third", "carry"]], { place: 3 }),
+      rider("second", [["qualification", "carry"], ["aarhi1", "carry"], ["aarhi2", "carry"], ["final", "miss"]], { place: 2 }),
+      rider("first", [["qualification", "carry"], ["aarhi1", "carry"], ["aarhi2", "carry"], ["final", "carry"]], { place: 1 }),
+    ],
+  });
+  assert.deepEqual(
+    rows.map((row) => [row.rank, row.id, row.points, row.reached]),
+    [
+      [1, "first", 16, "final"],
+      [2, "second", 12, "final"],
+      [3, "third", 14, "third"],
+      [4, "lost-ride-off", 10, "third"],
+    ]
+  );
+  // Each deciding ride has its own column: a rider rode one, the other is blank.
+  const cell = (id: string, row: (typeof rows)[number]) =>
+    column<(typeof RIDER_COLUMNS)[number]>(RIDER_COLUMNS, id).cell(row);
+  assert.deepEqual(cell("stage-final", rows[1]), { kind: "value", text: "0" });
+  assert.equal(cell("stage-third", rows[1]).kind, "blank");
+  assert.deepEqual(cell("stage-third", rows[2]), { kind: "value", text: "4" });
+  assert.equal(cell("stage-final", rows[2]).kind, "blank");
+
+  // The line above the table says so in plain words, in both views.
+  assert.match(PLACES_DECIDED.riders.lead, /not on total points/);
+  for (const view of ["riders", "teams"] as const) {
+    assert.match(PLACES_DECIDED[view].lead, /^Places are won in the last ride/);
+    assert.equal(PLACES_DECIDED[view].detail, "The Final decides 1st and 2nd. The 3rd place ride-off decides 3rd.");
+    assert.doesNotMatch(`${PLACES_DECIDED[view].lead} ${PLACES_DECIDED[view].detail}`, /—/);
+  }
 });
 
 test("carry rate breaks a tie on points, and riders level on everything share a rank", () => {
@@ -246,8 +291,12 @@ test("round names say what each round was; short headings keep the full name for
     qualification: "Qualification",
     aarhi1: "Aarhi round 1",
     aarhi2: "Aarhi round 2",
-    final: "Placing ride",
+    third: "3rd place ride-off",
+    final: "Final",
   });
+  // The two deciding rides carry the same names in both views.
+  assert.equal(SINGLE_STAGE_LABELS.third, TEAM_STAGE_LABELS.third);
+  assert.equal(SINGLE_STAGE_LABELS.final, TEAM_STAGE_LABELS.final1);
   assert.deepEqual(TEAM_STAGE_LABELS, {
     round1: "Round 1",
     round2: "Round 2",
@@ -259,9 +308,10 @@ test("round names say what each round was; short headings keep the full name for
   const riderStages = RIDER_COLUMNS.filter((candidate) => candidate.id.startsWith("stage-"));
   assert.deepEqual(
     riderStages.map((candidate) => candidate.label),
-    ["Qual", "Aarhi 1", "Aarhi 2", "Placing"]
+    ["Qual", "Aarhi 1", "Aarhi 2", "3rd place", "Final"]
   );
-  assert.equal(riderStages[3].title, "Points in Placing ride");
+  assert.equal(riderStages[3].title, "Points in 3rd place ride-off");
+  assert.equal(riderStages[4].title, "Points in Final");
   const teamStages = TEAM_COLUMNS.filter((candidate) => candidate.id.startsWith("stage-"));
   assert.deepEqual(
     teamStages.map((candidate) => candidate.label),
@@ -274,7 +324,12 @@ test("round names say what each round was; short headings keep the full name for
     ...riderNumbers(rider("r", [["final", "carry"]])),
     rank: 1,
   });
-  assert.deepEqual(reached, { kind: "value", text: "Placing ride" });
+  assert.deepEqual(reached, { kind: "value", text: "Final" });
+  const rodeOff = column<(typeof RIDER_COLUMNS)[number]>(RIDER_COLUMNS, "reached").cell({
+    ...riderNumbers(rider("r", [["third", "carry"]])),
+    rank: 1,
+  });
+  assert.deepEqual(rodeOff, { kind: "value", text: "3rd place ride-off" });
   const teamReached = column<(typeof TEAM_COLUMNS)[number]>(TEAM_COLUMNS, "reached").cell({
     ...teamNumbers(team("t", [["final2", 12]])),
     rank: 1,

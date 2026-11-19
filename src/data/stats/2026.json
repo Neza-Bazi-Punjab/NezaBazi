@@ -2,7 +2,7 @@
   "season": 2026,
   "eventName": "Neza Bazi Punjab Championship 2026",
   "eventDate": "2026-11-11",
-  "updated": "2026-11-11",
+  "updated": "2026-11-18",
   "provisional": true,
   "notes": [
     "Compiled from the judges' scores and the live broadcast of the event.",
@@ -303,7 +303,7 @@
           "result": "strike"
         },
         {
-          "stage": "final",
+          "stage": "third",
           "result": "miss"
         }
       ],
@@ -1994,7 +1994,7 @@
           "result": "strike"
         },
         {
-          "stage": "final",
+          "stage": "third",
           "result": "carry"
         }
       ],

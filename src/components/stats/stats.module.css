@@ -163,10 +163,84 @@
 .scroll:focus-visible,
 .sort:focus-visible,
 .pager button:focus-visible,
+.cols button:focus-visible,
 .clear:focus-visible,
 .seg a:focus-visible {
   outline: 2px solid var(--bronze);
   outline-offset: 2px;
+}
+
+/* Phones only (shown in the narrow-screen rules below): the short table or
+   every column. */
+.cols {
+  display: none;
+}
+
+/* How the places were decided: the first thing a newcomer asks of the table */
+.how {
+  padding: 12px 18px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #6b4a2c;
+  border-bottom: 1px solid rgba(90, 53, 23, 0.12);
+}
+
+.how b {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* The key: closed until asked for, so the table stays near the top */
+.key {
+  border-bottom: 1px solid rgba(90, 53, 23, 0.12);
+  font-size: 13.5px;
+  color: #3b2a1a;
+}
+
+.key summary {
+  padding: 12px 18px;
+  font-weight: 600;
+  color: var(--bronze-dark);
+  cursor: pointer;
+}
+
+.key summary:focus-visible {
+  outline: 2px solid var(--bronze);
+  outline-offset: -2px;
+}
+
+.keyBody {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px 32px;
+  padding: 4px 18px 18px;
+}
+
+.keyBody h3 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--brown);
+  margin-bottom: 8px;
+}
+
+.keyBody dl > div {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  gap: 10px;
+  padding: 5px 0;
+  line-height: 1.45;
+}
+
+.keyBody dt {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.keyBody dd {
+  color: #6b4a2c;
 }
 
 .scroll {
@@ -268,6 +342,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   font-weight: 400;
+}
+
+/* Words, not numbers (Reached): a long round name takes a second line
+   inside the fixed row height instead of a wider column. */
+.table td.l {
+  white-space: normal;
+  line-height: 1.3;
 }
 
 .table tbody th.nm {
@@ -452,17 +533,62 @@
     font-size: 30px;
   }
 
-  .phHide {
+  /* The short table: only the groups meant for phones, fitted to the screen */
+  .table:not(.full) .phHide {
     display: none;
   }
 
-  .table {
+  .table:not(.full) {
     table-layout: auto;
     min-width: 0 !important;
   }
 
-  .table col {
+  .table:not(.full) col {
     width: auto !important;
+  }
+
+  /* All columns: the computer's table with a narrower name column, scrolled
+     sideways under the name */
+  .table.full {
+    min-width: var(--phone-min) !important;
+  }
+
+  .cols {
+    display: flex;
+    flex-wrap: wrap;
+    flex-basis: 100%;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .cols button {
+    height: 40px;
+    padding: 0 14px;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--brown);
+    background: none;
+    border: 1.5px solid var(--brown);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  .cols button[aria-pressed="true"] {
+    background: var(--brown);
+    color: var(--cream);
+  }
+
+  .swipe {
+    font-size: 12.5px;
+    color: #7a5a3c;
+  }
+
+  .how {
+    padding: 12px 16px;
+    font-size: 13px;
   }
 
   .table tbody th.nm,

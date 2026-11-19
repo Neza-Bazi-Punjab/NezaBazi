@@ -9,9 +9,10 @@
 
 export type StatResult = "carry" | "strike" | "miss" | "unknown";
 
-/* Singles stages in the order they were ridden. "final" covers the placing
-   rides (third place and first place). */
-export type SingleStage = "qualification" | "aarhi1" | "aarhi2" | "final";
+/* Singles stages in the order they were ridden. The last two decide the
+   places, and a rider rode one or the other: "third" is the ride-off for
+   third place, "final" the ride for first and second. */
+export type SingleStage = "qualification" | "aarhi1" | "aarhi2" | "third" | "final";
 
 /* Team stages in the order they were ridden. */
 export type TeamStage = "round1" | "round2" | "third" | "final1" | "final2";
@@ -82,5 +83,5 @@ export const RESULT_POINTS: Record<StatResult, number> = {
   unknown: 0,
 };
 
-export const SINGLE_STAGES: readonly SingleStage[] = ["qualification", "aarhi1", "aarhi2", "final"];
+export const SINGLE_STAGES: readonly SingleStage[] = ["qualification", "aarhi1", "aarhi2", "third", "final"];
 export const TEAM_STAGES: readonly TeamStage[] = ["round1", "round2", "third", "final1", "final2"];

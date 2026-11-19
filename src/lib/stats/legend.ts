@@ -27,9 +27,10 @@ const RIDER_ROUNDS: LegendSection = {
     { term: "Aarhi round 1", meaning: "One try at a smaller 4 cm peg. Only a carry goes through." },
     {
       term: "Aarhi round 2",
-      meaning: "One try. Riders who carried rode for first place, riders who struck rode for third.",
+      meaning: "One try. Riders who carried went to the Final, riders who struck rode off for third.",
     },
-    { term: "Placing ride", meaning: "One ride to decide first and second, or third." },
+    { term: "3rd place ride-off", meaning: "One ride each. It decides 3rd place." },
+    { term: "Final", meaning: "One ride each. It decides 1st and 2nd place." },
   ],
 };
 
@@ -55,8 +56,10 @@ const RIDER_TABLE: LegendSection = {
   terms: [
     { term: "Runs", meaning: "Runs ridden." },
     { term: "C / S / M", meaning: "Carries, strikes and misses." },
-    { term: "Qual, Aarhi 1, Aarhi 2, Placing", meaning: "Points in each round." },
-    { term: "Pts", meaning: "Total points." },
+    { term: "Qual, Aarhi 1, Aarhi 2", meaning: "Points in each round." },
+    { term: "3rd place", meaning: "Points in the ride-off for third place." },
+    { term: "Final", meaning: "Points in the ride for first and second place." },
+    { term: "Pts", meaning: "Total points over every run. Places are not decided on it." },
     { term: "Pts/Run", meaning: "Average points for each run." },
     { term: "Carry %", meaning: "How often the rider carried the peg." },
     { term: "Hit %", meaning: "How often the rider carried or struck the peg." },

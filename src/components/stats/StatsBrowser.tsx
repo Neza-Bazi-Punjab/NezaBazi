@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import shared from "@/components/redesign/shared.module.css";
 import {
   RIDER_COLUMNS,
@@ -13,6 +13,7 @@ import {
   type StatColumn,
 } from "@/lib/stats/columns";
 import {
+  PLACES_DECIDED,
   SINGLE_STAGE_LABELS,
   TEAM_STAGE_LABELS,
   clampPage,
@@ -27,6 +28,7 @@ import {
   type SortValue,
   type TeamRow,
 } from "@/lib/stats/compute";
+import { legendSections } from "@/lib/stats/legend";
 import Pagination from "./Pagination";
 import type { StatsView } from "./SeasonViewNav";
 import t from "./stats.module.css";
@@ -35,7 +37,11 @@ import t from "./stats.module.css";
    pages (the agreed draft, handoff/mock-home/stats.html). Season and view are
    the page's own address; everything here is local state, reset by a new
    view. Every column has a fixed width and every row a fixed height, so
-   sorting or paging never moves the table: only what is inside changes. */
+   sorting or paging never moves the table: only what is inside changes.
+
+   A phone opens on the short table (the groups marked onPhone). Its
+   "All columns" switch lays the whole table out as on a computer, scrolled
+   sideways with the name held in place, so nobody has to turn the phone. */
 
 export const PAGE_SIZE = 25;
 
@@ -59,7 +65,10 @@ interface ViewConfig<T> {
   subline: (row: T) => string;
 }
 
-const RANK_WIDTH = 48;
+const RANK_WIDTH = 44;
+/* The name column's width on a phone showing all columns: narrow, so the
+   numbers get most of the screen. */
+const PHONE_NAME_WIDTH = 132;
 
 const riderConfig: ViewConfig<RiderRow> = {
   noun: "rider",
@@ -68,29 +77,36 @@ const riderConfig: ViewConfig<RiderRow> = {
   searchPlaceholder: "Search a rider, horse or place",
   columns: RIDER_COLUMNS,
   groups: RIDER_GROUPS,
+  /* Sized so the whole table, Place included, still fits a 1440px laptop
+     with both deciding rides in it. "3rd place ride-off" takes two lines in
+     Reached; a few very long horse-and-place lines end in an ellipsis. */
   widths: {
     runs: 68,
-    carries: 44,
-    strikes: 44,
-    misses: 44,
+    carries: 42,
+    strikes: 42,
+    misses: 42,
     "stage-qualification": 68,
     "stage-aarhi1": 86,
     "stage-aarhi2": 86,
-    "stage-final": 92,
-    points: 60,
-    pointsPerRun: 90,
+    "stage-third": 106,
+    "stage-final": 72,
+    points: 58,
+    pointsPerRun: 92,
     carryRate: 92,
     hitRate: 70,
-    reached: 140,
+    reached: 104,
     place: 76,
   },
-  nameMin: 220,
+  nameMin: 184,
   searchFields: riderSearchFields,
-  /* Everyone rode qualification, so "Any round" already covers it. */
+  /* Everyone rode qualification, so "Any round" already covers it. A rider
+     rode the 3rd place ride-off or the Final, never both, so "or further"
+     from the ride-off also takes in the finalists. */
   stageOptions: [
     { index: 1, label: `${SINGLE_STAGE_LABELS.aarhi1} or further` },
     { index: 2, label: `${SINGLE_STAGE_LABELS.aarhi2} or further` },
-    { index: 3, label: SINGLE_STAGE_LABELS.final },
+    { index: 3, label: `${SINGLE_STAGE_LABELS.third} or the ${SINGLE_STAGE_LABELS.final}` },
+    { index: 4, label: SINGLE_STAGE_LABELS.final },
   ],
   subline: (row) => [row.horse, row.location].filter(Boolean).join(" · "),
 };
@@ -108,7 +124,7 @@ const teamConfig: ViewConfig<TeamRow> = {
     "stage-third": 112,
     "stage-final1": 92,
     "stage-final2": 112,
-    reached: 200,
+    reached: 150,
     place: 90,
   },
   nameMin: 380,
@@ -168,6 +184,8 @@ function Browser<
     direction: "ascending",
   });
   const [page, setPage] = useState(1);
+  /* Phones only: the short table, or every column scrolled sideways. */
+  const [allColumns, setAllColumns] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo(
@@ -207,8 +225,14 @@ function Browser<
   );
   const cellClass = (group: ColumnGroup, startsGroup: boolean, ...more: (string | false | undefined)[]) =>
     [startsGroup && t.gs, !group.onPhone && t.phHide, ...more].filter(Boolean).join(" ");
-  const tableMinWidth =
-    RANK_WIDTH + config.nameMin + columns.reduce((sum, { column }) => sum + (config.widths[column.id] ?? 80), 0);
+  const columnsWidth = columns.reduce((sum, { column }) => sum + (config.widths[column.id] ?? 80), 0);
+  const tableMinWidth = RANK_WIDTH + config.nameMin + columnsWidth;
+  /* A view with nothing hidden on phones needs no switch. */
+  const phoneSwitch = config.groups.some((group) => !group.onPhone);
+  const tableStyle = {
+    minWidth: tableMinWidth,
+    "--phone-min": `${RANK_WIDTH + PHONE_NAME_WIDTH + columnsWidth}px`,
+  } as CSSProperties;
 
   const filtersOn = reachedAtLeast >= 0 || state !== "" || search.trim() !== "";
 
@@ -313,11 +337,46 @@ function Browser<
             </select>
           </>
         )}
+        {phoneSwitch && (
+          <div role="group" aria-label="Columns" className={t.cols}>
+            <button type="button" aria-pressed={!allColumns} onClick={() => setAllColumns(false)}>
+              Summary
+            </button>
+            <button type="button" aria-pressed={allColumns} onClick={() => setAllColumns(true)}>
+              All columns
+            </button>
+            {allColumns && <span className={t.swipe}>Swipe the table sideways.</span>}
+          </div>
+        )}
       </div>
+
+      <p className={t.how}>
+        <b>{PLACES_DECIDED[view].lead}</b> {PLACES_DECIDED[view].detail}
+      </p>
+
+      {/* ---------- the key: the rules and every heading, in plain words ---------- */}
+      <details className={t.key}>
+        <summary>Key: how points, rounds and the table work</summary>
+        <div className={t.keyBody}>
+          {legendSections(view).map((section) => (
+            <section key={section.title}>
+              <h3>{section.title}</h3>
+              <dl>
+                {section.terms.map(({ term, meaning }) => (
+                  <div key={term}>
+                    <dt>{term}</dt>
+                    <dd>{meaning}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          ))}
+        </div>
+      </details>
 
       {/* ---------- table ---------- */}
       <div role="region" aria-labelledby={captionId} tabIndex={0} className={t.scroll}>
-        <table className={t.table} style={{ minWidth: tableMinWidth }}>
+        <table className={`${t.table} ${allColumns ? t.full : ""}`} style={tableStyle}>
           <caption id={captionId} className={t.srOnly}>
             {config.nameHeading} statistics, {season} season, {sortText}
           </caption>

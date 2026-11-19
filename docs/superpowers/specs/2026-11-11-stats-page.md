@@ -56,15 +56,21 @@ screen readers use (`SINGLE_STAGE_LABELS` / `TEAM_STAGE_LABELS` in
 | `qualification` | Qualification | Qual |
 | `aarhi1` | Aarhi round 1 | Aarhi 1 |
 | `aarhi2` | Aarhi round 2 | Aarhi 2 |
-| `final` | Placing ride (one ride for first place or for third place, not a round everyone rode) | Placing |
+| `third` | 3rd place ride-off (singles; decides 3rd) | 3rd place |
+| `final` | Final (singles; decides 1st and 2nd) | Final |
 | `round1` | Round 1 | Round 1 |
 | `round2` | Round 2 | Round 2 |
 | `third` | 3rd place ride-off | 3rd place |
 | `final1` | Final | Final |
 | `final2` | Final tie-break (the final finished level, so both teams rode again) | Tie-break |
 
-The legend gives one plain line each for the Placing ride and the Final
-tie-break.
+Changed 18 Nov 2026: the singles "Placing ride" was one stage for both
+deciding rides, so 2nd place (12 points, missed in the Final) sat above 3rd
+(14 points, carried in the ride-off) with the same label and a spectator could
+not tell why. They are now two stages named as the team ones are, a line above
+the table says places are won in the last ride and not on total points
+(`PLACES_DECIDED`), and the key (`legend.ts`) is back on the page as a closed
+"Key" section above the table.
 - Only 2026 exists. `src/lib/stats/seasons.ts` lists the seasons that have a
   file (newest first) and loads one, so adding a year later is adding a file
   and one line.
@@ -75,7 +81,7 @@ tie-break.
 |---|---|
 | Runs | runs ridden, unknown ones included |
 | C / S / M | carries, strikes, misses |
-| Qual, Aarhi 1, Aarhi 2, Placing | points in that stage; blank if the rider did not ride it; a dash if they rode it and no result is known |
+| Qual, Aarhi 1, Aarhi 2, 3rd place, Final | points in that stage; blank if the rider did not ride it; a dash if they rode it and no result is known |
 | Pts | 4 × C + 2 × S |
 | Pts/Run | Pts ÷ runs with a known result, 2 decimals |
 | Carry % | C ÷ runs with a known result |
@@ -154,10 +160,11 @@ season, and renders one client component that owns the interaction.
   standings; do not bring it back).
 - The table sits in its own horizontally scrollable region with the rank and
   name columns sticky on the left, and a visible hint that it scrolls.
-- Riders: the groups are Runs (Runs, C, S, M), Points by round, Total (Pts),
-  Rates (Pts/Run, Carry %, Hit %) and Result. Below `sm` only Total and
-  Result are on by default (who did what); Columns turns the rest back on. Teams: both groups (Points by round,
-  Result) are on, because the round points are the team's whole record.
+- A phone (820px and under) opens on the short table, which fits the screen
+  with the place in view: riders show Total and Result, teams show Result.
+  A "Summary / All columns" switch (phones only) lays out the whole table with
+  a 132px name column, scrolled sideways with the name held in place, so
+  nothing needs the phone turned (18 Nov 2026).
 - Popovers (Filters, Columns, Legend) must be usable by touch and keyboard and
   close on Escape and on outside click.
 
