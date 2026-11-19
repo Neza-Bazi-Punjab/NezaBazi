@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import PasswordField from "@/components/PasswordField";
-import PageHeader from "@/components/PageHeader";
-import SectionHeading from "@/components/SectionHeading";
+import PageTop from "@/components/redesign/PageTop";
+import f from "@/components/redesign/forms.module.css";
+import s from "@/components/redesign/shared.module.css";
 import { createClient } from "@/lib/supabase/client";
 
 export default function ResetPasswordPage() {
@@ -62,48 +64,50 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <>
-      <PageHeader
+    <div className={`${s.page} ${f.forms}`}>
+      <PageTop
+        small
         title="Set a New Password"
-        intro="Choose a new password for your account."
+        lead="Choose a new password for your account."
       />
 
-      <section className="bg-cream">
-        <div className="mx-auto max-w-xl px-6 py-16">
-          {sessionState === "missing" ? (
-            <>
-              <SectionHeading>Link Expired</SectionHeading>
-              <div className="mt-10 space-y-6">
-                <p className="leading-7 text-brown/85">
-                  This reset link is invalid or has expired. Please request a new one.
-                </p>
-                <a
+      <section className={f.band}>
+        <div className={s.wrap}>
+          <div className={`${f.col} ${f.box}`}>
+            {sessionState === "missing" ? (
+              <div className={f.stack}>
+                <h2 className={f.boxTitle}>Link Expired</h2>
+                <div className={f.text}>
+                  <p>This reset link is invalid or has expired. Please request a new one.</p>
+                </div>
+                <Link
                   href="/forgot-password"
-                  className="block w-full rounded-lg bg-bronze-deep px-6 py-3 text-center font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze"
+                  className={`${s.btn} ${s.primary} ${f.block} ${f.primaryHover}`}
                 >
                   Request a New Link
-                </a>
+                </Link>
               </div>
-            </>
-          ) : done ? (
-            <>
-              <SectionHeading>Password Updated</SectionHeading>
-              <p className="mt-10 leading-7 text-brown/85">
-                Your password has been changed. Taking you to your account…
-              </p>
-            </>
-          ) : (
-            <>
-              <SectionHeading>New Password</SectionHeading>
-              <form onSubmit={handleSubmit} className="mt-10 space-y-6">
-                <PasswordField
-                  label="New Password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={8}
-                  disabled={sessionState === "checking"}
-                />
+            ) : done ? (
+              <div className={f.stack}>
+                <h2 className={f.boxTitle}>Password Updated</h2>
+                <div className={f.text}>
+                  <p>Your password has been changed. Taking you to your account…</p>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className={f.form}>
+                <div>
+                  <PasswordField
+                    label="New Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                    disabled={sessionState === "checking"}
+                  />
+                  <p className={f.hint}>At least 8 characters.</p>
+                </div>
 
                 <PasswordField
                   label="Confirm New Password"
@@ -111,23 +115,24 @@ export default function ResetPasswordPage() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
                   minLength={8}
+                  autoComplete="new-password"
                   disabled={sessionState === "checking"}
                 />
 
-                {error && <p className="text-sm text-red-700">{error}</p>}
+                {error && <p className={f.err}>{error}</p>}
 
                 <button
                   type="submit"
                   disabled={loading || sessionState !== "ready"}
-                  className="w-full rounded-lg bg-bronze-deep px-6 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze disabled:opacity-60"
+                  className={`${s.btn} ${s.primary} ${f.block} ${f.primaryHover}`}
                 >
                   {loading ? "Updating..." : "Update Password"}
                 </button>
               </form>
-            </>
-          )}
+            )}
+          </div>
         </div>
       </section>
-    </>
+    </div>
   );
 }

@@ -1,14 +1,15 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import HeadshotUpload from "@/components/HeadshotUpload";
 import LocationPicker from "@/components/LocationPicker";
-import SectionHeading from "@/components/SectionHeading";
+import f from "@/components/redesign/forms.module.css";
+import sh from "@/components/redesign/shared.module.css";
 import { isValidEmail } from "@/lib/email-address";
 import { site } from "@/lib/site";
 import { displayEmail } from "@/lib/paper-registration";
+import a from "./account.module.css";
 
 export type AccountProfile = {
   id: string;
@@ -99,11 +100,6 @@ type ProfileDraft = {
   email: string;
 };
 
-const inputClassName =
-  "mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none";
-const displayClassName =
-  "mt-2 w-full rounded-lg border border-bronze/20 bg-parchment px-4 py-3 text-brown/75";
-
 const numberToInputValue = (value?: number | null) => (value == null ? "" : String(value));
 
 const dateFormatter = new Intl.DateTimeFormat("en-US", {
@@ -116,10 +112,8 @@ const formatDate = (value: string) => dateFormatter.format(new Date(value));
 
 const Detail = ({ label, value }: { label: string; value: string | number }) => (
   <div>
-    <p className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
-      {label}
-    </p>
-    <p className="mt-1 text-brown/85">{value}</p>
+    <p className={a.dlabel}>{label}</p>
+    <p className={a.dvalue}>{value}</p>
   </div>
 );
 
@@ -148,26 +142,18 @@ const CheckInStatus = ({
   code: string;
   checkedInAt: string | null;
 }) => (
-  <div className="rounded-lg border border-bronze/30 bg-cream p-4">
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <p className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
-          Check-in Code
-        </p>
-        <p className="mt-1 font-mono text-xl font-bold tracking-[0.15em] text-bronze-deep">
-          {code}
-        </p>
-      </div>
-      {checkedInAt ? (
-        <p className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark">
-          Checked in {formatDate(checkedInAt)}
-        </p>
-      ) : (
-        <p className="max-w-xs text-sm leading-6 text-brown/80">
-          {`Bring this to check-in on ${site.checkInDate}. Riders who do not check in are not entered into the brackets.`}
-        </p>
-      )}
+  <div className={a.code}>
+    <div>
+      <p className={a.codeLabel}>Check-in Code</p>
+      <p className={a.codeValue}>{code}</p>
     </div>
+    {checkedInAt ? (
+      <p className={a.codeNote}>Checked in {formatDate(checkedInAt)}</p>
+    ) : (
+      <p className={a.codeNote}>
+        {`Bring this to check-in on ${site.checkInDate}. Riders who do not check in are not entered into the brackets.`}
+      </p>
+    )}
   </div>
 );
 
@@ -307,11 +293,21 @@ export default function AccountPageClient({
     setSuccess(null);
   };
 
+  const smallOutline = `${sh.btn} ${sh.outline} ${f.smallBtn} ${f.outlineSmall} ${f.outlineHover}`;
+  const smallPrimary = `${sh.btn} ${sh.primary} ${f.smallBtn} ${f.primaryHover}`;
+
+  const shown = (value: string | number | null) =>
+    value === null || value === "" ? (
+      <p className={`${a.dvalue} ${a.notSet}`}>Not set</p>
+    ) : (
+      <p className={a.dvalue}>{value}</p>
+    );
+
   return (
-    <div className="space-y-12">
+    <div className={a.acct}>
       <section>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <SectionHeading>Account Info</SectionHeading>
+        <div className={a.head}>
+          <h2 className={a.h2}>Account Info</h2>
           {!editing ? (
             <button
               type="button"
@@ -320,17 +316,17 @@ export default function AccountPageClient({
                 setError(null);
                 setSuccess(null);
               }}
-              className="w-fit rounded-lg border border-bronze/20 px-4 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40"
+              className={smallOutline}
             >
               Edit
             </button>
           ) : (
-            <div className="flex gap-2">
+            <div className={a.actions}>
               <button
                 type="button"
                 onClick={saveProfile}
                 disabled={saving}
-                className="rounded-lg bg-bronze-deep px-4 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-cream transition-colors hover:bg-bronze disabled:opacity-60"
+                className={smallPrimary}
               >
                 Save
               </button>
@@ -338,7 +334,7 @@ export default function AccountPageClient({
                 type="button"
                 onClick={cancelEditing}
                 disabled={saving}
-                className="rounded-lg border border-bronze/20 px-4 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-bronze-dark transition-colors hover:border-bronze/40 disabled:opacity-60"
+                className={smallOutline}
               >
                 Cancel
               </button>
@@ -346,131 +342,141 @@ export default function AccountPageClient({
           )}
         </div>
 
-        <div className="mt-10 space-y-6 rounded-lg border border-bronze/20 bg-sand p-6">
+        <div className={f.box}>
           {/* Managed on its own rather than through Save/Cancel: the photo is
               uploaded the moment it is chosen, so tying it to the form's edit
               mode would leave a stored file that the account has not recorded
               if the rider cancelled. */}
-          <HeadshotUpload initialPath={profile.headshot_path} hint={null} />
-
-          <div>
-            <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
-              Full Name
-            </label>
-            {editing ? (
-              <input
-                value={draft.full_name}
-                onChange={(event) => updateDraft("full_name", event.target.value)}
-                className={inputClassName}
-              />
-            ) : (
-              <p className={displayClassName}>{profile.full_name || "Not set"}</p>
-            )}
+          <div className={a.who}>
+            <HeadshotUpload initialPath={profile.headshot_path} hint={null} />
           </div>
 
-          <div>
-            <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
-              Age
-            </label>
-            {editing ? (
-              <input
-                type="number"
-                value={draft.age}
-                onChange={(event) => updateDraft("age", event.target.value)}
-                min={1}
-                className={inputClassName}
-              />
-            ) : (
-              <p className={displayClassName}>{profile.age ?? "Not set"}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
-              Location
-            </label>
-            {editing ? (
-              <div className="mt-2">
-                <LocationPicker
-                  value={draft.location}
-                  onChange={(nextLocation) => updateDraft("location", nextLocation)}
+          <div className={a.details}>
+            <div>
+              <label htmlFor="account-name" className={a.dlabel}>
+                Full Name
+              </label>
+              {editing ? (
+                <input
+                  id="account-name"
+                  value={draft.full_name}
+                  onChange={(event) => updateDraft("full_name", event.target.value)}
+                  className={f.input}
                 />
-              </div>
-            ) : (
-              <p className={displayClassName}>{profile.location || "Not set"}</p>
-            )}
+              ) : (
+                shown(profile.full_name)
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="account-age" className={a.dlabel}>
+                Age
+              </label>
+              {editing ? (
+                <input
+                  id="account-age"
+                  type="number"
+                  value={draft.age}
+                  onChange={(event) => updateDraft("age", event.target.value)}
+                  min={1}
+                  className={f.input}
+                />
+              ) : (
+                shown(profile.age)
+              )}
+            </div>
+
+            <div className={editing ? a.span2 : undefined}>
+              <span className={a.dlabel}>Location</span>
+              {editing ? (
+                <div className={f.picker}>
+                  <LocationPicker
+                    value={draft.location}
+                    onChange={(nextLocation) => updateDraft("location", nextLocation)}
+                  />
+                </div>
+              ) : (
+                shown(profile.location)
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="account-phone" className={a.dlabel}>
+                Phone Number
+              </label>
+              {editing ? (
+                <input
+                  id="account-phone"
+                  type="tel"
+                  value={draft.phone}
+                  onChange={(event) => updateDraft("phone", event.target.value)}
+                  className={f.input}
+                />
+              ) : (
+                shown(profile.phone)
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="account-email" className={a.dlabel}>
+                Email
+              </label>
+              {editing ? (
+                <input
+                  id="account-email"
+                  type="email"
+                  value={draft.email}
+                  onChange={(event) => updateDraft("email", event.target.value)}
+                  className={f.input}
+                />
+              ) : (
+                shown(profile.email)
+              )}
+            </div>
           </div>
 
-          <div>
-            <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
-              Phone Number
-            </label>
-            {editing ? (
-              <input
-                type="tel"
-                value={draft.phone}
-                onChange={(event) => updateDraft("phone", event.target.value)}
-                className={inputClassName}
-              />
-            ) : (
-              <p className={displayClassName}>{profile.phone || "Not set"}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
-              Email
-            </label>
-            {editing ? (
-              <input
-                type="email"
-                value={draft.email}
-                onChange={(event) => updateDraft("email", event.target.value)}
-                className={inputClassName}
-              />
-            ) : (
-              <p className={displayClassName}>{profile.email || "Not set"}</p>
-            )}
-          </div>
-
-          {error && <p className="text-sm text-red-700">{error}</p>}
-          {success && <p className="text-sm text-brown/80">{success}</p>}
+          {(error || success) && (
+            <div className={a.messages}>
+              {error && <p className={f.err}>{error}</p>}
+              {success && <p className={f.ok}>{success}</p>}
+            </div>
+          )}
         </div>
       </section>
 
       <section>
-        <SectionHeading>Active Registrations</SectionHeading>
+        <div className={a.head}>
+          <h2 className={a.h2}>Active Registrations</h2>
+        </div>
 
-        <div className="mt-10 space-y-6">
+        <div className={a.regs}>
           {!soloRegistration &&
           enteredRegistrations.length === 0 &&
           !team &&
           memberships.length === 0 ? (
-            <div className="space-y-6 rounded-lg border border-bronze/20 bg-sand p-6">
-              <p className="leading-7 text-brown/85">
-                You haven&apos;t registered yet.
+            /* Online registration is closed (the register pages are admin-only
+               since the 2026 championship), so there is nothing to link to. */
+            <div className={`${f.box} ${f.text}`}>
+              <p>
+                You haven&apos;t registered yet. Registration for the next championship
+                isn&apos;t open yet.
               </p>
-              <Link
-                href="/register"
-                className="block w-full rounded-lg bg-bronze-deep px-6 py-3 text-center font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze sm:w-fit"
-              >
-                Register
-              </Link>
             </div>
           ) : (
             <>
               {soloRegistration && (
-                <article className="space-y-6 rounded-lg border border-bronze/20 bg-sand p-6">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <h3 className="font-display text-xl font-bold uppercase tracking-wide text-bronze-dark">
-                      Solo Registration
-                    </h3>
-                    <p className="text-sm text-brown/80">
-                      Registered {formatDate(soloRegistration.created_at)}
-                    </p>
+                <article className={f.box}>
+                  <div className={a.regHead}>
+                    <h3>Solo Registration</h3>
+                    <p className={a.meta}>Registered {formatDate(soloRegistration.created_at)}</p>
                   </div>
 
-                  <div className="grid gap-4 sm:grid-cols-2">
+                  <CheckInStatus
+                    code={soloRegistration.confirmation_code}
+                    checkedInAt={soloRegistration.checked_in_at}
+                  />
+
+                  <div className={a.details}>
                     <Detail label="Full Name" value={soloRegistration.full_name} />
                     <ParentNames
                       fatherName={soloRegistration.father_name}
@@ -479,53 +485,31 @@ export default function AccountPageClient({
                     <Detail label="Age" value={soloRegistration.age} />
                     <Detail label="Location" value={soloRegistration.location} />
                     <Detail label="Phone" value={soloRegistration.phone} />
-                    <Detail
-                      label="Email"
-                      value={displayEmail(soloRegistration.email)}
-                    />
-                    <Detail
-                      label="Experience"
-                      value={soloRegistration.years_experience}
-                    />
+                    <Detail label="Email" value={displayEmail(soloRegistration.email)} />
+                    <Detail label="Experience" value={soloRegistration.years_experience} />
                     <Detail label="Horse Age" value={soloRegistration.horse_age} />
                     <Detail label="Horse Breed" value={soloRegistration.horse_breed} />
                   </div>
-
-                  <CheckInStatus
-                    code={soloRegistration.confirmation_code}
-                    checkedInAt={soloRegistration.checked_in_at}
-                  />
                 </article>
               )}
 
               {enteredRegistrations.length > 0 && (
-                <article className="space-y-6 rounded-lg border border-bronze/20 bg-sand p-6">
-                  <div>
-                    <h3 className="font-display text-xl font-bold uppercase tracking-wide text-bronze-dark">
-                      Registrations You Entered
-                    </h3>
-                    <p className="mt-2 leading-7 text-brown/85">
-                      Riders you registered from this account. Their details are edited by an
-                      administrator, not here.
-                    </p>
+                <article className={f.box}>
+                  <div className={a.regHead}>
+                    <h3>Registrations You Entered</h3>
                   </div>
+                  <p className={a.note}>
+                    Riders you registered from this account. Their details are edited by an
+                    administrator, not here.
+                  </p>
 
-                  <ul className="space-y-3">
+                  <ul className={a.list}>
                     {enteredRegistrations.map((entry) => (
-                      <li
-                        key={entry.id}
-                        className="flex flex-col gap-1 rounded-lg border border-bronze/20 bg-cream p-4 sm:flex-row sm:items-center sm:justify-between"
-                      >
-                        <span className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink">
-                          {entry.full_name}
-                        </span>
-                        <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                          <span className="font-mono text-sm font-bold tracking-[0.15em] text-bronze-deep">
-                            {entry.confirmation_code}
-                          </span>
-                          <span className="text-sm text-brown/80">
-                            Registered {formatDate(entry.created_at)}
-                          </span>
+                      <li key={entry.id}>
+                        <span className={a.entryName}>{entry.full_name}</span>
+                        <span className={a.meta}>
+                          <span className={a.entryCode}>{entry.confirmation_code}</span>
+                          {" · "}Registered {formatDate(entry.created_at)}
                         </span>
                       </li>
                     ))}
@@ -534,25 +518,16 @@ export default function AccountPageClient({
               )}
 
               {memberships.map(({ member, team: membershipTeam, teammates }) => (
-                <article
-                  key={member.id}
-                  className="space-y-6 rounded-lg border border-bronze/20 bg-sand p-6"
-                >
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <article key={member.id} className={f.box}>
+                  <div className={a.regHead}>
                     <div>
-                      <h3 className="font-display text-xl font-bold uppercase tracking-wide text-bronze-dark">
-                        Team Registration
-                      </h3>
-                      <p className="mt-1 font-display text-sm font-semibold uppercase tracking-[0.12em] text-brown/80">
-                        Team: {membershipTeam?.team_name ?? "Unknown"}
-                      </p>
+                      <h3>Team Registration</h3>
+                      <p className={a.teamName}>Team: {membershipTeam?.team_name ?? "Unknown"}</p>
                     </div>
-                    <p className="text-sm text-brown/80">
-                      Registered {formatDate(member.created_at)}
-                    </p>
+                    <p className={a.meta}>Registered {formatDate(member.created_at)}</p>
                   </div>
 
-                  <p className="leading-7 text-brown/85">
+                  <p className={a.note}>
                     You are registered as a rider on this team by its team leader.
                   </p>
 
@@ -561,7 +536,7 @@ export default function AccountPageClient({
                     checkedInAt={member.checked_in_at}
                   />
 
-                  <div className="grid gap-4 sm:grid-cols-2">
+                  <div className={a.details}>
                     <Detail label="Full Name" value={member.full_name} />
                     <ParentNames
                       fatherName={member.father_name}
@@ -577,11 +552,9 @@ export default function AccountPageClient({
                   </div>
 
                   {teammates.length > 0 && (
-                    <div>
-                      <p className="font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink">
-                        Teammates
-                      </p>
-                      <p className="mt-1 text-brown/85">
+                    <div className={a.teammates}>
+                      <p className={a.dlabel}>Teammates</p>
+                      <p className={a.dvalue}>
                         {teammates
                           .map(
                             (teammate) =>
@@ -595,60 +568,42 @@ export default function AccountPageClient({
               ))}
 
               {team && (
-                <article className="space-y-6 rounded-lg border border-bronze/20 bg-sand p-6">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <article className={f.box}>
+                  <div className={a.regHead}>
                     <div>
-                      <h3 className="font-display text-xl font-bold uppercase tracking-wide text-bronze-dark">
-                        Team Registration
-                      </h3>
-                      <p className="mt-1 font-display text-sm font-semibold uppercase tracking-[0.12em] text-brown/80">
-                        Team: {team.team_name}
-                      </p>
+                      <h3>Team Registration</h3>
+                      <p className={a.teamName}>Team: {team.team_name}</p>
                     </div>
-                    <p className="text-sm text-brown/80">
-                      Registered {formatDate(team.created_at)}
-                    </p>
+                    <p className={a.meta}>Registered {formatDate(team.created_at)}</p>
                   </div>
 
-                  <div className="space-y-4">
-                    {teamMembers.map((member) => (
-                      <div
-                        key={member.id}
-                        className="space-y-4 rounded-lg border border-bronze/20 bg-cream p-4"
-                      >
-                        <h4 className="font-display text-sm font-bold uppercase tracking-[0.12em] text-bronze-dark">
-                          {member.is_leader ? "Team Leader" : "Team Member"}:{" "}
-                          {member.full_name}
-                        </h4>
+                  {teamMembers.map((member) => (
+                    <div key={member.id} className={a.member}>
+                      <h4>
+                        {member.is_leader ? "Team Leader" : "Team Member"}: {member.full_name}
+                      </h4>
 
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <ParentNames
-                            fatherName={member.father_name}
-                            motherName={member.mother_name}
-                          />
-                          <Detail label="Age" value={member.age} />
-                          <Detail label="Location" value={member.location} />
-                          <Detail label="Phone" value={member.phone} />
-                          <Detail
-                            label="Email"
-                            value={displayEmail(member.email)}
-                          />
-                          <Detail label="Experience" value={member.years_experience} />
-                          <Detail
-                            label="Horse Name"
-                            value={member.horse_name ?? "—"}
-                          />
-                          <Detail label="Horse Age" value={member.horse_age} />
-                          <Detail label="Horse Breed" value={member.horse_breed} />
-                        </div>
-
-                        <CheckInStatus
-                          code={member.confirmation_code}
-                          checkedInAt={member.checked_in_at}
+                      <div className={a.details}>
+                        <ParentNames
+                          fatherName={member.father_name}
+                          motherName={member.mother_name}
                         />
+                        <Detail label="Age" value={member.age} />
+                        <Detail label="Location" value={member.location} />
+                        <Detail label="Phone" value={member.phone} />
+                        <Detail label="Email" value={displayEmail(member.email)} />
+                        <Detail label="Experience" value={member.years_experience} />
+                        <Detail label="Horse Name" value={member.horse_name ?? "—"} />
+                        <Detail label="Horse Age" value={member.horse_age} />
+                        <Detail label="Horse Breed" value={member.horse_breed} />
                       </div>
-                    ))}
-                  </div>
+
+                      <CheckInStatus
+                        code={member.confirmation_code}
+                        checkedInAt={member.checked_in_at}
+                      />
+                    </div>
+                  ))}
                 </article>
               )}
             </>

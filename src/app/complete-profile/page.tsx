@@ -11,8 +11,9 @@
 // this page has to hand them onward to wherever they were originally going.
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import PageHeader from "@/components/PageHeader";
-import SectionHeading from "@/components/SectionHeading";
+import PageTop from "@/components/redesign/PageTop";
+import f from "@/components/redesign/forms.module.css";
+import s from "@/components/redesign/shared.module.css";
 import { isAccountProfileComplete } from "@/lib/account-profile";
 import { getPostSignupRedirect } from "@/lib/safe-redirect";
 import { createClient } from "@/lib/supabase/server";
@@ -55,32 +56,33 @@ export default async function CompleteProfilePage({
   const metadata = user.user_metadata ?? {};
 
   return (
-    <>
-      <PageHeader
+    <div className={`${s.page} ${f.forms}`}>
+      <PageTop
+        small
         title="Complete Your Profile"
-        intro="Google gave us your name and email. We need a few more details before you can register."
+        lead="Google gave us your name and email. We need a few more details to finish your account."
       />
 
-      <section className="bg-cream">
-        <div className="mx-auto max-w-xl px-6 py-16">
-          <SectionHeading>Your Details</SectionHeading>
-
-          <CompleteProfileForm
-            next={destination}
-            email={user.email ?? ""}
-            initialFullName={
-              typeof metadata.full_name === "string" ? metadata.full_name : ""
-            }
-            initialAge={
-              metadata.age == null || metadata.age === "" ? "" : String(metadata.age)
-            }
-            initialLocation={
-              typeof metadata.location === "string" ? metadata.location : ""
-            }
-            initialPhone={typeof metadata.phone === "string" ? metadata.phone : ""}
-          />
+      <section className={f.band}>
+        <div className={s.wrap}>
+          <div className={`${f.col} ${f.box}`}>
+            <CompleteProfileForm
+              next={destination}
+              email={user.email ?? ""}
+              initialFullName={
+                typeof metadata.full_name === "string" ? metadata.full_name : ""
+              }
+              initialAge={
+                metadata.age == null || metadata.age === "" ? "" : String(metadata.age)
+              }
+              initialLocation={
+                typeof metadata.location === "string" ? metadata.location : ""
+              }
+              initialPhone={typeof metadata.phone === "string" ? metadata.phone : ""}
+            />
+          </div>
         </div>
       </section>
-    </>
+    </div>
   );
 }

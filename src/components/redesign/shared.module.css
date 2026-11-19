@@ -191,3 +191,25 @@
     padding: 36px 0 40px;
   }
 }
+
+/* The shorter header band for the sign-in, account and privacy pages
+   (handoff/mock-home/auth.html, "Small band"). */
+.topSmall {
+  padding: 36px 0 34px;
+}
+
+.topSmall .h1 {
+  font-size: clamp(32px, 3.6vw, 44px);
+  margin-top: 0;
+}
+
+.topSmall .lead {
+  font-size: 16px;
+  margin-top: 10px;
+}
+
+@media (max-width: 820px) {
+  .topSmall {
+    padding: 28px 0;
+  }
+}

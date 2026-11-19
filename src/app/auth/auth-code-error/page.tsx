@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import PageHeader from "@/components/PageHeader";
-import SectionHeading from "@/components/SectionHeading";
+import PageTop from "@/components/redesign/PageTop";
+import f from "@/components/redesign/forms.module.css";
+import s from "@/components/redesign/shared.module.css";
 
 export const metadata: Metadata = {
   title: "Link Expired",
@@ -10,39 +11,34 @@ export const metadata: Metadata = {
 
 export default function AuthCodeErrorPage() {
   return (
-    <>
-      <PageHeader
+    <div className={`${s.page} ${f.forms}`}>
+      <PageTop
+        small
         title="Link Expired"
-        intro="This link is invalid or has already been used."
+        lead="This link is invalid or has already been used."
       />
 
-      <section className="bg-cream">
-        <div className="mx-auto max-w-xl px-6 py-16">
-          <SectionHeading>Try Again</SectionHeading>
+      <section className={f.band}>
+        <div className={s.wrap}>
+          <div className={`${f.col} ${f.box} ${f.stack}`}>
+            <div className={f.text}>
+              <p>
+                Confirmation and reset links can only be used once and expire after a
+                short time. Please request a new one.
+              </p>
+            </div>
 
-          <div className="mt-10 space-y-6">
-            <p className="leading-7 text-brown/85">
-              Confirmation and reset links can only be used once and expire after a
-              short time. Please request a new one.
-            </p>
-
-            <div className="space-y-3">
-              <Link
-                href="/login"
-                className="block w-full rounded-lg bg-bronze-deep px-6 py-3 text-center font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze"
-              >
-                Go to Login
-              </Link>
-              <Link
-                href="/forgot-password"
-                className="block text-center text-sm font-semibold text-bronze-deep underline"
-              >
+            <Link href="/login" className={`${s.btn} ${s.primary} ${f.block} ${f.primaryHover}`}>
+              Go to Login
+            </Link>
+            <p className={f.small}>
+              <Link href="/forgot-password" className={f.link}>
                 Reset your password
               </Link>
-            </div>
+            </p>
           </div>
         </div>
       </section>
-    </>
+    </div>
   );
 }

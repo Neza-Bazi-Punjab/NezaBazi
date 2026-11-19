@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import PageHeader from "@/components/PageHeader";
 import ResendConfirmation from "@/components/ResendConfirmation";
-import SectionHeading from "@/components/SectionHeading";
+import PageTop from "@/components/redesign/PageTop";
+import f from "@/components/redesign/forms.module.css";
+import s from "@/components/redesign/shared.module.css";
 import { getPostSignupRedirect } from "@/lib/safe-redirect";
 
 export const metadata: Metadata = {
@@ -21,52 +22,47 @@ export default async function SignupSuccessPage({ searchParams }: SignupSuccessP
   )}`;
 
   return (
-    <>
-      <PageHeader
+    <div className={`${s.page} ${f.forms}`}>
+      <PageTop
+        small
         title="Confirm Your Email"
-        intro="Your account is almost ready — one quick step to go."
+        lead="Your account is almost ready, one quick step to go."
       />
 
-      <section className="bg-cream">
-        <div className="mx-auto max-w-xl px-6 py-16">
-          <SectionHeading>Check Your Inbox</SectionHeading>
+      <section className={f.band}>
+        <div className={s.wrap}>
+          <div className={`${f.col} ${f.box} ${f.stack}`}>
+            <div className={f.text}>
+              <p>
+                We&apos;ve sent a confirmation link to your email address. Click the
+                link to activate your account, then log in.
+              </p>
+              <p className={f.muted}>
+                Can&apos;t find it? Check your spam folder. The email comes from the
+                Neza Bazi Punjab Championship.
+              </p>
+              <p className={f.muted}>
+                {`If you have signed up with this address before, no new email is sent. Use the resend button below, or log in if your account is already confirmed.`}
+              </p>
+            </div>
 
-          <div className="mt-10 space-y-6">
-            <p className="leading-7 text-brown/85">
-              We&apos;ve sent a confirmation link to your email address. Click the
-              link to activate your account, then log in to register for the
-              championship.
-            </p>
-            <p className="leading-7 text-brown/70">
-              Can&apos;t find it? Check your spam folder — the email comes from the
-              Neza Bazi Punjab Championship.
-            </p>
-            <p className="leading-7 text-brown/70">
-              {`If you have signed up with this address before, no new email is sent — use the resend button below, or log in if your account is already confirmed.`}
-            </p>
-
-            <div className="rounded-lg border border-bronze/25 bg-sand p-5">
+            <div className={f.panel}>
               <ResendConfirmation />
             </div>
 
-            <div className="space-y-3">
-              <Link
-                href={loginHref}
-                className="block w-full rounded-lg bg-bronze-deep px-6 py-3 text-center font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze"
-              >
-                Go to Login
-              </Link>
+            <Link href={loginHref} className={`${s.btn} ${s.primary} ${f.block} ${f.primaryHover}`}>
+              Go to Login
+            </Link>
 
-              <p className="text-center text-sm text-brown/80">
-                Want to return later?{" "}
-                <Link href="/" className="font-semibold text-bronze-deep underline">
-                  Back to home
-                </Link>
-              </p>
-            </div>
+            <p className={f.small}>
+              Want to return later?{" "}
+              <Link href="/" className={f.link}>
+                Back to home
+              </Link>
+            </p>
           </div>
         </div>
       </section>
-    </>
+    </div>
   );
 }

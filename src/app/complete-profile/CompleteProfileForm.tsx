@@ -3,14 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import LocationPicker from "@/components/LocationPicker";
+import f from "@/components/redesign/forms.module.css";
+import s from "@/components/redesign/shared.module.css";
 import { syncAccountRegistrations } from "@/lib/sync-account-registrations";
-
-const inputClassName =
-  "mt-2 w-full rounded-lg border border-bronze/20 bg-sand px-4 py-3 text-brown focus:border-bronze focus:outline-none";
-const lockedInputClassName =
-  "mt-2 w-full cursor-not-allowed rounded-lg border border-bronze/20 bg-parchment px-4 py-3 text-brown/70 focus:outline-none";
-const labelClassName =
-  "font-display text-sm font-semibold uppercase tracking-[0.12em] text-ink";
 
 export default function CompleteProfileForm({
   next,
@@ -104,65 +99,72 @@ export default function CompleteProfileForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="mt-10 space-y-6">
+    <form onSubmit={handleSubmit} className={f.form}>
       <div>
-        <label className={labelClassName}>Full Name</label>
+        <label htmlFor="profile-name">Full Name</label>
         <input
+          id="profile-name"
           type="text"
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
           required
-          className={inputClassName}
+          autoComplete="name"
+          className={f.input}
         />
       </div>
 
-      <div>
-        <label className={labelClassName}>Age</label>
-        <input
-          type="number"
-          value={age}
-          onChange={(e) => setAge(e.target.value)}
-          required
-          min={1}
-          className={inputClassName}
-        />
-      </div>
+      <div className={f.row2}>
+        <div>
+          <label htmlFor="profile-age">Age</label>
+          <input
+            id="profile-age"
+            type="number"
+            value={age}
+            onChange={(e) => setAge(e.target.value)}
+            required
+            min={1}
+            className={f.input}
+          />
+        </div>
 
-      <div>
-        <label className={labelClassName}>Location</label>
-        <div className="mt-2">
-          <LocationPicker value={location} onChange={setLocation} />
+        <div>
+          <label htmlFor="profile-phone">Phone Number</label>
+          <input
+            id="profile-phone"
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            required
+            autoComplete="tel"
+            className={f.input}
+          />
         </div>
       </div>
 
       <div>
-        <label className={labelClassName}>Phone Number</label>
-        <input
-          type="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          required
-          className={inputClassName}
-        />
+        <span className={f.label}>Location</span>
+        <div className={f.picker}>
+          <LocationPicker value={location} onChange={setLocation} />
+        </div>
       </div>
 
       {/* Shown, not editable. This address is the identity every entry is
           matched on, and it came verified from Google — changing it belongs on
           the account page, where the confirmation flow that protects it runs. */}
       <div>
-        <label className={labelClassName}>Email</label>
-        <input type="email" value={email} readOnly className={lockedInputClassName} />
-        <p className="mt-2 text-sm text-brown/70">
+        <label htmlFor="profile-email">Email</label>
+        <input id="profile-email" type="email" value={email} readOnly className={`${f.input} ${f.locked}`} />
+        <p className={f.hint}>
           From your Google account. You can change it later on your account page.
         </p>
       </div>
 
-      {error && <p className="text-sm text-red-700">{error}</p>}
+      {error && <p className={f.err}>{error}</p>}
 
       <button
         type="submit"
         disabled={saving}
-        className="w-full rounded-lg bg-bronze-deep px-6 py-3 font-display text-sm font-semibold uppercase tracking-[0.15em] text-cream transition-colors hover:bg-bronze disabled:opacity-60"
+        className={`${s.btn} ${s.primary} ${f.block} ${f.primaryHover}`}
       >
         {saving ? "Saving..." : "Save and Continue"}
       </button>
