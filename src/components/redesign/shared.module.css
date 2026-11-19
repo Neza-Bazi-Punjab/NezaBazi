@@ -10,7 +10,9 @@
   --bronze-dark: #8a3f0e;
   --brown: #5a3517;
   --ink: #2e1d0e;
-  --display: var(--font-cinzel);
+  /* The plain heading font (Oswald), not the carved capitals of the first
+     redesign: asked for as "the simple one", 19 Nov 2026 */
+  --display: var(--font-oswald), sans-serif;
   --body: var(--font-dmsans);
   --pad: 40px;
   flex: 1;

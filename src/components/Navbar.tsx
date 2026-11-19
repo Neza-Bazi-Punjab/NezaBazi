@@ -38,7 +38,7 @@ const staffLinksByRole: Record<ProfileRole, readonly { href: string; label: stri
 const SHOWN_STAFF_LINKS: ReadonlySet<string> = new Set(["/admin"]);
 
 /* Sticky top navigation, in the 2026 redesign's look (dark brown, like the
-   footer; Cinzel logo, DM Sans tabs in cream, the active tab gold, the gold
+   footer; Oswald logo, DM Sans tabs in cream, the active tab gold, the gold
    "2026 Champions" pill), the same on every page. The account items (staff
    links, My Account, Log Out or Log In) follow the pill on desktop; on
    phones and tablets the tabs and account items sit in a dropdown that
