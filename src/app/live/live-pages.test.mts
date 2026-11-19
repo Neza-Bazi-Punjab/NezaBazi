@@ -259,7 +259,7 @@ test("/live is taken down for now: it sends visitors to /stats, linked instead",
   assert.ok(navLinks.some((link) => link.href === "/stats" && link.label === "Stats"));
   assert.ok(!navLinks.some((link) => (link.href as string) === "/live"));
   assert.ok(!footerQuickLinks.some((link) => (link.href as string) === "/live"));
-  assert.equal(navLinks.length, 5, "five-tab navbar: Home, Stats, Gallery, Event, Rulebook");
+  assert.equal(navLinks.length, 5, "five-tab navbar: Home, Gallery, Stats, Event, Rulebook");
 });
 
 test("the sitemap lists /stats and leaves out the staff panels and overlays", () => {

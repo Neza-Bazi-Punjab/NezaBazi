@@ -152,8 +152,8 @@ test("the public tabs are untouched: staff links are never tabs", () => {
     navLinks.map(({ href, label }) => ({ href, label })),
     [
       { href: "/", label: "Home" },
-      { href: "/stats", label: "Stats" },
       { href: "/gallery", label: "Gallery" },
+      { href: "/stats", label: "Stats" },
       { href: "/event", label: "Event" },
       { href: "/rules", label: "Rulebook" },
     ]

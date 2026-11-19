@@ -388,7 +388,7 @@
   left: 0;
   right: 0;
   bottom: -1px;
-  height: 120px;
+  height: 48px;
   background: linear-gradient(to bottom, rgba(247, 239, 228, 0), var(--sand));
   pointer-events: none;
 }
