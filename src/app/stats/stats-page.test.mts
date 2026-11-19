@@ -193,18 +193,16 @@ test("phones: the table scrolls in its own region, rank and name stay put", () =
   assert.match(browser, /role="region"[^>]*className=\{t\.scroll\}/);
   const css = read("../../components/stats/stats.module.css");
   assert.match(css, /\.scroll \{\s*position: relative;\s*overflow-x: auto;/);
-  // A phone gets two short tables that each fit the screen, under a Result /
-  // Rounds switch, and a tap on a row slides up that row's card (owner, 19 Nov
-  // 2026). Nothing scrolls sideways and nothing is out of reach.
-  assert.doesNotMatch(browser, /onPhone|phHide|allColumns|swipe/i);
-  assert.match(browser, /role="group" aria-label="Table" className=\{t\.views\}/);
-  assert.match(browser, /aria-pressed=\{phoneView === "result"\} onClick=\{\(\) => setPhoneView\("result"\)\}>\s*Result/);
-  assert.match(browser, /aria-pressed=\{phoneView === "rounds"\} onClick=\{\(\) => setPhoneView\("rounds"\)\}>\s*Rounds/);
-  assert.match(browser, /\$\{phoneView === "rounds" \? t\.vRounds : t\.vResult\}/);
+  // A phone gets one short table that fits the screen: rank, name and each
+  // round's points, with the medal under the name so the winners are plain.
+  // No switch (owner, 19 Nov 2026); a tap on a row slides up that row's card.
+  // Nothing scrolls sideways and nothing is out of reach.
+  assert.doesNotMatch(browser, /onPhone|phHide|allColumns|phoneView|swipe/i);
   assert.match(css, /@media \(max-width: 820px\)[\s\S]*\.table \{\s*table-layout: auto;\s*min-width: 0 !important;/);
-  assert.match(css, /\.table\.vResult \[data-g="rounds"\],[\s\S]*\.table\.vRounds \[data-g="result"\] \{\s*display: none;/);
-  // The switch, the card's arrow and the short headings are for phones only.
-  assert.match(css, /\.views,\s*\.more,\s*\.lblShort \{\s*display: none;\s*\}/);
+  assert.match(css, /\.table \[data-g="runs"\],\s*\.table \[data-g="totals"\],\s*\.table \[data-g="result"\] \{\s*display: none;/);
+  assert.match(browser, /<span aria-hidden className=\{t\.won\}>/);
+  // The hint, the medal, the card's arrow and the short headings are for phones only.
+  assert.match(css, /\.tap,\s*\.won,\s*\.more,\s*\.lblShort \{\s*display: none;\s*\}/);
   // Every round column has a short heading for the Rounds table.
   for (const column of [...RIDER_COLUMNS, ...TEAM_COLUMNS].filter((candidate) => candidate.group === "rounds")) {
     assert.ok(browser.includes(`"${column.id}": "`), `${column.id} has a phone heading`);

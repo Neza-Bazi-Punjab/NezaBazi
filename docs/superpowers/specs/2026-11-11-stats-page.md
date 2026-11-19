@@ -160,14 +160,13 @@ season, and renders one client component that owns the interaction.
   standings; do not bring it back).
 - The table sits in its own horizontally scrollable region with the rank and
   name columns sticky on the left, and a visible hint that it scrolls.
-- A phone (820px and under) gets two short tables that each fit the screen,
-  under a Result / Rounds switch: Result is rank, name, Pts (riders), Reached
-  and Place; Rounds is rank, name and each round's points under short
-  headings (Qual, A1, A2, 3rd, Final; teams R1, R2, 3rd, Final, T-B). Tapping
-  a row slides up that rider's or team's card: name, horse and place or the
-  team's riders, the medal, every round across, each run in words, and the
-  run counts. Nothing scrolls sideways (owner, 19 Nov 2026, after the
-  leaderboard of a well-known sports app).
+- A phone (820px and under) gets one short table that fits the screen: rank,
+  name (medal under it for 1st, 2nd and 3rd, then horse and place) and each
+  round's points under short headings (Qual, A1, A2, 3rd, Final; teams R1,
+  R2, 3rd, Final, T-B). No switch. Tapping a row slides up that rider's or
+  team's card: name, horse and place or the team's riders, the medal, round
+  reached and points, every round across, each run in words, and the run
+  counts. Nothing scrolls sideways (owner, 19 Nov 2026).
 - The Rates columns (Pts/Run, Carry %, Hit %) were removed on 19 Nov 2026
   (owner: not needed).
 - Popovers (Filters, Columns, Legend) must be usable by touch and keyboard and

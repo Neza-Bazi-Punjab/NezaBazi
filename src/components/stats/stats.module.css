@@ -169,9 +169,10 @@
   outline-offset: 2px;
 }
 
-/* Phones only: the Result / Rounds switch, the arrow that opens a card and
-   the short round headings */
-.views,
+/* Phones only: the hint, the medal under a name, the arrow that opens a card
+   and the short round headings */
+.tap,
+.won,
 .more,
 .lblShort {
   display: none;
@@ -456,6 +457,17 @@
   justify-content: flex-start;
 }
 
+/* Numbers sit centred under their headings. The heading's left padding
+   balances the room kept for its sort arrow, so the two line up. */
+.table tbody td:not(.l):not(.rk) {
+  text-align: center;
+}
+
+.table thead th:not(.l):not(:first-child) .sort {
+  justify-content: center;
+  padding-left: 21px;
+}
+
 /* The arrow's space is always kept, so a heading never changes width */
 .ar {
   display: inline-block;
@@ -671,8 +683,8 @@
     font-size: 30px;
   }
 
-  /* Two short tables that each fit the screen, under the Result / Rounds
-     switch. No group headings, and nothing scrolls sideways. */
+  /* One short table that fits the screen: rank, name and each round's
+     points. No group headings, and nothing scrolls sideways. */
   .table {
     table-layout: auto;
     min-width: 0 !important;
@@ -683,11 +695,9 @@
   }
 
   .table thead tr.grp,
-  .table.vResult [data-g="runs"],
-  .table.vResult [data-g="rounds"],
-  .table.vRounds [data-g="runs"],
-  .table.vRounds [data-g="totals"],
-  .table.vRounds [data-g="result"] {
+  .table [data-g="runs"],
+  .table [data-g="totals"],
+  .table [data-g="result"] {
     display: none;
   }
 
@@ -699,67 +709,62 @@
     display: none;
   }
 
-  /* Five round columns fit beside the name: no room kept for a sort arrow
-     that is not showing, and tighter cells */
-  .table.vRounds .ar.off {
-    display: none;
-  }
-
-  .table.vRounds .sort {
-    padding: 12px 4px;
-  }
-
-  .table.vRounds td {
-    padding: 0 5px;
-  }
-
-  .table.vRounds .nm {
-    min-width: 104px;
-  }
-
   .lblShort {
     display: inline;
   }
 
-  .views {
-    display: flex;
-    flex-wrap: wrap;
+  /* Five round columns fit beside the name: no room kept for a sort arrow
+     that is not showing, and tighter cells */
+  .table .ar.off {
+    display: none;
+  }
+
+  .table .sort {
+    padding: 12px 4px;
+  }
+
+  .table thead th:not(.l):not(:first-child) .sort {
+    padding-left: 4px;
+  }
+
+  .table td {
+    padding: 0 5px;
+  }
+
+  .table .nm {
+    min-width: 100px;
+  }
+
+  .table td {
+    padding: 0 4px;
+  }
+
+  .status {
+    font-size: 11px;
+  }
+
+  /* Who won: the medal sits right under the name */
+  .won {
+    display: block;
+    margin: 3px 0 2px;
+  }
+
+  .won .med {
+    padding: 2px 7px;
+    font-size: 10px;
+  }
+
+  .tap {
+    display: block;
     flex-basis: 100%;
-    align-items: center;
-    gap: 8px;
+    font-size: 12.5px;
+    color: #7a5a3c;
   }
 
-  .views button {
-    height: 40px;
-    padding: 0 18px;
-    font-family: var(--display);
-    font-weight: 700;
-    font-size: 12px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--brown);
-    background: none;
-    border: 1.5px solid var(--brown);
-    border-radius: 6px;
-    cursor: pointer;
-  }
-
-  .views button[aria-pressed="true"] {
-    background: var(--brown);
-    color: var(--cream);
-  }
-
-  .views button:focus-visible,
   .more:focus-visible,
   .sheetClose:focus-visible {
     outline: 2px solid var(--bronze);
     outline-offset: 2px;
-  }
-
-  .views span {
-    margin-left: auto;
-    font-size: 12.5px;
-    color: #7a5a3c;
   }
 
   .table tbody th.nm {
@@ -793,10 +798,6 @@
   .table tbody th.nm,
   .table td.l {
     white-space: normal;
-  }
-
-  .table .nm {
-    min-width: 120px;
   }
 
   /* A long list of a team's riders keeps to two lines on a phone */

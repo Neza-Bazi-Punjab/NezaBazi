@@ -40,9 +40,10 @@ import t from "./stats.module.css";
    view. Every column has a fixed width and every row a fixed height, so
    sorting or paging never moves the table: only what is inside changes.
 
-   A phone gets two short tables that each fit the screen, under a Result /
-   Rounds switch, and a tap on a row slides up that rider's or team's card
-   with every round on it. Nothing scrolls sideways. */
+   A phone gets one short table that fits the screen: rank, name (with the
+   medal under it, so the winners are plain) and each round's points. A tap
+   on a row slides up that rider's or team's card with everything on it.
+   Nothing scrolls sideways. */
 
 export const PAGE_SIZE = 25;
 
@@ -194,8 +195,7 @@ function Browser<
     direction: "ascending",
   });
   const [page, setPage] = useState(1);
-  /* Phones: which short table is showing, and whose card is up. */
-  const [phoneView, setPhoneView] = useState<"result" | "rounds">("result");
+  /* Phones: whose card is up. */
   const [openId, setOpenId] = useState<string | null>(null);
   const sheetRef = useRef<HTMLDialogElement>(null);
   const openRow = openId ? (rows.find((row) => row.id === openId) ?? null) : null;
@@ -359,15 +359,7 @@ function Browser<
             </select>
           </>
         )}
-        <div role="group" aria-label="Table" className={t.views}>
-          <button type="button" aria-pressed={phoneView === "result"} onClick={() => setPhoneView("result")}>
-            Result
-          </button>
-          <button type="button" aria-pressed={phoneView === "rounds"} onClick={() => setPhoneView("rounds")}>
-            Rounds
-          </button>
-          <span>Tap a {config.noun} for more.</span>
-        </div>
+        <span className={t.tap}>Points in each round. Tap a {config.noun} for more.</span>
       </div>
 
       <p className={t.how}>
@@ -396,7 +388,7 @@ function Browser<
 
       {/* ---------- table ---------- */}
       <div role="region" aria-labelledby={captionId} tabIndex={0} className={t.scroll}>
-        <table className={`${t.table} ${phoneView === "rounds" ? t.vRounds : t.vResult}`} style={{ minWidth: tableMinWidth }}>
+        <table className={t.table} style={{ minWidth: tableMinWidth }}>
           <caption id={captionId} className={t.srOnly}>
             {config.nameHeading} statistics, {season} season, {sortText}
           </caption>
@@ -484,6 +476,11 @@ function Browser<
                       <span aria-hidden>›</span>
                     </button>
                     <b>{row.name}</b>
+                    {row.place && (
+                      <span aria-hidden className={t.won}>
+                        <span className={`${t.med} ${MEDAL[row.place]}`}>{formatPlace(row.place)}</span>
+                      </span>
+                    )}
                     <small>{subline}</small>
                   </th>
                   {columns.map(({ column, group, startsGroup }) => {
