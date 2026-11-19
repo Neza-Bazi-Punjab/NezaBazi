@@ -27,7 +27,7 @@ import { site } from "@/lib/site";
 
 export const statsMetadata = (year: number, view: StatsView): Metadata => ({
   title: "Stats",
-  description: `Rider and team statistics from the ${site.title}: runs, points, carry rates, rounds reached and placings.`,
+  description: `Rider and team statistics from the ${site.title}: runs, points, rounds reached and placings.`,
   alternates: { canonical: statsHref(year, view) },
 });
 

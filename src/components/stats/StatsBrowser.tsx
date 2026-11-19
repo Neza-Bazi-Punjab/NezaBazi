@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import shared from "@/components/redesign/shared.module.css";
 import {
   RIDER_COLUMNS,
@@ -13,9 +13,11 @@ import {
   type StatColumn,
 } from "@/lib/stats/columns";
 import {
+  PLACES_DECIDED,
   SINGLE_STAGE_LABELS,
   TEAM_STAGE_LABELS,
   clampPage,
+  formatPlace,
   matchesSearch,
   pageCount,
   riderSearchFields,
@@ -27,6 +29,7 @@ import {
   type SortValue,
   type TeamRow,
 } from "@/lib/stats/compute";
+import { legendSections } from "@/lib/stats/legend";
 import Pagination from "./Pagination";
 import type { StatsView } from "./SeasonViewNav";
 import t from "./stats.module.css";
@@ -35,7 +38,12 @@ import t from "./stats.module.css";
    pages (the agreed draft, handoff/mock-home/stats.html). Season and view are
    the page's own address; everything here is local state, reset by a new
    view. Every column has a fixed width and every row a fixed height, so
-   sorting or paging never moves the table: only what is inside changes. */
+   sorting or paging never moves the table: only what is inside changes.
+
+   A phone gets one short table that fits the screen: rank, name (with the
+   medal under it, so the winners are plain) and each round's points. A tap
+   on a row slides up that rider's or team's card with everything on it.
+   Nothing scrolls sideways. */
 
 export const PAGE_SIZE = 25;
 
@@ -50,8 +58,8 @@ interface ViewConfig<T> {
   searchPlaceholder: string;
   columns: readonly StatColumn<T>[];
   groups: readonly ColumnGroup[];
-  /* Each column's width in px; the name column takes what is left, but
-     never less than nameMin. */
+  /* Each column's narrowest width in px, nameMin for the name column. Spare
+     width is shared across them all in proportion. */
   widths: Record<string, number>;
   nameMin: number;
   searchFields: (row: T) => (string | null | undefined)[];
@@ -59,7 +67,21 @@ interface ViewConfig<T> {
   subline: (row: T) => string;
 }
 
-const RANK_WIDTH = 48;
+const RANK_WIDTH = 44;
+/* Round headings short enough for five of them to fit a phone. */
+const PHONE_LABEL: Record<string, string> = {
+  "stage-qualification": "Qual",
+  "stage-aarhi1": "A1",
+  "stage-aarhi2": "A2",
+  "stage-third": "3rd",
+  "stage-final": "Final",
+  "stage-round1": "R1",
+  "stage-round2": "R2",
+  "stage-final1": "Final",
+  "stage-final2": "T-B",
+};
+/* The same break as stats.module.css. */
+const PHONE_QUERY = "(max-width: 820px)";
 
 const riderConfig: ViewConfig<RiderRow> = {
   noun: "rider",
@@ -68,29 +90,34 @@ const riderConfig: ViewConfig<RiderRow> = {
   searchPlaceholder: "Search a rider, horse or place",
   columns: RIDER_COLUMNS,
   groups: RIDER_GROUPS,
+  /* The narrowest each column goes; together they fit a 1440px laptop. On a
+     wider screen the spare width is shared out across every column in
+     proportion, so the numbers spread over the table instead of the name
+     column taking it all. */
   widths: {
-    runs: 68,
-    carries: 44,
-    strikes: 44,
-    misses: 44,
-    "stage-qualification": 68,
-    "stage-aarhi1": 86,
-    "stage-aarhi2": 86,
-    "stage-final": 92,
-    points: 60,
-    pointsPerRun: 90,
-    carryRate: 92,
-    hitRate: 70,
-    reached: 140,
-    place: 76,
+    runs: 72,
+    carries: 48,
+    strikes: 48,
+    misses: 48,
+    "stage-qualification": 76,
+    "stage-aarhi1": 90,
+    "stage-aarhi2": 90,
+    "stage-third": 110,
+    "stage-final": 80,
+    points: 68,
+    reached: 150,
+    place: 84,
   },
-  nameMin: 220,
+  nameMin: 250,
   searchFields: riderSearchFields,
-  /* Everyone rode qualification, so "Any round" already covers it. */
+  /* Everyone rode qualification, so "Any round" already covers it. A rider
+     rode the 3rd place ride-off or the Final, never both, so "or further"
+     from the ride-off also takes in the finalists. */
   stageOptions: [
     { index: 1, label: `${SINGLE_STAGE_LABELS.aarhi1} or further` },
     { index: 2, label: `${SINGLE_STAGE_LABELS.aarhi2} or further` },
-    { index: 3, label: SINGLE_STAGE_LABELS.final },
+    { index: 3, label: `${SINGLE_STAGE_LABELS.third} or the ${SINGLE_STAGE_LABELS.final}` },
+    { index: 4, label: SINGLE_STAGE_LABELS.final },
   ],
   subline: (row) => [row.horse, row.location].filter(Boolean).join(" · "),
 };
@@ -108,7 +135,7 @@ const teamConfig: ViewConfig<TeamRow> = {
     "stage-third": 112,
     "stage-final1": 92,
     "stage-final2": 112,
-    reached: 200,
+    reached: 150,
     place: 90,
   },
   nameMin: 380,
@@ -168,6 +195,15 @@ function Browser<
     direction: "ascending",
   });
   const [page, setPage] = useState(1);
+  /* Phones: whose card is up. */
+  const [openId, setOpenId] = useState<string | null>(null);
+  const sheetRef = useRef<HTMLDialogElement>(null);
+  const openRow = openId ? (rows.find((row) => row.id === openId) ?? null) : null;
+
+  useEffect(() => {
+    const sheet = sheetRef.current;
+    if (openRow && sheet && !sheet.open) sheet.showModal();
+  }, [openRow]);
   const boxRef = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo(
@@ -199,16 +235,26 @@ function Browser<
   const shown = sorted.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
 
   /* Each column with its group; the first column of a group carries the
-     divider line, and groups not meant for phones hide on narrow screens. */
+     divider line. */
   const columns = config.groups.flatMap((group) =>
     config.columns
       .filter((column) => column.group === group.id)
       .map((column, index) => ({ column, group, startsGroup: index === 0 }))
   );
-  const cellClass = (group: ColumnGroup, startsGroup: boolean, ...more: (string | false | undefined)[]) =>
-    [startsGroup && t.gs, !group.onPhone && t.phHide, ...more].filter(Boolean).join(" ");
-  const tableMinWidth =
-    RANK_WIDTH + config.nameMin + columns.reduce((sum, { column }) => sum + (config.widths[column.id] ?? 80), 0);
+  const cellClass = (startsGroup: boolean, ...more: (string | false | undefined)[]) =>
+    [startsGroup && t.gs, ...more].filter(Boolean).join(" ");
+  const columnsWidth = columns.reduce((sum, { column }) => sum + (config.widths[column.id] ?? 80), 0);
+  const tableMinWidth = RANK_WIDTH + config.nameMin + columnsWidth;
+  const valueOf = (row: T, id: string) => {
+    const cell = config.columns.find((column) => column.id === id)?.cell(row);
+    return cell?.kind === "value" ? cell.text : "";
+  };
+  /* The rounds a row rode, for its card. */
+  const roundsOf = (row: T) =>
+    columns
+      .filter(({ group }) => group.id === "rounds")
+      .map(({ column }) => ({ column, cell: column.cell(row) }))
+      .filter(({ cell }) => cell.kind !== "blank");
 
   const filtersOn = reachedAtLeast >= 0 || state !== "" || search.trim() !== "";
 
@@ -313,7 +359,32 @@ function Browser<
             </select>
           </>
         )}
+        <span className={t.tap}>Points in each round. Tap a {config.noun} for more.</span>
       </div>
+
+      <p className={t.how}>
+        <b>{PLACES_DECIDED[view].lead}</b> {PLACES_DECIDED[view].detail}
+      </p>
+
+      {/* ---------- the key: the rules and every heading, in plain words ---------- */}
+      <details className={t.key}>
+        <summary>Key: how points, rounds and the table work</summary>
+        <div className={t.keyBody}>
+          {legendSections(view).map((section) => (
+            <section key={section.title}>
+              <h3>{section.title}</h3>
+              <dl>
+                {section.terms.map(({ term, meaning }) => (
+                  <div key={term}>
+                    <dt>{term}</dt>
+                    <dd>{meaning}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          ))}
+        </div>
+      </details>
 
       {/* ---------- table ---------- */}
       <div role="region" aria-labelledby={captionId} tabIndex={0} className={t.scroll}>
@@ -323,9 +394,9 @@ function Browser<
           </caption>
           <colgroup>
             <col style={{ width: RANK_WIDTH }} />
-            <col />
-            {columns.map(({ column }) => (
-              <col key={column.id} style={{ width: config.widths[column.id] ?? 80 }} />
+            <col style={{ width: config.nameMin }} />
+            {columns.map(({ column, group }) => (
+              <col key={column.id} data-g={group.id} style={{ width: config.widths[column.id] ?? 80 }} />
             ))}
           </colgroup>
           <thead>
@@ -336,7 +407,8 @@ function Browser<
                   key={group.id}
                   colSpan={config.columns.filter((column) => column.group === group.id).length}
                   scope="colgroup"
-                  className={cellClass(group, true)}
+                  data-g={group.id}
+                  className={cellClass(true)}
                 >
                   {group.label}
                 </th>
@@ -365,10 +437,12 @@ function Browser<
                   key={column.id}
                   scope="col"
                   aria-sort={ariaSort(column.id)}
-                  className={cellClass(group, startsGroup, !column.numeric && t.l)}
+                  data-g={group.id}
+                  className={cellClass(startsGroup, !column.numeric && t.l)}
                 >
                   <SortButton
                     label={column.label}
+                    short={PHONE_LABEL[column.id]}
                     title={column.title}
                     active={sort.key === column.id}
                     first={sort.direction === column.firstDirection}
@@ -379,13 +453,34 @@ function Browser<
             </tr>
           </thead>
           <tbody>
-            {shown.map((row) => {
+            {shown.map((row, rowIndex) => {
               const subline = config.subline(row);
+              /* A tap opens the card on a phone only: a computer shows it all. */
+              const openCard = () => {
+                if (window.matchMedia(PHONE_QUERY).matches) setOpenId(row.id);
+              };
               return (
-                <tr key={row.id}>
+                <tr key={row.id} className={`${t.row} ${rowIndex % 2 === 1 ? t.alt : ""}`} onClick={openCard}>
                   <td className={t.rk}>{row.rank}</td>
                   <th scope="row" className={t.nm}>
+                    <button
+                      type="button"
+                      aria-haspopup="dialog"
+                      aria-label={`Every round for ${row.name}`}
+                      className={t.more}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setOpenId(row.id);
+                      }}
+                    >
+                      <span aria-hidden>›</span>
+                    </button>
                     <b>{row.name}</b>
+                    {row.place && (
+                      <span aria-hidden className={t.won}>
+                        <span className={`${t.med} ${MEDAL[row.place]}`}>{formatPlace(row.place)}</span>
+                      </span>
+                    )}
                     <small>{subline}</small>
                   </th>
                   {columns.map(({ column, group, startsGroup }) => {
@@ -393,8 +488,8 @@ function Browser<
                     return (
                       <td
                         key={column.id}
+                        data-g={group.id}
                         className={cellClass(
-                          group,
                           startsGroup,
                           !column.numeric && t.l,
                           column.id === "points" && t.pts,
@@ -426,13 +521,77 @@ function Browser<
         </table>
       </div>
 
+      {/* ---------- phones: the card that slides up from a tapped row ---------- */}
+      <dialog
+        ref={sheetRef}
+        aria-labelledby={`${uid}-sheet`}
+        className={t.sheet}
+        onClose={() => setOpenId(null)}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) event.currentTarget.close();
+        }}
+      >
+        {openRow && (
+          <div className={t.sheetBody}>
+            <button type="button" aria-label="Close" className={t.sheetClose} onClick={() => sheetRef.current?.close()}>
+              <span aria-hidden>✕</span>
+            </button>
+            <h3 id={`${uid}-sheet`}>{openRow.name}</h3>
+            <p className={t.sheetSub}>{config.subline(openRow)}</p>
+            <p className={t.sheetRes}>
+              {openRow.place && <span className={`${t.med} ${MEDAL[openRow.place]}`}>{formatPlace(openRow.place)}</span>}
+              {[valueOf(openRow, "reached"), valueOf(openRow, "points") && `${valueOf(openRow, "points")} points`]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+            <dl className={t.strip}>
+              {roundsOf(openRow).map(({ column, cell }) => (
+                <div key={column.id}>
+                  <dt>{PHONE_LABEL[column.id] ?? column.label}</dt>
+                  <dd>
+                    <CellView cell={cell} />
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            {/* Riders: each run in words, then the run counts. A team's rounds
+                are all in the strip above, so it has no list to repeat them. */}
+            {view === "riders" && (
+            <dl className={t.card}>
+              {roundsOf(openRow).map(({ column, cell }) => (
+                <div key={column.id}>
+                  <dt>{roundName(column.title ?? column.label)}</dt>
+                  <dd>
+                    {cell.kind === "value" && column.id !== "stage-qualification" && (
+                      <em>{RESULT_WORD[cell.text] ?? ""}</em>
+                    )}
+                    <CellView cell={cell} />
+                  </dd>
+                </div>
+              ))}
+              {columns
+                .filter(({ group }) => group.id === "runs")
+                .map(({ column }) => (
+                  <div key={column.id}>
+                    <dt>{column.title ?? column.label}</dt>
+                    <dd>
+                      <CellView cell={column.cell(openRow)} />
+                    </dd>
+                  </div>
+                ))}
+            </dl>
+            )}
+          </div>
+        )}
+      </dialog>
+
       {(anyDash || shownStatuses.size > 0) && (
         <ul className={t.marks}>
           {anyDash && (
             <li>
               <b aria-hidden>–</b>
               <span className={t.srOnly}>A dash:</span>{" "}
-              {view === "teams" ? "ridden, total not recorded." : "ridden, result not recorded. Left out of the % columns."}
+              {view === "teams" ? "ridden, total not recorded." : "ridden, result not recorded."}
             </li>
           )}
           {Object.values(RIDE_STATUS_TEXT)
@@ -452,6 +611,14 @@ function Browser<
     </div>
   );
 }
+
+/* A round column's title as the card's label: "Points in Final, out of
+   16" -> "Final". */
+const roundName = (title: string) => title.replace(/^Points in /, "").replace(/, out of 16$/, "");
+
+/* One run's points as the word for it. Qualification is two tries added
+   together, so it shows the points alone. */
+const RESULT_WORD: Record<string, string> = { "4": "Carry", "2": "Strike", "0": "Miss" };
 
 /* "Points in Aarhi round 1" -> "points in Aarhi round 1": round names keep
    their capitals inside a sentence. "#" and short headings pass through. */
@@ -481,12 +648,15 @@ function CellView({ cell }: { cell: Cell }) {
    once it is turned round. */
 function SortButton({
   label,
+  short,
   title,
   active,
   first,
   onClick,
 }: {
   label: string;
+  /* A shorter heading for phones, when the full one is too wide there. */
+  short?: string;
   title?: string;
   active: boolean;
   first: boolean;
@@ -501,7 +671,18 @@ function SortButton({
     >
       {title && title !== label ? (
         <>
-          <span aria-hidden>{label}</span>
+          {short && short !== label ? (
+            <>
+              <span aria-hidden className={t.lblFull}>
+                {label}
+              </span>
+              <span aria-hidden className={t.lblShort}>
+                {short}
+              </span>
+            </>
+          ) : (
+            <span aria-hidden>{label}</span>
+          )}
           <span className={t.srOnly}>{title}</span>
         </>
       ) : (

@@ -11,8 +11,6 @@
 import {
   SINGLE_STAGE_LABELS,
   TEAM_STAGE_LABELS,
-  formatDecimal,
-  formatPercent,
   formatPlace,
   type RiderRow,
   type SortDirection,
@@ -49,8 +47,6 @@ const statusCell = (status: StatRideStatus): Cell => {
 export interface ColumnGroup {
   id: string;
   label: string;
-  /* Shown by default on narrow screens (below the `sm` breakpoint). */
-  onPhone: boolean;
 }
 
 export interface StatColumn<T> {
@@ -71,9 +67,6 @@ const value = (text: string | number): Cell => ({ kind: "value", text: String(te
 
 const NOT_RIDDEN: Cell = { kind: "blank", reason: "did not ride" };
 
-const orDash = (text: string | null, reason: string): Cell =>
-  text === null ? { kind: "dash", reason } : value(text);
-
 const stageCell = (cell: StageCell, missing: string): Cell =>
   cell === undefined ? NOT_RIDDEN : cell === null ? { kind: "dash", reason: missing } : value(cell);
 
@@ -82,15 +75,11 @@ const placeCell = (place: 1 | 2 | 3 | null): Cell =>
 
 /* ---------- riders ---------- */
 
-/* On a phone the table opens on who did what: total points, how far each
-   rider got and the place. The run counts, round points and rates are one
-   tap away under Columns. */
 export const RIDER_GROUPS: readonly ColumnGroup[] = [
-  { id: "runs", label: "Runs", onPhone: false },
-  { id: "rounds", label: "Points by round", onPhone: false },
-  { id: "totals", label: "Total", onPhone: true },
-  { id: "rates", label: "Rates", onPhone: false },
-  { id: "result", label: "Result", onPhone: true },
+  { id: "runs", label: "Runs" },
+  { id: "rounds", label: "Points by round" },
+  { id: "totals", label: "Total" },
+  { id: "result", label: "Result" },
 ];
 
 /* Short headings where the full round name is too wide for the table. The
@@ -99,7 +88,8 @@ const SHORT_SINGLE: Record<SingleStage, string> = {
   qualification: "Qual",
   aarhi1: "Aarhi 1",
   aarhi2: "Aarhi 2",
-  final: "Placing",
+  third: "3rd place",
+  final: "Final",
 };
 
 const SHORT_TEAM: Record<TeamStage, string> = {
@@ -178,36 +168,6 @@ export const RIDER_COLUMNS: readonly StatColumn<RiderRow>[] = [
       row.known > 0 || row.runs === 0 ? value(row.points) : { kind: "dash", reason: NO_KNOWN_RUN },
   },
   {
-    id: "pointsPerRun",
-    label: "Pts/Run",
-    title: "Points per run",
-    group: "rates",
-    numeric: true,
-    firstDirection: "descending",
-    sortValue: (row) => row.pointsPerRun,
-    cell: (row) => orDash(formatDecimal(row.pointsPerRun, 2), NO_KNOWN_RUN),
-  },
-  {
-    id: "carryRate",
-    label: "Carry %",
-    title: "Carry percentage",
-    group: "rates",
-    numeric: true,
-    firstDirection: "descending",
-    sortValue: (row) => row.carryRate,
-    cell: (row) => orDash(formatPercent(row.carryRate), NO_KNOWN_RUN),
-  },
-  {
-    id: "hitRate",
-    label: "Hit %",
-    title: "Hit percentage",
-    group: "rates",
-    numeric: true,
-    firstDirection: "descending",
-    sortValue: (row) => row.hitRate,
-    cell: (row) => orDash(formatPercent(row.hitRate), NO_KNOWN_RUN),
-  },
-  {
     id: "reached",
     label: "Reached",
     title: "Furthest round reached",
@@ -231,9 +191,8 @@ export const RIDER_COLUMNS: readonly StatColumn<RiderRow>[] = [
 /* ---------- teams ---------- */
 
 export const TEAM_GROUPS: readonly ColumnGroup[] = [
-  // The round points are the team's whole record, so phones show them too.
-  { id: "rounds", label: "Points by round", onPhone: true },
-  { id: "result", label: "Result", onPhone: true },
+  { id: "rounds", label: "Points by round" },
+  { id: "result", label: "Result" },
 ];
 
 export const TEAM_COLUMNS: readonly StatColumn<TeamRow>[] = [
